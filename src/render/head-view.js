@@ -75,6 +75,8 @@ export class HeadView {
     lamp.position.copy(this.lampDir).multiplyScalar(2).add(lamp.target.position);
     lamp.intensity = 1.6;
     lamp.updateMatrixWorld();
+    camera.position.x = this.P.x + (this.followX?.() ?? 0);
+    camera.updateMatrixWorld();
     renderer.setRenderTarget(rt);
     renderer.clear();
     renderer.render(this.scene, camera);

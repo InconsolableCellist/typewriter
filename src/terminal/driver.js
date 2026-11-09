@@ -106,6 +106,7 @@ export class PrintDriver {
     if (t - this.lastFireT < PACE.minPressGapS) return false;   // the finger is still on its way: the key cannot have returned yet
     if (!this.keyUp(st)) return false;
     if (Math.abs(st[this.L.rocker]) > PACE.rockerRest) return false;
+    if (this.L.interposerKey !== undefined && st[this.L.interposerKey] >= 0) return false;   // a powered machine's one selection slot is taken
     if (this.pending.length > 0) return false;                         // never fire over an unconfirmed strike
     for (let i = 0; i < this.g.nPrint; i++) if (i !== this.lastBar && st[this.L.barTheta + i] > PACE.jamBarRad) return false;   // another bar is up: let it clear (or be freed) first
     if (this.lastBar >= 0 && st[this.L.barTheta + this.lastBar] > PACE.barGateRad) return false;

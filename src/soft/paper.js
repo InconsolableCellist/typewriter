@@ -350,6 +350,12 @@ export class PaperSim {
     return ke;
   }
 
+  /** The carrier moved and the sheet did not: the solve frame rides on the carrier, so everything in it shifts together, held points included. */
+  shiftFrame(dx) {
+    this._translateAll(dx, 0, 0);
+    for (const g of this.grabs.values()) g.tx += dx;
+  }
+
   _translateAll(dx, dy, dz) {
     const { x, y, z, xp, yp, zp, n } = this;
     for (let i = 0; i < n; i++) { x[i] += dx; y[i] += dy; z[i] += dz; xp[i] += dx; yp[i] += dy; zp[i] += dz; }
@@ -1014,7 +1020,7 @@ export class PaperSim {
     const rearRoll = this.patches[0];
     const lipTheta = rearRoll.theta - (0.25 * rearRoll.halfArc) / r;
     const panR = rPanInner + 0.0006, panOuterBig = rPanOuter + 0.004;
-    const MB = MACHINE_BODY, MB_TOP_MAX = 0.1456 + halfT + 0.01;
+    const MB = this.m.bodyProxy ?? MACHINE_BODY, MB_TOP_MAX = MB.topMax + halfT + 0.01, bodyShift = this.bodyShift ?? 0;
     const nxRow = this.nx;
     // Rows ahead of the rollers have been typed on and lie on top of the part still waiting on the table.
     let firstGripped = -1, lastGripped = -1;
@@ -1033,15 +1039,16 @@ export class PaperSim {
       if (py < halfT) { dn = halfT - py; py = halfT; ny = 1; msu = p.deskFriction; contact = true; }
 
       // Machine body: the sheet rests on it and cannot get inside.
-      if (px > -MB.halfWidth && px < MB.halfWidth && pz > MB.zMin && pz < MB.zMax && py < MB_TOP_MAX) {
-        const top = bodyTop(px, pz) + halfT;
+      const bodyX = px - bodyShift;
+      if (bodyX > -MB.halfWidth && bodyX < MB.halfWidth && pz > MB.zMin && pz < MB.zMax && py < MB_TOP_MAX) {
+        const top = bodyTop(bodyX, pz, MB) + halfT;
         if (py < top) {
-          const fromX = xp[i], fromZ = zp[i];
+          const fromX = xp[i] - bodyShift, fromZ = zp[i];
           const inPrev = fromX > -MB.halfWidth && fromX < MB.halfWidth && fromZ > MB.zMin && fromZ < MB.zMax;
           if (!inPrev && yp[i] < top) {
             // Came in through a side: back out the way it came, against the outer wall.
-            if (fromX <= -MB.halfWidth) px = -MB.halfWidth - halfT;
-            else if (fromX >= MB.halfWidth) px = MB.halfWidth + halfT;
+            if (fromX <= -MB.halfWidth) px = bodyShift - MB.halfWidth - halfT;
+            else if (fromX >= MB.halfWidth) px = bodyShift + MB.halfWidth + halfT;
             else if (fromZ <= MB.zMin) pz = MB.zMin - halfT;
             else pz = MB.zMax + halfT;
           } else {

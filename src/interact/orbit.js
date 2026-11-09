@@ -9,16 +9,16 @@ const KEEP_IN_VIEW = 0.7;    // zoomed out, the machine's centre stays within th
 const GLIDE_LEFT_AFTER_1S = 1e-9;          // how much of a released drag's speed survives a second: stops within a few frames
 
 export class Orbit {
-  constructor(camera, element) {
+  constructor(camera, element, target = [-0.0557, 0.1262, -0.0124]) {
     this.camera = camera; this.el = element;
-    this.target = new THREE.Vector3(-0.0557, 0.1262, -0.0124);
+    this.target = new THREE.Vector3().fromArray(target);
     const off = camera.position.clone().sub(this.target);
     this.radius = off.length();
     this.theta = Math.atan2(off.x, off.z);
     this.phi = Math.acos(off.y / this.radius);
     this.vTheta = 0; this.vPhi = 0;
     this._right = new THREE.Vector3(); this._forward = new THREE.Vector3(); this._up = new THREE.Vector3(); this._off = new THREE.Vector3();
-    this.limits = { phiMin: 0.18, phiMax: 1.45, rMin: 0.09, rMax: 1.2 };
+    this.limits = { phiMin: 0.18, phiMax: 1.45, rMin: 0.09, rMax: Math.max(1.2, this.radius * 1.15) };
     this.home = { target: this.target.clone(), radius: this.radius, theta: this.theta, phi: this.phi };
     this.apply();
   }

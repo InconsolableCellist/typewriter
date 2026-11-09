@@ -31,6 +31,7 @@ export function rotate(p, k, a) {
  * barDirection(bar, theta). theta = 0 at rest, bar.thetaTravel at nominal impact.
  */
 export function deriveGeometry(m) {
+  if (m.element) return deriveElementGeometry(m);
   const { platen, typebars: tb, keys: kd, condition: cond } = m;
   const beta = m.printPoint.beta;
   const n = [0, Math.sin(beta), Math.cos(beta)];
@@ -71,6 +72,67 @@ export function deriveGeometry(m) {
     };
   });
   return { printPoint, printNormal: n, strikeDown: w, keys, bars, nPrint, nKeys: keys.length };
+}
+
+/**
+ * Single-element machine. Keys are as usual; one "bar" per printing key names which glyphs the ball carries for
+ * consumers of bars[]. `element.keys[k]` gives the key's seat on the ball and `element.cells` the inverse.
+ * Ball orientation at tilt t, rotate r, hemisphere h: spin about rotateAxis by (r + h*pi), tilt about tiltAxis by t*tiltStep.
+ * `center` is the rest ball centre with carriageX = 0; the carrier sits at world x = -carriageX relative to it.
+ */
+function deriveElementGeometry(m) {
+  const { platen, keys: kd, element: E } = m;
+  const beta = m.printPoint.beta;
+  const n = [0, Math.sin(beta), Math.cos(beta)];
+  const printPoint = v.add(platen.center, v.mul(n, platen.radius));
+  const w = [0, -Math.cos(beta), Math.sin(beta)];
+
+  const keys = [];
+  kd.rows.forEach((row, r) => row.keys.forEach((pair, c) => {
+    const chars = [...pair];
+    keys.push({
+      id: `k${keys.length}`, kind: 'print', row: r, col: c, lower: chars[0], upper: chars[1] ?? chars[0],
+      pos: [row.x0 + c * row.pitch, row.y, row.z], travel: m.linkage.keyTravel,
+      returnForce: kd.returnForce, finger: fingerFor(r, c, row.keys.length),
+    });
+  }));
+  const nPrint = keys.length;
+  for (const k of kd.controls) keys.push({ ...k, kind: 'control', returnForce: k.returnForce ?? kd.returnForce });
+
+  // Seat every printing key on the ball: most frequent character first, onto the cheapest move.
+  const nBands = E.ball.bands, nCols = E.ball.columns / 2;
+  const seats = [];
+  for (let t = 0; t < nBands; t++) for (let r = -Math.floor(nCols / 2); r <= Math.floor(nCols / 2); r++) seats.push({ tilt: t, rotate: r });
+  seats.sort((a, b) => (Math.abs(a.rotate) + 1.3 * a.tilt) - (Math.abs(b.rotate) + 1.3 * b.tilt) || b.rotate - a.rotate || a.tilt - b.tilt);
+  const rank = (k) => { const i = E.frequency.indexOf(k.lower); return i < 0 ? E.frequency.length + k.row * 16 + k.col : i; };
+  const order = keys.slice(0, nPrint).map((k, i) => i).sort((a, b) => rank(keys[a]) - rank(keys[b]) || a - b);
+  const seatOf = new Array(nPrint);
+  order.forEach((keyIndex, i) => { seatOf[keyIndex] = seats[i]; });
+  const cells = new Int32Array(nBands * nCols).fill(-1);     // (tilt * nCols + rotate + 5) -> key
+  const table = keys.slice(0, nPrint).map((k, i) => {
+    const s = seatOf[i];
+    cells[s.tilt * nCols + s.rotate + Math.floor(nCols / 2)] = i;
+    return { tilt: s.tilt, rotate: s.rotate, hemisphere: 0, lower: k.lower, upper: k.upper };
+  });
+
+  // Rest: low and in front of the print position. strikeDir is the straight-line pop from rest to contact.
+  const contact = v.add(printPoint, v.mul(n, E.ball.radius));
+  const center = v.add(contact, v.add(v.mul(w, E.rest.drop), v.mul(n, E.rest.standoff)));
+  const strikeDir = v.norm(v.sub(contact, center));
+  const element = {
+    keys: table, cells, nBands, nCols, ballRadius: E.ball.radius, center,
+    strikeDir, strikeGap: E.strikeGap, correction: E.correction,
+    rotateAxis: [0, 1, 0], tiltAxis: [1, 0, 0],
+    rotateStep: E.ball.columnStep, tiltStep: E.ball.bandStep,
+  };
+
+  const bars = keys.slice(0, nPrint).map((k, i) => ({
+    index: i, slot: i, arcAngle: 0, pivot: center,
+    axis: [1, 0, 0], strikeDir, thetaTravel: 1, inertia: E.rocker.mass * 1e-4, length: 0.01,
+    skew: 0, offsetX: 0, offsetY: 0, leverage: 1, lower: k.lower, upper: k.upper,
+  }));
+  keys.forEach((k, i) => { if (i < nPrint) k.bar = i; });
+  return { printPoint, printNormal: n, strikeDown: w, keys, bars, nPrint, nKeys: keys.length, element };
 }
 
 /** Unit vector from a bar's pivot toward its slug at angle theta from rest. */

@@ -3,6 +3,7 @@
 // measured indentation. Where it lands is found by intersecting the strike with the actual sheet.
 
 const INK_PX_PER_MM = 14;
+const ERASE_FRACTION = 0.97;       // of the ink a lift-off tape takes up in one correction, a faint ghost remains
 const COLOR_DOWNSAMPLE = 4;
 const PLATEN_PX_PER_MM = 6;
 const LN2 = Math.log(2);
@@ -282,6 +283,12 @@ export class Printer {
             const a = ix + iy * N, b = a + 1, c = a + N, d = c + 1;
             const p = lerp4(P[a], P[b], P[c], P[d], fx, fy);
             if (p <= 0) continue;
+            if (evt.erase) {
+              // Lift-off tape: the face presses it onto the character and takes the ink with it, more where it bears harder. The dent stays.
+              const k = (px + py * W) * 2;
+              ink[k] *= 1 - Math.min(1, p / halfPressure) * ERASE_FRACTION;
+              continue;
+            }
             const r = lerp4(R[a], R[b], R[c], R[d], fx, fy);
             const col = lerp4(Col[a], Col[b], Col[c], Col[d], fx, fy);
             const fibreN = 1 - fibre + fibre * (0.6 * valueNoise(px * 0.33, py * 0.33) + 0.4 * hash2(px, py));
@@ -360,7 +367,7 @@ export class Printer {
           const dX = aM * cs - bM * sn, dY = aM * sn + bM * cs;
           const w = dY - rc, s = rs + dX;
           const relP = 1 - Math.exp(-LN2 * P[k] / inkHalf);
-          ribbon.deplete(s, w, dep * relP * areaFactor);
+          if (!evt.erase) ribbon.deplete(s, w, dep * relP * areaFactor);
         }
       }
       ribbon.markDirty?.();

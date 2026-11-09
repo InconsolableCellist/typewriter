@@ -14,10 +14,10 @@ const ROWS = [
 
 const PARAMS = [
   { id: 'force', label: 'strike force', unit: 'N', min: 10, max: 60, step: 0.5, value: 34 },
-  { id: 'hardness', label: 'platen hardness', unit: '×', min: 0.5, max: 3, step: 0.05, value: 1, param: 'slug.foundationKPerM2', scale: 4.0e11 },
-  { id: 'cmass', label: 'carriage mass', unit: 'kg', min: 0.8, max: 4, step: 0.05, value: 2.05, param: 'carriage.mass' },
-  { id: 'spring', label: 'mainspring', unit: 'N', min: 1, max: 12, step: 0.1, value: 4.6, param: 'carriage.drawbandPreload' },
-  { id: 'wear', label: 'slug wear', unit: 'mm', min: 0, max: 0.3, step: 0.005, value: 0, scale: -1e-3, baseline: 0.00035, param: 'slug.reliefDepth' },
+  { id: 'hardness', label: 'platen hardness', unit: '×', min: 0.5, max: 3, step: 0.05, value: 1, from: (m) => m.slug.foundationKPerM2 / 4.0e11, param: 'slug.foundationKPerM2', scale: 4.0e11 },
+  { id: 'cmass', label: 'carriage mass', unit: 'kg', min: 0.3, max: 4, step: 0.01, value: 2.05, from: (m) => m.carriage.mass, param: 'carriage.mass' },
+  { id: 'spring', label: 'mainspring', unit: 'N', min: 1, max: 12, step: 0.1, value: 4.6, from: (m) => m.carriage.drawbandPreload, param: 'carriage.drawbandPreload' },
+  { id: 'wear', label: 'slug wear', unit: 'mm', min: 0, max: 0.3, step: 0.005, value: 0, scale: -1e-3, baseline: 0.00035, from: (m) => (0.00035 - m.slug.reliefDepth) / 1e-3, param: 'slug.reliefDepth' },
   { id: 'ribink', label: 'ribbon ink', unit: '', min: 0, max: 1, step: 0.01, value: 1, param: 'ribbon.ink' },
   { id: 'time', label: 'time scale', unit: '', min: -3, max: 0, step: 0.01, value: 0, log: true },
 ];
@@ -79,7 +79,9 @@ function drawSky(c, t, weather) {
 }
 
 export class Panel {
-  constructor({ sim, soft, onFreeBars, onResetPaper, onResetAll, onAshtray }) {
+  constructor({ sim, soft, machine, onFreeBars, onResetPaper, onResetAll, onAshtray }) {
+    // Sliders are live and push their value at start-up, so each starts from the selected machine's own number.
+    this.paramDefs = PARAMS.map((p) => ({ ...p, value: machine && p.from ? p.from(machine) : p.value }));
     this.sim = sim; this.soft = soft;
     this.el = document.getElementById('panel');
     this.el.innerHTML = this.html();
@@ -93,7 +95,7 @@ export class Panel {
     this.sent = new Map();
     this.flick = 0.035;
     this.frameMs = 16;
-    for (const p of PARAMS) this.bindParam(p);
+    for (const p of this.paramDefs) this.bindParam(p);
     this.tip = document.getElementById('forceTip');
     this.labelTip = document.getElementById('labelTip');
     this.labelsOn = true;
@@ -136,6 +138,7 @@ export class Panel {
       </div>
       <div class="actions"><button id="a-paper">reset paper</button><button id="a-ribbon">reset ribbon</button><button id="a-free">free bars</button><button id="a-all">reset all</button></div>
       <div class="actions"><button id="a-unlimited" aria-pressed="false" title="no speed limit and no typebar collisions; not realistic">unlimited typing</button><button id="a-ashtray" aria-pressed="true" title="the ashtray, cigarette and lighter on the desk">ashtray</button></div>
+      <div class="actions"><select id="a-machine" title="machine" aria-label="machine"></select></div>
       <div class="env-row">
         <canvas id="env-sky" role="slider" aria-label="time of day" title="drag to set the time of day"></canvas>
         <div class="env-wx" role="group" aria-label="weather">${Object.entries(WEATHER_ICONS).map(([n, icon]) => `<button data-w="${n}" aria-pressed="false" title="${n}" aria-label="${n}">${icon}</button>`).join('')}</div>
@@ -143,7 +146,7 @@ export class Panel {
       <details class="params" open>
         <summary>parameters</summary>
         <div class="note" id="slowNote" hidden>acoustics are nearly silent at slow time scales</div>
-        ${PARAMS.map((p) => `<div class="p"><span class="k">${p.label}</span><input type="range" id="p-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}"><span class="v"><span id="pv-${p.id}"></span><span class="u">${p.unit}</span></span></div>`).join('')}
+        ${this.paramDefs.map((p) => `<div class="p"><span class="k">${p.label}</span><input type="range" id="p-${p.id}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}"><span class="v"><span id="pv-${p.id}"></span><span class="u">${p.unit}</span></span></div>`).join('')}
       </details>`;
   }
 

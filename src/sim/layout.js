@@ -17,6 +17,13 @@ export function makeLayout(geo) {
     paperRelease: scalar(), bail: scalar(),
     lastForce: scalar(), rms: scalar(),
   };
+  if (geo.element) {   // single-element machine only, appended so other machines' snapshots are unchanged
+    Object.assign(L, {
+      motorOmega: scalar(), motorOn: scalar(), printShaft: scalar(), clutchOn: scalar(), opShaft: scalar(), shiftShaft: scalar(),
+      interposerKey: scalar(), selectedKey: scalar(), tilt: scalar(), rotate: scalar(), hemisphere: scalar(), printRocker: scalar(),
+      returnLatched: scalar(), tabLatched: scalar(), correctionLift: scalar(), correctionTape: scalar(),
+    });
+  }
   L.length = o;
   return L;
 }

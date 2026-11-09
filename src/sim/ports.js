@@ -26,4 +26,6 @@ export const AC = {
   STOP: 7,       // b carriage speed (m/s), carriage or margin stop contact begins
   BELL: 8,       // b peak force (N), bell hammer leaves the bell
   KEY_TOP: 9,    // a key, b speed (m/s), key lands back on its top felt
+  CLUTCH: 10,    // single-element machine: a 0 cycle trip, 1 op trip, 2 shift trip, 3 latch catches, 4 return/tab unlatch, 5 return trip; b level
+  SETTLE: 11,    // a 0 cycle end, 1 detent seats the ball, 2 shift end; b carrier speed (rad/s)
 };

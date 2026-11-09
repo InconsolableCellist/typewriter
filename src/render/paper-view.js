@@ -180,6 +180,7 @@ export class PaperView {
   update() {
     const p = this.soft.paper;
     this.mesh.visible = !this.soft.sheetParked;
+    this.mesh.position.x = -(this.soft.carrierOffset ?? 0);
     this.refine();
     this.geo.getAttribute('position').needsUpdate = true;
     if (p.normalsDirty) { this.geo.computeVertexNormals(); p.normalsDirty = false; }
@@ -235,6 +236,7 @@ export class RibbonView {
   update() {
     const { soft, m } = this;
     const r = soft.ribbon;
+    this.mesh.position.x = -(soft.carrierOffset ?? 0);
     const a = this.geo.getAttribute('position');
     const hw = m.ribbon.width / 2;
     for (let i = 0; i < r.count; i++) {

@@ -14,7 +14,8 @@ export class KeyboardInput {
     this.shiftGrab = null;
     window.addEventListener('keydown', (e) => this.down(e));
     window.addEventListener('keyup', (e) => this.up(e));
-    window.addEventListener('blur', () => this.releaseShift());
+    this.held = new Map();      // physical key -> the timer or grab keeping a repeating key down
+    window.addEventListener('blur', () => { this.releaseShift(); for (const c of [...this.held.keys()]) this.letGo(c); });
   }
 
   down(e) {
@@ -32,10 +33,11 @@ export class KeyboardInput {
       if (i >= 0) sim.pressKey(i, 22, 0.12);
       return;
     }
-    if (e.key === 'Enter') { e.preventDefault(); this.hands.carriageReturn(); return; }
-    if (e.key === ' ') { e.preventDefault(); const i = this.idx('space'); if (i >= 0) this.strike(i, force * 0.8); return; }
-    if (e.key === 'Backspace') { e.preventDefault(); const i = this.idx('backspace'); if (i >= 0) this.strike(i, force * 0.9); return; }
-    if (e.key === 'Tab') { e.preventDefault(); return; }
+    if (e.key === 'Enter') { e.preventDefault(); this.hands.carriageReturn(); return; }   // on a powered machine that presses its Return key
+    if (e.key === ' ') { e.preventDefault(); const i = this.idx('space'); if (i >= 0) { this.strike(i, force * 0.8); this.holdDown(e.code, i, this.m.keys.holdDelayS); } return; }
+    if (e.key === 'Backspace') { e.preventDefault(); const i = this.idx('backspace'); if (i >= 0) { this.strike(i, force * 0.9); this.holdDown(e.code, i, this.m.keys.holdDelayS); } return; }
+    if (e.key === 'Delete') { const i = this.idx('correct'); if (i >= 0) { e.preventDefault(); this.strike(i, force * 0.9); } return; }
+    if (e.key === 'Tab') { e.preventDefault(); const i = this.idx('tab'); if (i >= 0) { this.strike(i, force * 0.8); this.holdDown(e.code, i, this.m.keys.holdDelayS !== undefined ? 0 : undefined); } return; }
     const i = this.map.get(e.key);
     if (i !== undefined) {
       e.preventDefault();
@@ -48,11 +50,32 @@ export class KeyboardInput {
     const pinky = (k.finger ?? 1) <= 0.9;
     const spread = pinky ? STROKE.pinkyJitter : STROKE.jitter;
     const jitter = (pinky ? STROKE.pinkyBias : 1) * (1 + (Math.random() * 2 - 1) * spread);
-    this.sim.pressKey(i, force * jitter, STROKE.durationS);
+    this.sim.pressKey(i, force * jitter, this.m.keys.strokeS ?? STROKE.durationS);
+  }
+
+  /** A key that does something more while held keeps being pressed after its stroke, once the delay shows it was not a tap. */
+  holdDown(code, i, delayS) {
+    if (delayS === undefined) return;
+    this.letGo(code);
+    const entry = { grab: null, timer: 0 };
+    entry.timer = setTimeout(() => {
+      entry.timer = 0;
+      entry.grab = this.sim.grab('key', i, { target: this.g.keys[i].travel * 1.5, k: 2200, c: 18, maxF: 30 });
+    }, delayS * 1000);
+    this.held.set(code, entry);
+  }
+
+  letGo(code) {
+    const entry = this.held.get(code);
+    if (!entry) return;
+    if (entry.timer) clearTimeout(entry.timer);
+    if (entry.grab) this.sim.release(entry.grab);
+    this.held.delete(code);
   }
 
   up(e) {
     if (e.key === 'Shift') this.releaseShift();
+    this.letGo(e.code);
   }
 
   grabShift() {

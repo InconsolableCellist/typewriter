@@ -169,9 +169,10 @@ export class Interaction {
     const CONTROL = { space: 'Space bar', shiftL: 'Shift key', shiftR: 'Shift key', shiftLock: 'Shift lock', backspace: 'Backspace key', marginRelease: 'Margin release' };
     switch (part.kind) {
       case 'info': case 'pages': case 'bell': case 'freshPaper': case 'lamp': return part.label;
-      case 'key': { const k = g.keys[part.index]; return CONTROL[k.id] ?? `Key '${k.lower}'`; }
+      case 'key': { const k = g.keys[part.index]; return part.label ?? CONTROL[k.id] ?? `Key '${k.lower}'`; }
       case 'lever': { const k = g.keys[part.index]; return CONTROL[k.id] ? `${CONTROL[k.id]} lever` : `Key lever '${k.lower}'`; }
       case 'bar': return `Typebar '${g.bars[part.index].lower}'`;
+      case 'cover': return part.label;
       case 'knob': return 'Platen knob';
       case 'platen': return 'Platen';
       case 'bail': return 'Paper bail';
@@ -387,7 +388,7 @@ export class Interaction {
 
   dragBail() {
     const { sim, rig, view } = this;
-    const p = () => new THREE.Vector3(view.carriage.position.x, rig.bail.pivot[1] + view.carriage.position.y, rig.bail.pivot[2]);
+    const p = () => new THREE.Vector3(this.platenFrameX(), rig.bail.pivot[1] + view.carriage.position.y, rig.bail.pivot[2]);
     const ref = new THREE.Vector3(0, 0, 1);
     const ax = AX_X;
     const p0 = rayPlane(this.picker.ray.ray, p(), ax, new THREE.Vector3()) ?? p();
@@ -406,7 +407,7 @@ export class Interaction {
     const x0 = e.clientX, y0 = e.clientY;
     const kind = hit.part.kind;
     const ref = kind === 'carriageRelease' ? rig.carriageRelease : rig.paperRelease;
-    const pivot = () => new THREE.Vector3(ref.pos[0] + view.carriage.position.x, ref.pos[1] + view.carriage.position.y, ref.pos[2]);
+    const pivot = () => new THREE.Vector3(ref.pos[0] + this.platenFrameX(), ref.pos[1] + view.carriage.position.y, ref.pos[2]);
     const ax = kind === 'carriageRelease' ? AX_Y : AX_X;
     const p0 = rayPlane(this.picker.ray.ray, pivot(), ax, new THREE.Vector3()) ?? pivot();
     const r = new THREE.Vector3().subVectors(p0, pivot()).normalize();
@@ -487,7 +488,7 @@ export class Interaction {
   dragSpool(hit, e) {
     const { soft, m } = this;
     const side = hit.part.side;
-    const c = new THREE.Vector3(side === 'L' ? -m.ribbon.spoolX : m.ribbon.spoolX, m.ribbon.spoolY, m.ribbon.spoolZ);
+    const c = new THREE.Vector3((side === 'L' ? -m.ribbon.spoolX : m.ribbon.spoolX) - (soft.carrierOffset ?? 0), m.ribbon.spoolY, m.ribbon.spoolZ);
     const ref = new THREE.Vector3(1, 0, 0);
     const a0 = (() => { const p = rayPlane(this.picker.ray.ray, c, AX_Y, new THREE.Vector3()); return p ? angleAround(p, c, AX_Y, ref) : 0; })();
     const ang0 = this.spoolAngle(side);
@@ -504,6 +505,9 @@ export class Interaction {
       end: () => { if (id !== null) soft.release(id); },
     };
   }
+
+  /** Where the parts carried with the platen sit along x: they ride a moving carriage, and stand still on a fixed platen. */
+  platenFrameX() { return this.m.action?.fixedPlaten ? 0 : this.view.carriage.position.x; }
 
   spoolAngle(side) {
     const s = side === 'L' ? this.soft.ribbon.spoolL : this.soft.ribbon.spoolR;

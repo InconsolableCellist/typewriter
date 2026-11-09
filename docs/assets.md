@@ -5,7 +5,7 @@ Coordinates are machine coordinates: x right, y up, z toward the typist, metres,
 the machine centre. No text, logos or manufacturer names appear in any asset or prompt.
 
 ## Licence caveat (check before any commercial use)
-The pinstripe decal comes from **Qwen-Image 2.1**. 
+The pinstripe decal and the source image of the `element_crinkle` paint textures come from **Qwen-Image 2.1**. 
 
 ## Frame: `public/assets/models/frame.glb`
 A procedural black japanned open frame, 41 k triangles, 1.5 MB, metres, Y-up glTF. Node transforms are all
@@ -97,6 +97,30 @@ the whole arc, keys at full depression, carriage through its full travel with sh
 
 The paper's soft body does not collide with the shell: a sheet flopped over onto the deck will pass through it.
 
+## Element housing: `public/assets/models/element_enclosure.glb`
+`tools/blender/build_element_enclosure.py`, about 13.6 k triangles, for the machine `element1971`. A closed solid is cut into panels from one
+master shape, with real wall thickness and real panel gaps, then bevelled with weighted normals. Key wells follow the definition's key positions.
+Cap sizes and the corner lever slots are shared with the renderer through `src/render/element-keycaps.json`.
+
+| Node | Contents |
+|---|---|
+| `element_base` | Thin tray below the seam |
+| `element_body` | Deck, key wells, apron and the two shoulders |
+| `element_rear_cover` | Top behind the seam, with the slots for the corner levers |
+| `element_hood` | The hinged cover. Its origin is the hinge at machine (0, 0.1872, -0.030), axis x; rotation.x negative raises the front |
+| `element_feet`, `element_strain_relief`, `element_keybed` | Rubber feet, rear cord relief, dark floor under the keys |
+
+Materials: `element_paint`, `element_black`, `element_rubber`, replaced by name at load (`ElementEnclosure` in `src/render/element-view.js`). UVs are
+box projected at one unit = 0.2 m, as elsewhere.
+
+### Regenerate
+```
+node tools/gen/export_element.mjs                                       # tools/blender/element1971.json, if the definition changed
+~/bin/blender --background --python tools/blender/build_element_enclosure.py
+```
+The script exits 1 if a panel came out empty, or if the tilted box of the ribbon cartridge, the capsule the type element sweeps through its stroke (both at
+the travel extremes) or the platen touches a panel. The bail is not in that check, because its pivot comes from the renderer's rig.
+
 ## Materials: `public/assets/textures/`
 Authored procedurally by `tools/gen/materials.py`. Heights are in metres at the tile size, so normals are true slopes and `normalScale` 1 is correct.
 Metals hold their measured F0 in albedo. `materials.json` holds the tile sizes and physical parameters for code to read.
@@ -126,6 +150,12 @@ measured F0 and base colour are not altered. `repeat = uvMetresPerUnit / T`: for
 that is `0.2 / T`.
 
 `pinstripe_border.png` is a separate 2048 x 2048 RGBA decal (a gold line border with scrolled corners).
+
+### Crinkle paint for `element1971`: `element_crinkle_{albedo,normal,roughness,roughness_mips}.jpg`
+1024 px, tiling every 0.08 m. Made by `tools/gen/element_crinkle.py` from `tools/gen/raw/element_crinkle_s71002.png` (Qwen-Image 2.1 through
+ComfyUI, seed 71002, 30 steps, cfg 1, 1024 x 1024; the prompt and settings are in the `.json` beside it): the prompt asks for a macro of fine
+pebbled paint with no objects, text or logos. Periodic plus smooth decomposition makes it tile; the slope is normalised to 0.13 RMS and the colour
+set to the housing's putty, which `createElementMaterials` then multiplies down slightly.
 
 ### Specular aliasing
 Each set's normal variance is folded into roughness at source (Toksvig: variance from the shortened mean normal):

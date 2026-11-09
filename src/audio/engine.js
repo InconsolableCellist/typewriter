@@ -7,6 +7,7 @@ import { SUBSTEP_HZ } from '../sim/mechanics.js';
 import { MASTER_CAL } from './measured_body.js';
 import { PORT } from '../sim/ports.js';
 import { Sampler } from './sampler.js';
+import { ElementSynth } from './element-synth.js';
 
 const MASTER = MASTER_CAL; // recording units to full scale, calibrated by tools/audio (see SOURCES.md)
 const SNAPSHOT_HZ = 250;
@@ -21,6 +22,8 @@ export class AudioEngine {
     this.room = new Room(sampleRate);
     this.limiter = new Limiter(sampleRate);
     this.sampler = new Sampler(sim, sampleRate);
+    this.synth = sim.m.action?.type === 'single-element' ? new ElementSynth(sim, sampleRate) : null;
+    this.sampler.synth = this.synth;
     this.subPerFrame = SUBSTEP_HZ / sampleRate;
     this.subAcc = 0;
     this.timeScale = 1;
@@ -58,7 +61,7 @@ export class AudioEngine {
     const barForce = this.barForce;
     const rad = this.rad, room = this.room;
     const master = this.master;
-    const enabled = this.enabled;
+    const enabled = this.enabled, synth = this.synth;
     for (let i = 0; i < n; i++) {
       // Advance the mechanism by the whole number of substeps owed to this sample
       this.subAcc += subPerFrame;
@@ -91,6 +94,7 @@ export class AudioEngine {
         y = rad.tick(y * master);
         y = room.tick(y);
         y += sampler.tick();    // recorded room already in the samples: not sent through the synthetic one
+        if (synth) y += synth.tick();
         y = this.limiterBypass ? y : this.limiter.tick(y);
         this.rmsAcc += y * y;
       }

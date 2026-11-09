@@ -8,7 +8,7 @@ import { createAction } from './actions.js';
 import { PORT, AC } from './ports.js';
 
 const SLEEP_FRAMES = 384;
-const KEY_PRINT = 0, KEY_SPACE = 1, KEY_SHIFT = 2, KEY_LOCK = 3, KEY_BACKSPACE = 4, KEY_MARGIN = 5;
+const KEY_PRINT = 0, KEY_SPACE = 1, KEY_SHIFT = 2, KEY_LOCK = 3, KEY_BACKSPACE = 4, KEY_MARGIN = 5, KEY_ACTION = 6;
 const AUX = { paperRelease: 0, carriageRelease: 1, bail: 2, marginL: 3, marginR: 4, ribbonSelector: 5 };
 const AUX_N = 6;
 const FINGER_MAX = 16;
@@ -26,6 +26,8 @@ export class MechanicalSim {
   constructor({ machine, geometry, glyphs } = {}) {
     if (!machine || !geometry) throw new Error('MechanicalSim needs { machine, geometry }');
     this.m = machine; this.g = geometry;
+    this.powered = machine.action?.type === 'single-element';   // keys drive cams through the action, not levers
+    this.dogRelief = 0;   // action-driven lifting of the dogs off the rack (power return, tab)
     this.h = 1 / SUBSTEP_HZ;
     this.t = 0;
     this.layout = makeLayout(geometry);
@@ -126,6 +128,7 @@ export class MechanicalSim {
     this.tripFrac = ub.tripAtKeyFraction;
     this.kVibr = 2e4;
     const vib = m.ribbon.vibrator;
+    this.vibrUpper = vib.upperBandFraction ?? 0.72;
     this.vibrMass = vib.mass ?? 0.012; this.vibrStart = vib.liftStartKeyFraction;
     this.vibrLift = vib.fullLift; this.vibrSpring0 = vib.spring0 ?? 0.8; this.vibrRate = vib.springRate ?? 90;
     this.rpMass = 0.001; this.rpFull = m.ribbon.feedPerKey; this.kRp = 2500; this.rpRet = 20;
@@ -227,12 +230,13 @@ export class MechanicalSim {
     this.kAwake.fill(0); this.nActiveK = 0; this.nFingers = 0; this.nGrabs = 0;
     for (let k = 0; k < this.nKeys; k++) {
       const key = this.g.keys[k];
-      const code = key.kind === 'print' ? KEY_PRINT
+      let code = key.kind === 'print' ? KEY_PRINT
         : key.id === 'space' ? KEY_SPACE
         : key.id === 'shiftL' || key.id === 'shiftR' ? KEY_SHIFT
         : key.id === 'shiftLock' ? KEY_LOCK
         : key.id === 'backspace' ? KEY_BACKSPACE
         : key.id === 'marginRelease' ? KEY_MARGIN : KEY_SPACE;
+      if (this.powered && key.kind !== 'print' && key.id !== 'marginRelease') code = KEY_ACTION;
       this.kType[k] = code;
       if (key.id === 'space') this.spaceK = k;
       this.kTravel[k] = key.travel;
@@ -510,10 +514,12 @@ export class MechanicalSim {
       switch (type) {
         case KEY_PRINT: {
           F += action.keyForce(k, x, v);
+          if (this.powered) break;
           F += this.ubarContact(k, x, v);
           F += this.vibratorContact(k, x, v);
           break;
         }
+        case KEY_ACTION: F += action.keyForce(k, x, v); break;
         case KEY_SPACE: F += this.ubarContact(k, x, v); break;
         case KEY_SHIFT: F += this.shiftContact(k, x, v, 0); break;
         case KEY_LOCK: F += this.shiftContact(k, x, v, 1); break;
@@ -573,7 +579,7 @@ export class MechanicalSim {
   vibrLiftTarget() {
     // Ribbon selector: 0 = upper band, 1 = lower band (full lift), 2 = stencil (no lift).
     const s = this.ax[AUX.ribbonSelector], pos = this.auxParams[AUX.ribbonSelector].detents;
-    if (s <= (pos[0] + pos[1]) / 2) return this.vibrLift * 0.72;
+    if (s <= (pos[0] + pos[1]) / 2) return this.vibrLift * this.vibrUpper;
     if (s <= (pos[1] + pos[2]) / 2) return this.vibrLift;
     return 0;
   }
@@ -655,6 +661,7 @@ export class MechanicalSim {
     }
     uf -= 0.6 * this.uV; // light pivot damping
     const camRel = this.ax[AUX.carriageRelease] / this.auxParams[AUX.carriageRelease].hi; // 0..1 lifts dogs clear
+    const dogLift = camRel > this.dogRelief ? camRel : this.dogRelief;
 
     // Fixed dog. Rocker lifts it against its spring; y = height above root.
     let Fyf = -(this.Fdog0 + this.kDogSpring * (this.yf - this.yBot));
@@ -665,7 +672,7 @@ export class MechanicalSim {
       Fyf += Fs; ports[PORT.DOG] += Fs;
     }
     const rd = this.unlimited ? 0 : r;   // unlimited typing: the rocker no longer works the dogs
-    const rawCamF = this.camFixed(rd), reliefT = this.yBot + (this.D * 1.45 - this.yBot) * camRel;
+    const rawCamF = this.camFixed(rd), reliefT = this.yBot + (this.D * 1.45 - this.yBot) * dogLift;
     const camF = rawCamF > reliefT ? rawCamF : reliefT;
     const penF = camF - this.yf;
     if (penF > 0) {
@@ -1088,10 +1095,10 @@ export class MechanicalSim {
       E += 0.5 * this.keyMass * v * v;
       if (x > 0) E += this.kRet0[k] * x + 0.5 * this.keyRetRate * x * x;
       if (x < 0) E += 0.5 * kFelt * x * x; else if (x > Tr) E += 0.5 * kFelt * (x - Tr) ** 2;
-      if (this.kType[k] === KEY_PRINT) E += this.action.linkEnergy(k, x);
+      if (this.kType[k] === KEY_PRINT || this.kType[k] === KEY_ACTION) E += this.action.linkEnergy(k, x);
       // ubar contact potential
       const xTrip = this.tripFrac * Tr;
-      if ((this.kType[k] === KEY_PRINT || this.kType[k] === KEY_SPACE) && x > xTrip) {
+      if (!this.powered && (this.kType[k] === KEY_PRINT || this.kType[k] === KEY_SPACE) && x > xTrip) {
         const ratio = this.uFull / ((1 - this.tripFrac) * Tr);
         const pen = (x - xTrip) * ratio - this.u;
         if (pen > 0) E += 0.5 * this.kUbar * pen * pen;
@@ -1106,7 +1113,7 @@ export class MechanicalSim {
     if (this.yf < yBot) E += 0.5 * this.kDogStop * (yBot - this.yf) ** 2;
     if (this.yl < yBot) E += 0.5 * this.kDogStop * (yBot - this.yl) ** 2;
     const camRelE = this.ax[AUX.carriageRelease] / this.auxParams[AUX.carriageRelease].hi;
-    const reliefE = this.yBot + (this.D * 1.45 - this.yBot) * camRelE;
+    const reliefE = this.yBot + (this.D * 1.45 - this.yBot) * Math.max(camRelE, this.dogRelief);
     const pf = Math.max(this.camFixed(r), reliefE) - this.yf, pl2 = Math.max(this.camLoose(r), reliefE) - this.yl;
     if (pf > 0) E += 0.5 * this.kCam * pf * pf;
     if (pl2 > 0) E += 0.5 * this.kCam * pl2 * pl2;

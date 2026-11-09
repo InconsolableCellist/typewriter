@@ -26,7 +26,7 @@ export class DeskPile {
     this.paper = paperMaterial; this.maxAniso = maxAniso;
     this.W = machine.paper.width; this.H = machine.paper.height;
     this.group = new THREE.Group();
-    this.group.position.set(AT.x, 0, AT.z);
+    this.group.position.set(AT.x + (machine.deskSpread ?? 0), 0, AT.z);
     scene.add(this.group);
     this.sheets = [];             // bottom first
     this.count = 0;

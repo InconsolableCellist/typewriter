@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import machine from './machine/frontstrike1926.js';
+import { MACHINES, DEFAULT_MACHINE } from './machine/index.js';
 import { deriveGeometry } from './machine/geometry.js';
 import { deriveRig } from './render/rig.js';
 import { createScene, loadRoom } from './render/scene.js';
@@ -9,6 +9,8 @@ import { MachineView } from './render/machine-view.js';
 import { PaperView, RibbonView } from './render/paper-view.js';
 import { HeadView } from './render/head-view.js';
 import { Enclosure } from './render/enclosure.js';
+import { ElementView, ElementEnclosure, ELEMENT_ENCLOSURE_URL, ELEMENT_CAVITY } from './render/element-view.js';
+import { applyCavity } from './render/look.js';
 import { Desk } from './render/desk.js';
 import { createMockSim, MockSoft } from './render/mock-sim.js';
 import { Orbit } from './interact/orbit.js';
@@ -22,11 +24,19 @@ import { PaperSoundTracker } from './audio/paper_tracker.js';
 import { installPages } from './pages/index.js';
 import { installDeskProps } from './render/desk-props.js';
 import { installEnvironment } from './render/environment.js';
+import { DeskSway } from './render/desk-sway.js';
+import { BallBlur } from './render/ball-blur.js';
 import { Ambience } from './audio/ambience.js';
 
 const sources = import.meta.glob(['./sim/client.js', './soft/index.js']);
 const params = new URLSearchParams(location.search);
 const useMock = params.has('mock');
+function chooseMachine() {
+  let saved = null;
+  try { saved = localStorage.getItem('machine'); } catch { /* storage can be blocked; the default machine is fine */ }
+  return MACHINES[new URLSearchParams(location.search).get('machine')] ?? MACHINES[saved] ?? MACHINES[DEFAULT_MACHINE];
+}
+const machine = chooseMachine();
 
 async function loadGlyphs() {
   try {
@@ -73,9 +83,11 @@ async function main() {
   atlas.keys.anisotropy = maxAniso; atlas.slugs.anisotropy = maxAniso;
   document.title = real ? 'Typewriter' : 'Typewriter (mock physics)';
 
-  const view = new MachineView({ machine, geometry: geometry, rig, mats, atlas });
+  const isElement = !!geometry.element;
+  const view = isElement ? new ElementView({ machine, geometry, rig, mats, atlas, glyphs }) : new MachineView({ machine, geometry, rig, mats, atlas });
+  if (isElement) await view.emats.ready;
   stage.scene.add(view.root);
-  view.tryLoadGLB('/assets/models/frame.glb').then((ok) => { if (ok) console.info('frame.glb loaded'); });
+  if (!isElement) view.tryLoadGLB('/assets/models/frame.glb').then((ok) => { if (ok) console.info('frame.glb loaded'); });
 
   const paper = new PaperView({ renderer: stage.renderer, soft, mats, keyDir: new THREE.Vector3() });
   const keyWorld = stage.key.position.clone().sub(stage.key.target.position).normalize();
@@ -85,17 +97,20 @@ async function main() {
   stage.scene.add(paper.mesh, ribbon.mesh);
 
   stage.camera.layers.enable(1);   // the enclosure, which the print-point view looks past
-  const orbit = new Orbit(stage.camera, canvas);
+  if (machine.defaultCamera) stage.camera.position.fromArray(machine.defaultCamera.position);
+  const orbit = new Orbit(stage.camera, canvas, machine.defaultCamera?.target);
 
   const head = new HeadView({ renderer: stage.renderer, scene: stage.scene, geometry, rig, element: document.getElementById('insetFront'), lamp: stage.rim });
   for (const b of document.querySelectorAll('#insets .fold')) b.addEventListener('click', () => b.closest('.card').classList.toggle('folded'));
 
-  const enclosure = new Enclosure({ scene: stage.scene, mats });
+  const enclosure = isElement ? new ElementEnclosure({ scene: stage.scene, mats: view.emats }) : new Enclosure({ scene: stage.scene, mats });
+  if (isElement) { applyCavity(ELEMENT_CAVITY); head.followX = () => -soft.carrierOffset; }
   const desk = new Desk({ scene: stage.scene, mats });
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
   loadRoom(stage.scene, '/assets/hdri/combination_room_2k.hdr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
 
   const panel = new Panel({
+    machine,
     sim, soft,
     onFreeBars: () => hands.freeBars(),
     onResetPaper: () => hands.loadPaper(),
@@ -120,13 +135,14 @@ async function main() {
     paperMesh: paper.mesh, ribbonMesh: ribbon.mesh,
   });
   // Carriage body handles: the end plates and the proxy over the rails.
-  for (const e of makeCarriageHandles(view, rig)) { view.pickables.push(e); interaction.picker.add(e); }
+  if (!isElement) for (const e of makeCarriageHandles(view, rig)) { view.pickables.push(e); interaction.picker.add(e); }
 
 
-  enclosure.load('/assets/models/enclosure.glb').then((ok) => {
+  enclosure.load(isElement ? ELEMENT_ENCLOSURE_URL : '/assets/models/enclosure.glb').then((ok) => {
     if (!ok) return;
-    console.info('enclosure.glb loaded');
-    for (const object of enclosure.meshes) interaction.picker.add({ object, part: () => null, enabled: () => enclosure.showing });
+    console.info('enclosure loaded');
+    if (isElement) for (const entry of enclosure.pickEntries()) interaction.picker.add(entry);
+    else for (const object of enclosure.meshes) interaction.picker.add({ object, part: () => null, enabled: () => enclosure.showing });
     desk.setFootprint(new THREE.Box3().setFromObject(enclosure.group));
   });
 
@@ -140,7 +156,19 @@ async function main() {
   }
   const pages = installPages({ stage, soft, paper, machine, interaction, hands });   // before the keyboard and terminal listeners: its overlay must see keys first
   const deskProps = installDeskProps({ stage, interaction, soft, paper, hands, machine });
-  const environment = installEnvironment({ stage, interaction, panel });
+  const machinePicker = document.getElementById('a-machine');
+  for (const m of Object.values(MACHINES)) machinePicker.add(new Option(m.name, m.id));
+  machinePicker.value = machine.id;
+  machinePicker.addEventListener('change', () => {
+    try { localStorage.setItem('machine', machinePicker.value); } catch { /* the URL below still selects it */ }
+    const url = new URL(location.href);
+    url.searchParams.set('machine', machinePicker.value);
+    location.href = url;
+  });
+  machinePicker.addEventListener('keydown', () => machinePicker.blur());   // typing goes to the typewriter
+  const environment = installEnvironment({ stage, interaction, panel, machine });
+  const deskSway = machine.desk ? new DeskSway(machine.desk, machine.carriage.mass) : null;
+  const ballBlur = isElement ? new BallBlur(stage.scene, view.ballGroup) : null;
   const ambience = new Ambience({ environment });
   environment.onChange((s) => ambience.setWeather(s.weather));
   panel.onWeatherSound = (on) => ambience.setEnabled(on);
@@ -188,6 +216,10 @@ async function main() {
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (deskSway) {
+      deskSway.update(dt, -sim.state[sim.layout.carriageV]);
+      environment.deskKick(deskSway.dv);
+    }
     const t0 = performance.now();
     soft.step(dt, sim.state, sim.layout);
     paperSound.update(dt, soft);
@@ -195,6 +227,7 @@ async function main() {
     const envKey = JSON.stringify(env);
     if (envKey !== lastEnv) { lastEnv = envKey; sim.setEnv(env); }
     view.update(sim.state, sim.layout, soft);
+    ballBlur?.update();
     // A bar left standing with no motion is jammed; say where the fix is, and picking lets raised bars be taken first.
     let stuck = false;
     for (let i = 0; i < geometry.nPrint; i++) {
@@ -211,7 +244,10 @@ async function main() {
     interaction.update();
     orbit.update(dt);
     if (timer) timer.begin();
+    const shake = deskSway?.x ?? 0;
+    stage.camera.position.x -= shake;   // everything on the table moves with it; shifting the viewer instead leaves the distant room still
     stage.composer.render();
+    stage.camera.position.x += shake;
     head.beforeRender = (cam) => paper.keyDir.copy(keyWorld).transformDirection(cam.matrixWorldInverse);
     head.render();
     if (timer) timer.end();
@@ -228,7 +264,7 @@ async function main() {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { ambience, environment, sim, soft, view, paper, panel, orbit, stage, geometry, machine, rig, interaction, hands, enclosure, head, terminal, pages, deskProps };
+  window.__tw = { deskSway, ballBlur, ambience, environment, sim, soft, view, paper, panel, orbit, stage, geometry, machine, rig, interaction, hands, enclosure, head, terminal, pages, deskProps };
 }
 
 function makeGpuTimer(gl) {

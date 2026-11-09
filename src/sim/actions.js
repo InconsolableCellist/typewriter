@@ -9,6 +9,7 @@
 //   energy(), snapshot(state, L), exportState(), importState(s)
 import { PORT, AC } from './ports.js';
 import { FACE_TABLE_N } from './faces.js';
+import { ElementAction } from './element-action.js';
 
 const S_LUT_N = 2048;
 const TRACE_LEN = 256;
@@ -784,6 +785,8 @@ export function createAction(sim) {
     case 'typebar-frontstrike':
     case 'typebar-upstrike':
       return new TypebarAction(sim);
+    case 'single-element':
+      return new ElementAction(sim);
     default:
       throw new Error(`Unknown action type '${type}': add it to createAction in src/sim/actions.js`);
   }

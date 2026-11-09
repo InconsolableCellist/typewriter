@@ -6,6 +6,7 @@ const V = 32;                 // voices
 const REF_STRIKE_PK = 0.45;   // source amplitude of an ordinary keystroke, so cuts keep their recorded balance
 const MAX_VOICE_GAIN = 2.5;
 const TOUCH_WAIT_S = 0.035;   // how long a bottomed key waits for its slug before it counts as a missed press
+const RUN_REF_SPEED = 0.9;    // m/s; the carrier speed at which the recorded run plays at its own level
 const fnv = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; };
 
 class Rng { constructor(s) { this.s = s | 0 || 1; } next() { let x = this.s; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this.s = x; return (x >>> 0) / 4294967296; } }
@@ -28,6 +29,7 @@ export class Sampler {
     this.lastTop = new Float64Array(sim.nKeys + 8).fill(-1e9);
     this.clashHold = 0; this.clashMax = 0; this.clashGuard = 0;
     this.paperV = 0; this.vFilt = 0; this.loops = {};
+    this.electric = sim.m.action?.type === 'single-element';   // key touches are synthesised there, the recorded ones are of a manual
   }
 
   load(pcm, manifest) {
@@ -60,11 +62,12 @@ export class Sampler {
       this.keyVar.push({ tiers, rr: 0, isSpace: id === 'space' || geo.keys[k].id === 'space', isShift: /shift/i.test(id) });
     }
     this.rrGen = 0;
-    for (const name of ['paper_rustle', 'paper_feed']) {
+    for (const name of ['paper_rustle', 'paper_feed', 'el_run']) {
       const it = this.sets[name]?.[0];
       if (it) this.loops[name] = { o: it.o, n: it.n, base: it.base, pos: 0, g: 0, tg: 0 };
     }
     this.radius = this.sim.m.platen.radius;
+    this.cycleCut = this.electric && !!this.sets.el_cycle?.length;
     this.loaded = true;
   }
 
@@ -73,8 +76,10 @@ export class Sampler {
   /** Sample-accurate queue of acoustic events. */
   drain(sim) {
     if (sim.acN === 0) return;
+    const q = sim.acQ;
+    // With the machine's own recording loaded, the cycle and clutch voices are in it; the synth keeps the motor and the keys.
+    if (this.synth) for (let i = 0; i < sim.acN; i++) { if (!this.cycleCut || q[i * 3] === AC.KEY_BOTTOM) this.synth.fire(q[i * 3], q[i * 3 + 1], q[i * 3 + 2]); }
     if (this.loaded) {
-      const q = sim.acQ;
       for (let i = 0; i < sim.acN; i++) this.fire(q[i * 3], q[i * 3 + 1], q[i * 3 + 2]);
     }
     sim.acN = 0;
@@ -106,15 +111,34 @@ export class Sampler {
 
   fire(type, a, b) {
     switch (type) {
-      case AC.STRIKE: this.strike(a | 0, b); break;
+      case AC.CLUTCH: this.clutch(a | 0); break;
+      case AC.STRIKE: if (!this.cycleCut) this.strike(a | 0, b); break;
       case AC.KEY_BOTTOM: this.keyBottom(a | 0, b); break;
       case AC.PAD: if (b > 8 && this.now - this.lastPad[a | 0] > 0.05 * this.sr) { this.lastPad[a | 0] = this.now; this.play(this.choose('bar_return'), Math.min(1.4, Math.pow(b / 40, 0.9))); } break;
       case AC.SHIFT_DOWN: this.play(this.sets.shift_down?.[0], Math.min(1.6, Math.pow(Math.abs(b) / 0.25, 0.7) + 0.2)); break;
       case AC.SHIFT_UP: this.play(this.sets.shift_up?.[0], Math.min(1.6, Math.pow(Math.abs(b) / 0.25, 0.7) + 0.2)); break;
       case AC.LS_PICK: if (b > 0.05) this.play(this.choose('lever'), Math.min(1.4, 0.6 + 0.5 * Math.min(1, b / 6))); break;
-      case AC.STOP: if (b > 0.03 && this.now - this.stopGuard > 0.12 * this.sr) this.stopGuard = this.now, this.play(this.choose('endstop'), Math.min(1.6, Math.pow(b / 0.9, 1.0)), Math.min(19000, 2500 + 14000 * b)); break;
+      case AC.STOP: if (b > 0.03 && this.now - this.stopGuard > 0.12 * this.sr) this.stopGuard = this.now, this.play(this.choose(this.cycleCut ? 'el_return_stop' : 'endstop'), Math.min(1.6, Math.pow(b / 0.9, 1.0)), Math.min(19000, 2500 + 14000 * b)); break;
       case AC.KEY_TOP: this.keyTop(a | 0, b); break;
-      case AC.BELL: this.play(this.sets.bell?.[0], Math.min(1.5, Math.pow(b / 110, 0.8))); break;
+      case AC.BELL: this.play((this.cycleCut ? this.sets.el_bell?.[0] : null) ?? this.sets.bell?.[0], Math.min(1.5, Math.pow(b / 110, 0.8))); break;
+      default: break;
+    }
+  }
+
+  /** Electric machine: a clutch trip starts the whole recorded print cycle, strike and all. */
+  clutch(kind) {
+    if (!this.cycleCut) return;
+    const S = this.sets;
+    switch (kind) {
+      case 0: this.play(this.choose('el_cycle'), 1); break;
+      case 1: this.play(this.choose(S.el_space ? 'el_space' : 'el_cycle'), 1); break;
+      case 4:                                                          // a return or tab arriving; a carrier that hit its stop has already sounded
+        if (this.now - this.stopGuard > 0.12 * this.sr) { this.stopGuard = this.now; this.play(this.choose('el_return_stop'), 0.8); }
+        break;
+      case 5: this.play(this.choose('el_return_start'), 1); break;
+      case 6: this.play(this.choose(S.el_back ? 'el_back' : 'el_cycle'), 1); break;
+      case 7: this.play(this.choose(S.el_correct ? 'el_correct' : 'el_cycle'), 1); break;
+      case 8: this.play(this.choose('el_tab_start'), 1); break;
       default: break;
     }
   }
@@ -137,6 +161,7 @@ export class Sampler {
   }
 
   keyBottom(k, v) {
+    if (this.electric) return;
     const info = this.keyVar[k]; if (!info || v < 0.02) return;
     this.lastBottom[k] = this.now;
     if (info.isShift) return;
@@ -152,7 +177,7 @@ export class Sampler {
 
   /** A press too light to bottom the key or throw the bar still lifts off a finger: the key settling on its top felt. */
   keyTop(k, v) {
-    if (v < 0.02 || !this.keyVar[k] || this.keyVar[k].isShift) return;
+    if (this.electric || v < 0.02 || !this.keyVar[k] || this.keyVar[k].isShift) return;
     const hold = 0.7 * this.sr, now = this.now;
     if (now - this.lastStrike[k] < hold || now - this.lastBottom[k] < hold || now - this.lastTop[k] < 0.08 * this.sr) return;
     this.lastTop[k] = now;
@@ -178,7 +203,7 @@ export class Sampler {
       if (!this.toothInit) { this.lastTooth = tooth; this.toothInit = true; }
       if (tooth !== this.lastTooth) {
         const speed = sim.qV < 0 ? -sim.qV : sim.qV;
-        const released = sim.ax[1] / (sim.auxParams[1].hi || 1) > 0.5;
+        const released = sim.ax[1] / (sim.auxParams[1].hi || 1) > 0.5 || sim.dogRelief > 0.5;
         if (tooth < this.lastTooth && speed > 0.02 && !released && this.now - this.toothGuard > 0.001 * this.sr) {
           this.toothGuard = this.now;
           this.play(this.choose('ratchet'), Math.min(0.9, Math.pow(speed / 0.2, 0.6)));
@@ -211,6 +236,11 @@ export class Sampler {
     const L = this.loops;
     if (L.paper_feed) L.paper_feed.tg = feed > 0.005 ? Math.min(1.5, Math.pow(feed / 0.08, 0.7)) : 0;
     if (L.paper_rustle) L.paper_rustle.tg = handled > 0.01 ? Math.min(1.5, Math.pow(handled / 0.25, 0.7)) : 0;
+    // The carrier's own run, for as long as a powered return or a tab has it moving.
+    if (L.el_run) {
+      const A = sim.action, speed = Math.abs(sim.qV);
+      L.el_run.tg = (A.returnLatched || A.tabLatched) && speed > 0.04 ? Math.min(1.3, Math.pow(speed / RUN_REF_SPEED, 0.6)) : 0;
+    }
   }
 
   tick() {

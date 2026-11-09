@@ -11,7 +11,7 @@ export class FreshStack {
     this.paper = paperMaterial;
     const W = machine.paper.width, H = machine.paper.height;
     this.group = new THREE.Group();
-    this.group.position.set(AT.x, 0, AT.z);
+    this.group.position.set(AT.x - (machine.deskSpread ?? 0), 0, AT.z);
     scene.add(this.group);
     this.material = new THREE.MeshStandardMaterial({ color: paperMaterial.color.clone(), roughness: paperMaterial.roughness, metalness: 0 });
     const block = new THREE.Mesh(new THREE.BoxGeometry(W, BLOCK_H, H), this.material);

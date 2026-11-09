@@ -15,6 +15,7 @@ export class Hands {
     if (this.busy) { this.queuedReturns = 1; return; }   // a press made during the stroke is honoured when it ends, not lost
     const { sim, m } = this;
     this.busy = true;
+    if (m.action?.powerReturn) { this.pressPowerReturn(); return; }
     const L = sim.layout;
     // Sim time, so the stroke is the same stroke at any time scale and under any frame timing.
     const nowMs = () => sim.state[L.time] * 1000;
@@ -59,6 +60,26 @@ export class Hands {
       setTimeout(step, 8);
     };
     step();
+  }
+
+  /** Powered machine: a finger on the Return key, and the motor does the rest. Busy until the mechanism has unlatched. */
+  pressPowerReturn() {
+    const { sim } = this;
+    const L = sim.layout, key = sim.geometry.keys.findIndex((k) => k.id === 'return');
+    sim.pressKey(key, 14, 0.08);
+    const t0 = sim.state[L.time];
+    let latched = false;
+    const watch = () => {
+      const on = sim.state[L.returnLatched] > 0.5, waited = sim.state[L.time] - t0;
+      latched ||= on;
+      if ((latched && !on) || waited > 3 || (!latched && waited > 0.4)) {
+        this.busy = false;
+        if (this.queuedReturns) { this.queuedReturns = 0; this.carriageReturn(); }
+        return;
+      }
+      setTimeout(watch, 8);
+    };
+    watch();
   }
 
   /** A hand that takes hold of every raised bar and eases it back to rest, the way a jam is cleared by hand. */

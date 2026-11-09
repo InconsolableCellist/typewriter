@@ -130,7 +130,8 @@ function installBackgroundTint() {
 
 const lerp = (a, b, k) => a + (b - a) * k;
 
-export function installEnvironment({ stage, interaction, panel }) {
+export function installEnvironment({ stage, interaction, panel, machine }) {
+  const lampX = LAMP_AT.x - (machine?.deskSpread ?? 0);
   const { scene, renderer, key, rim, look } = stage;
   const bgTint = installBackgroundTint();
 
@@ -151,10 +152,10 @@ export function installEnvironment({ stage, interaction, panel }) {
 
   // The lamp.
   const { lamp, glass, opal, bulbMat, bulb, chainPivot, ends, proxies } = buildLamp();
-  lamp.position.set(LAMP_AT.x, 0, LAMP_AT.z);
+  lamp.position.set(lampX, 0, LAMP_AT.z);
   lamp.rotation.y = LAMP_YAW;
   lamp.scale.setScalar(LAMP_SCALE);
-  setContactDisc(LAMP_AT.x, LAMP_AT.z, 0.069 * LAMP_SCALE);   // the base's outer radius
+  setContactDisc(lampX, LAMP_AT.z, 0.069 * LAMP_SCALE);   // the base's outer radius
   scene.add(lamp);
   // Aimed from the bulb to the middle of the machine, wide enough for the pool to take in the keyboard and the sheet.
   const spot = new THREE.SpotLight(0xffd2a0, 0, 2.2, 0.82, 0.8, 1);
@@ -235,6 +236,12 @@ export function installEnvironment({ stage, interaction, panel }) {
     times: TIMES,
     weathers: WEATHERS,
     /** One frame: eases the state, sets every light, and keeps the paper shader's key direction current (keyWorld). */
+    get chainAngle() { return Math.hypot(swing.x, swing.z); },
+    /** The desk under the lamp jumped by this world x velocity: the chain's bob stays behind. */
+    deskKick(dvX) {
+      const l = dvX * Math.cos(LAMP_YAW) / CHAIN_LENGTH, n = dvX * Math.sin(LAMP_YAW) / CHAIN_LENGTH;
+      swing.vz -= l; swing.vx += n;
+    },
     update(dt, keyWorld) {
       frame++;
       flashNow += dt;

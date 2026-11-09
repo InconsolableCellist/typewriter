@@ -25,9 +25,16 @@ Click the stack of paper on the desk to the left of the machine to wind in a fre
 
 The Settings panel at the bottom left sets the time of day (drag the sky strip) and the weather (rain and thunderstorms, with lightning and sound; **weather sound** turns the audio off). The banker's lamp comes on after dark, and its pull chain works. Drag the paper over the lit cigarette at your own risk; the **ashtray** button hides the ashtray and lighter.
 
+## Machines
+
+The **machine** menu in Settings switches between them; the choice is remembered.
+
+- **Open-frame front-strike, c. 1926.** A manual typebar machine with a moving carriage.
+- **Electric single-element office machine, c. 1971.** A motor-driven machine with a fixed platen and a carrier that travels along it. A one-revolution clutch tilts and rotates a type element to one of 88 characters and throws it at the paper at a set strength, however hard you press. Enter is its powered Return; Delete is the correction key, which backs up one space so that retyping the wrong letter lifts it off with the correction tape. Hold space or backspace to repeat. Tab runs the carrier to the next set stop, or past every stop for as long as you hold it. Click the top cover to open it. The carrier's momentum sways the table a little when it stops hard, and the lamp's pull chain swings with it.
+
 ## Audio
 
-Keystrokes and carriage sounds are samples triggered and scaled by the physics, cut from "ASMR Typing on 1950s Typewriter". Bar-on-bar clashes come from a modal model, which also voices everything until the samples load. See `public/assets/audio/SOURCES.md`.
+Keystrokes and carriage sounds are samples triggered and scaled by the physics, cut from "ASMR Typing on 1950s Typewriter". Bar-on-bar clashes come from a modal model, which also voices everything until the samples load. The electric machine has its own sprite, cut from recordings of a real one and triggered by its clutches and carrier; only its motor hum and key clicks are synthesised. See `public/assets/audio/SOURCES.md`.
 
 ## Terminal mode
 
@@ -79,6 +86,8 @@ Output back to the page is flow controlled: when the print queue is long the bri
 long-running program blocks instead of filling memory (a real teletype's serial line behaved the same way).
 
 ## Credits and licences
+
+The code is released under the MIT licence (see `LICENSE`).
 
 - HDRI: "Combination Room" from Poly Haven, CC0.
 - Fitted acoustic data and proofs: see `public/assets/audio/SOURCES.md`.

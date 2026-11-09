@@ -70,7 +70,9 @@ export class SheetBurn {
     this.sinceCheck = 0;
     const sim = this.soft.paperSim;
     if (!sim || this.soft.sheetParked || !(sim.grabs?.size > 0)) return;
-    const i = particleNear(sim, this.ember);
+    const i = particleNear(sim, this.emberInFrame());
     if (i >= 0) this.ignite(sim.uvs[i * 2], sim.uvs[i * 2 + 1]);
   }
+
+  emberInFrame() { return [this.ember[0] + (this.soft.carrierOffset ?? 0), this.ember[1], this.ember[2]]; }
 }

@@ -201,7 +201,7 @@ function patchMaterial(mat) {
 }
 
 function isDrawnOpaque(o) {
-  if (o.isPoints || o.isLine || o.isSprite) return false;
+  if (o.isPoints || o.isLine || o.isSprite || o.userData.noAO) return false;
   const m = o.material;
   if (!m) return true;
   const one = (x) => x.visible && !x.transparent && x.depthWrite !== false;

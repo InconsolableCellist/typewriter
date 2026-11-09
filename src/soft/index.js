@@ -20,6 +20,7 @@ export class SoftWorld {
   }
 
   constructor({ machine, geometry, glyphs: rawGlyphs, paperGrid, pose } = {}) {
+    this.fixedPlaten = !!machine.action?.fixedPlaten;
     const glyphs = withGlyphApi(rawGlyphs);
     this.m = machine; this.geo = geometry; this.glyphs = glyphs;
     this.paperSim = new PaperSim(machine, { ...paperGrid, pose });
@@ -67,6 +68,7 @@ export class SoftWorld {
       for (let k = 1; k <= nsub; k++) {
         const f = this._frame(prev, cur, k / nsub, nsub, dt);
         f.dcx = f.cx - f0.cx; f.dcy = f.cy - f0.cy;
+        if (this.fixedPlaten) { this.paperSim.shiftFrame(f.dcx); f.dcx = 0; this.paperSim.bodyShift = f.cx - this.m.platen.center[0]; }
         f.omega = (f.psi - f0.psi) / SUBSTEP;
         this.paperSim.substep(SUBSTEP, f);
         this.ribbonSim.substep(SUBSTEP, f);
@@ -163,7 +165,7 @@ export class SoftWorld {
       const forkNow = this._forkOffsetUp(f, f.fork);
       const caught = Math.abs(q.up - forkNow) < 0.0025;
       const sel = f.selector ?? 0, L = m.ribbon.vibrator.fullLift;
-      const fullFork = this._forkAt(sel <= 0.175 ? 0.72 * L : sel <= 0.525 ? L : 0, sel, f.shiftY ?? 0);
+      const fullFork = this._forkAt(sel <= 0.175 ? (m.ribbon.vibrator.upperBandFraction ?? 0.72) * L : sel <= 0.525 ? L : 0, sel, f.shiftY ?? 0);
       const atFull = this._forkOffsetUp(f, fullFork);
       const rc = caught ? atFull : q.up;
       const halfW = R.W / 2;
@@ -243,15 +245,23 @@ export class SoftWorld {
     return out;
   }
 
+  /**
+   * On a fixed-platen machine the soft bodies are solved in the moving carrier's frame, which keeps the print point and
+   * ribbon where the printer expects them. Frame x = world x + carrierOffset. Zero on a moving-carriage machine.
+   */
+  get carrierOffset() { return this.fixedPlaten && this.frame ? this.frame.cx - this.m.platen.center[0] : 0; }
+
+  _toFrame(point) { return [point[0] + this.carrierOffset, point[1], point[2]]; }
+
   // ---- interaction
   grabPaper(point) {
-    const g = this.paperSim.grab(point);
+    const g = this.paperSim.grab(this._toFrame(point));
     if (g < 0) return -1;
     return this._registerGrab('paper', g);
   }
 
   grabRibbon(point) {
-    const g = this.ribbonSim.grab(point);
+    const g = this.ribbonSim.grab(this._toFrame(point));
     if (g < 0) return -1;
     return this._registerGrab('ribbon', g);
   }
@@ -267,8 +277,9 @@ export class SoftWorld {
   moveGrab(id, target) {
     const g = this._grabKinds.get(id);
     if (!g) return;
-    if (g.kind === 'paper') this.paperSim.move(g.inner, target);
-    else this.ribbonSim.move(g.inner, target);
+    const inFrame = Array.isArray(target) ? this._toFrame(target) : target;
+    if (g.kind === 'paper') this.paperSim.move(g.inner, inFrame);
+    else this.ribbonSim.move(g.inner, inFrame);
   }
 
   release(id) {

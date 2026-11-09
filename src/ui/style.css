@@ -37,6 +37,7 @@ html, body { margin: 0; height: 100%; background: #08080a; overflow: hidden; fon
 #forceTip i { display: block; height: 2px; margin-top: 3px; background: var(--accent); width: 0; }
 
 #hint.alert { color: #f2b56b; }
+#a-machine { flex: 1 1 auto; min-width: 0; font: 9.5px "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace; color: #cfc9ba; background: #16171a; border: 1px solid var(--hair); border-radius: 2px; padding: 3px 4px; }
 #copyright { position: fixed; right: 16px; bottom: 12px; color: var(--dim); font-size: 10px; letter-spacing: .02em; }
 
 #labelTip { position: fixed; display: none; pointer-events: none; z-index: 30; padding: 2px 7px; font: 10.5px "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace; color: #e8e3d6; background: rgba(10,11,13,.86); border: 1px solid var(--hair); border-radius: 2px; white-space: nowrap; }

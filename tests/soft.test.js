@@ -116,6 +116,19 @@ test('opening the paper release lets the sheet be repositioned freely', async ()
   state[L.paperRelease] = 0; state[L.bail] = 0;
 });
 
+test('a lift-off strike takes the character back off the paper and leaves its dent', async () => {
+  const { world, state, layout: L, machine: m, geometry: g } = await makeWorld();
+  loadedSheet(world, state, L, m);
+  const bar = barFor(g, 'm');
+  const sum = (ch) => { let t = 0; const d = world.inkTexture.data; for (let i = ch; i < d.length; i += 2) t += d[i]; return t; };
+  world.applyStrike(strikeEvent(g, L, state, bar, { peakForce: 60 }, world));
+  const inked = sum(0), dented = sum(1);
+  assert.ok(inked > 0, 'the strike printed');
+  world.applyStrike({ ...strikeEvent(g, L, state, bar, { peakForce: 60 }, world), erase: true });
+  assert.ok(sum(0) < inked * 0.25, `ink left ${(sum(0) / inked).toFixed(3)}`);
+  assert.ok(sum(1) >= dented, 'the emboss stays');
+});
+
 test('a lightly hit glyph prints fainter than a heavy one', async () => {
   const { world, state, layout: L, machine: m, geometry: g } = await makeWorld();
   loadedSheet(world, state, L, m);

@@ -46,14 +46,16 @@ Every DOF is integrated (symplectic Euler, unconditional sleeping when at rest) 
 - Bell: hammer DOF tripped by a carriage finger. Vibrator lift, ribbon pawl, paper release and bail
   are DOFs driven by the mechanism or the user.
 
+## Single-element machine (`src/sim/element-action.js`)
+`element1971` is a second print action behind the same Action interface. A motor runs one-revolution clutches that drive the print, operational and shift shafts through cams. Selection goes through binary latches and a whiffletree into tilt and rotate DOFs; the print rocker throws the element at the platen from a low rest position. The platen is fixed and the carrier moves. To keep the common code unchanged, the carriage DOF, `SoftWorld` and the printer are all solved in the carrier's frame: `carriageX` is minus the carrier's world x, `SoftWorld.carrierOffset` converts between frames, and the paper and ribbon meshes and the Print Point camera are offset by it. The sheet is shifted by the frame's motion each substep, so it stays still in the world.
+
 ## Acoustics (src/audio)
 Recorded samples triggered by physical events. Slug contact, key bottoming, bar return, shift stops, each rack
 tooth on return, each platen detent, carriage stop and bell queue `AC` events from the mechanism, drained at
 audio rate; `src/audio/sampler.js` plays cuts from `public/assets/audio/samples/` with level and brightness set by
 the measured force or speed. Each key hashes to a stable set of cuts. Paper loops follow soft-body speed.
-A modal layer voices bar-bar metal and rail noise, and is the fallback until samples load.
-The current sprite is cut from a user-supplied recording with an unknown licence (see `SOURCES.md`): replace it
-before any public or commercial release.
+A modal layer voices bar-bar metal, and is the fallback until samples load. `src/audio/element-synth.js` voices the electric machine's motor and clutches from the mechanism's state.
+Sources and terms for the recordings are in `public/assets/audio/SOURCES.md`.
 
 ## Contract: SimClient (`src/sim/client.js`)
 ```js

@@ -55,6 +55,10 @@ de-noised against a static noise profile, trimmed, peak-normalised and encoded a
 `tools/audio/cut_samples.py`. The modal model above is unaffected by this source. It remains the fallback until the sprite
 has loaded, and afterwards voices only bar-on-bar clashes and carriage rail noise.
 
+## Electric machine samples (`samples_element/sprite.ogg`, `samples_element/manifest.json`)
+
+Cut by `tools/audio/cut_element_samples.py` from a 2 min 44 s sound-test recording of an electric single-element typewriter, supplied by the project owner; origin and licence not recorded here. Each cut's `srcT` is its time in that recording. The file was decoded with ffmpeg only and mixed to mono at 48 kHz. Print cycles, space, backspace, correction, return and tab are cut as recorded; `el_run` is a seamless loop of the carrier running; the bell is kept only at its three partials (band-passed), because machine noise runs through it. The motor and key clicks remain synthesised (`src/audio/element-synth.js`).
+
 ## Ambience (`ambience/rain.ogg`, `ambience/thunder.ogg`)
 
 Indoor thunderstorm rain loop and thunder recording supplied by the project owner; origin and licence not recorded here. `rain.ogg` is the owner's crossfaded loop re-encoded as Ogg Opus. `thunder.ogg` is one 22.8 s roll cut from the owner's file, which repeats that roll. Decoded with ffmpeg only.

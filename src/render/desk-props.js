@@ -570,7 +570,7 @@ function buildSparks(canvas) {
   const clear = () => { life.fill(0); alive = 0; points.visible = false; lifeAttr.needsUpdate = true; };
   return {
     points, clear,
-    step(dt, sim, burn) {
+    step(dt, sim, burn, frameX = 0) {
       if (!burn.active && alive === 0) return;
       if (burn.active && sim) {
         // A few random particles a frame; any that happens to lie on the front throws a spark.
@@ -578,7 +578,7 @@ function buildSparks(canvas) {
           const i = Math.floor(Math.random() * sim.n);
           const dist = Math.hypot((sim.uvs[i * 2] - burn.u) * burn.width, (sim.uvs[i * 2 + 1] - burn.v) * burn.height);
           if (dist < burn.radius - 0.022 || dist > burn.radius + 0.002 || life[cursor] > 0.25) continue;
-          positions[cursor * 3] = sim.x[i]; positions[cursor * 3 + 1] = sim.y[i]; positions[cursor * 3 + 2] = sim.z[i];
+          positions[cursor * 3] = sim.x[i] - frameX; positions[cursor * 3 + 1] = sim.y[i]; positions[cursor * 3 + 2] = sim.z[i];
           velocity[cursor * 3] = (Math.random() - 0.5) * 0.05;
           velocity[cursor * 3 + 1] = 0.05 + Math.random() * 0.1;
           velocity[cursor * 3 + 2] = (Math.random() - 0.5) * 0.05;
@@ -607,7 +607,7 @@ function buildSparks(canvas) {
 export function installDeskProps({ stage, interaction, soft, paper, hands, machine }) {
   const group = new THREE.Group();
   group.name = 'desk-props';
-  group.position.set(AT.x, 0, AT.z);
+  group.position.set(AT.x + (machine.deskSpread ?? 0), 0, AT.z);
   stage.scene.add(group);
 
   const solid = (geometry, material) => {
@@ -686,7 +686,7 @@ export function installDeskProps({ stage, interaction, soft, paper, hands, machi
     },
     update(dt) {
       if (!visible) return;
-      if (burn) { burn.update(dt); sparks.step(dt, soft.paperSim, burn); }
+      if (burn) { burn.update(dt); sparks.step(dt, soft.paperSim, burn, soft.carrierOffset ?? 0); }
       t += dt;
       smokeTime.value = (smokeTime.value + dt) % SMOKE_PERIOD;
       // A resting cigarette smoulders: a slow breath with a little flutter, never a flare.

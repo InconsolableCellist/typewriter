@@ -1,0 +1,7 @@
+// Cloudflare Workers static assets: `npm run build`, then `npx wrangler deploy` uploads dist/ as-is.
+// No Worker script; public/_headers (copied into dist/) sets caching.
+{
+  "name": "typewriter",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./dist" }
+}

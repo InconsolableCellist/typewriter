@@ -225,10 +225,12 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
 
 /** A DataTexture with partial uploads through texSubImage2D, driven by dirty rects (contract: RG). */
 export class SubrectTexture {
-  constructor(renderer, source) {
+  /** source: { data, width, height, dirty }, two bytes per texel, or one with { singleChannel: true }. */
+  constructor(renderer, source, { singleChannel = false } = {}) {
     this.renderer = renderer;
     this.source = source;
-    this.tex = new THREE.DataTexture(source.data, source.width, source.height, THREE.RGFormat, THREE.UnsignedByteType);
+    this.singleChannel = singleChannel;
+    this.tex = new THREE.DataTexture(source.data, source.width, source.height, singleChannel ? THREE.RedFormat : THREE.RGFormat, THREE.UnsignedByteType);
     this.tex.minFilter = THREE.LinearFilter;
     this.tex.magFilter = THREE.LinearFilter;
     this.tex.generateMipmaps = false;
@@ -257,7 +259,7 @@ export class SubrectTexture {
       if (w <= 0 || h <= 0) continue;
       gl.pixelStorei(gl.UNPACK_SKIP_PIXELS, x);
       gl.pixelStorei(gl.UNPACK_SKIP_ROWS, y);
-      gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, gl.RG, gl.UNSIGNED_BYTE, s.data);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, this.singleChannel ? gl.RED : gl.RG, gl.UNSIGNED_BYTE, s.data);
       this._since += w * h;
     }
     gl.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);

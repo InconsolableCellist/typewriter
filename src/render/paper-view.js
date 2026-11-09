@@ -22,6 +22,7 @@ export class PaperView {
     const keyDirView = keyDir;
     this.keyDir = keyDir;
     this.ink = new SubrectTexture(renderer, soft.inkTexture);
+    this.inkColour = new SubrectTexture(renderer, soft.colorMask, { singleChannel: true });
     const p = soft.paper;
     // The cloth is coarse along the feed; drawn as chords it cuts into the platen. Refine each cell along v with
     // a Catmull-Rom through the simulated nodes (display only).
@@ -46,11 +47,16 @@ export class PaperView {
     this.geo = geo;
 
     const texel = new THREE.Vector2(1 / soft.inkTexture.width, 1 / soft.inkTexture.height);
+    // The colour mask is downsampled and rounded up, so its last row and column are part empty.
+    const mask = soft.colorMask;
+    const colourScale = new THREE.Vector2(soft.inkTexture.width / (mask.downsample * mask.width), soft.inkTexture.height / (mask.downsample * mask.height));
     const mat = new THREE.MeshStandardMaterial({
       color: 0xe9e2cf, roughness: 0.92, metalness: 0, side: THREE.DoubleSide,
     });
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uInk = { value: this.ink.tex };
+      sh.uniforms.uInkColour = { value: this.inkColour.tex };
+      sh.uniforms.uInkColourScale = { value: colourScale };
       sh.uniforms.uTexel = { value: texel };
       sh.uniforms.uKeyDir = { value: keyDirView };
       Object.assign(sh.uniforms, this.burn);
@@ -62,7 +68,7 @@ export class PaperView {
         .replace('#include <uv_vertex>', '#include <uv_vertex>\nvInkUv = uv;');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', `#include <common>
-        uniform sampler2D uInk; uniform vec2 uTexel; uniform vec3 uKeyDir; varying vec2 vInkUv;
+        uniform sampler2D uInk; uniform sampler2D uInkColour; uniform vec2 uInkColourScale; uniform vec2 uTexel; uniform vec3 uKeyDir; varying vec2 vInkUv;
         float fibre(vec2 p){ return fract(sin(dot(floor(p), vec2(127.1,311.7)))*43758.5453); }
         ${BURN_GLSL}`)
         .replace('#include <map_fragment>', `#include <map_fragment>
@@ -79,7 +85,7 @@ export class PaperView {
         float inkA = smoothstep(0.02, 0.6, inkR);
         float grain = fibre(gl_FragCoord.xy*0.5)*0.03;
         diffuseColor.rgb *= 1.0 - grain;
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.013,0.012,0.016), inkA);
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.013,0.012,0.016), vec3(0.392,0.0144,0.0144), step(0.5, texture2D(uInkColour, inkUv*uInkColourScale).r)), inkA);   // the red is pages' RED_RGB, linear
         vec3 burnGlow = vec3(0.);
         if (uBurn.z > 0.) {
           float bd = burnDepth(vInkUv);
@@ -178,6 +184,7 @@ export class PaperView {
     this.geo.getAttribute('position').needsUpdate = true;
     if (p.normalsDirty) { this.geo.computeVertexNormals(); p.normalsDirty = false; }
     this.ink.flush();
+    this.inkColour.flush();
     this.geo.boundingSphere = null;
   }
 }
@@ -210,7 +217,7 @@ export class RibbonView {
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying vec2 vR; uniform sampler2D uRibbon; uniform float uHasTex;')
         .replace('#include <map_fragment>', `#include <map_fragment>
-        vec3 band = vR.y < 0.5 ? vec3(0.010,0.010,0.013) : vec3(0.19,0.012,0.014);
+        vec3 band = vR.y < 0.5 ? vec3(0.19,0.012,0.014) : vec3(0.010,0.010,0.013);   // black is the upper half, red the lower, as in print.js
         float inWindow = step(0.0, vR.x)*step(vR.x, 1.0);
         vec2 ribbonTex = uHasTex > 0.5 ? texture2D(uRibbon, clamp(vR, vec2(0.0), vec2(1.0))).rg : vec2(1.0, 0.0);
         // R = remaining ink and weave, G = depleted ink; depleted cloth reads paler and greyer.

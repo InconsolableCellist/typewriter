@@ -1,0 +1,145 @@
+{
+ "powder_coat": {
+  "tile": 0.08,
+  "physical": {
+   "metalness": 1,
+   "roughness": 1,
+   "clearcoat": 0.2,
+   "clearcoatRoughness": 0.42,
+   "ior": 1.5
+  },
+  "note": "metalnessMap carries the flake; normalScale 1 is physically scaled"
+ },
+ "wrinkle_paint": {
+  "tile": 0.06,
+  "physical": {
+   "metalness": 1,
+   "roughness": 1,
+   "ior": 1.5
+  },
+  "note": "keep repeat honest, the labyrinth period is 1.35 mm"
+ },
+ "bead_blasted_aluminium": {
+  "tile": 0.04,
+  "physical": {
+   "metalness": 1,
+   "roughness": 1
+  },
+  "note": "colour is measured F0, leave material.color white"
+ },
+ "nickel_polished": {
+  "tile": 0.06,
+  "physical": {
+   "metalness": 1,
+   "roughness": 1,
+   "envMapIntensity": 1.1
+  },
+  "note": "bright plating"
+ },
+ "nickel_worn": {
+  "tile": 0.1,
+  "physical": {
+   "metalness": 1,
+   "roughness": 1
+  },
+  "note": "rubbed through to brass then steel; albedo holds F0 of each layer"
+ },
+ "chrome_steel": {
+  "tile": 0.06,
+  "physical": {
+   "metalness": 1,
+   "roughness": 1,
+   "envMapIntensity": 1.15
+  }
+ },
+ "key_glass": {
+  "tile": 0.03,
+  "physical": {
+   "metalness": 0,
+   "roughness": 1,
+   "clearcoat": 1,
+   "clearcoatRoughness": 0.02,
+   "ior": 1.52,
+   "specularIntensity": 1
+  },
+  "note": "tint is the card under the glass; multiply the printed legend over albedo"
+ },
+ "blued_spring_steel": {
+  "tile": 0.05,
+  "physical": {
+   "metalness": 1,
+   "roughness": 1,
+   "anisotropy": 0.55,
+   "anisotropyRotation": 0
+  },
+  "note": "rolling lines run along U"
+ },
+ "japanned_enamel": {
+  "tile": 0.2,
+  "physical": {
+   "metalness": 1,
+   "roughness": 1,
+   "clearcoat": 1,
+   "clearcoatRoughness": 0.07,
+   "ior": 1.52
+  },
+  "note": "metalnessMap marks chips through to the iron"
+ },
+ "vulcanised_rubber": {
+  "tile": 0.1,
+  "physical": {
+   "metalness": 0,
+   "roughness": 1,
+   "ior": 1.52
+  }
+ },
+ "green_felt": {
+  "tile": 0.08,
+  "physical": {
+   "metalness": 0,
+   "roughness": 1,
+   "sheen": 0.35,
+   "sheenRoughness": 0.65,
+   "sheenColor": [
+    0.1,
+    0.26,
+    0.13
+   ]
+  },
+  "note": "sheen simulates the fibre halo"
+ },
+ "paper_fibre": {
+  "tile": 0.2159,
+  "physical": {
+   "metalness": 0,
+   "roughness": 1
+  },
+  "note": "laid lines along U"
+ },
+ "walnut_desk": {
+  "tile": 2.2,
+  "physical": {
+   "metalness": 0,
+   "roughness": 1,
+   "clearcoat": 0.45,
+   "clearcoatRoughness": 0.2,
+   "ior": 1.5
+  },
+  "note": "4096 px, 0.54 mm per texel; larger than the desk so it never repeats; grain along U; no metalnessMap needed"
+ },
+ "ribbon_cloth": {
+  "tile": 0.0248,
+  "physical": {
+   "metalness": 0,
+   "roughness": 1,
+   "sheen": 0.3,
+   "sheenRoughness": 0.5,
+   "sheenColor": [
+    0.05,
+    0.05,
+    0.06
+   ]
+  },
+  "note": "tile is 40 threads at the definition's pitch"
+ }
+}

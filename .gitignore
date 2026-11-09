@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+__pycache__/
+.vite/
+
+# Generated while working on assets: previews, candidates and evaluation renders, reproducible from tools/
+tools/gen/eval/
+tools/gen/preview/
+tools/gen/raw/
+tools/blender/previews/
+tools/audio/proofs/

@@ -1,0 +1,186 @@
+{
+ "ok": true,
+ "worst_clearance_m": 0.0021994848098605873,
+ "categories": {
+  "carriage_levers": {
+   "min": 0.04208,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.1392,
+    0.2011,
+    0.0015
+   ],
+   "inside": false
+  },
+  "carriage_platen_knobs": {
+   "min": 0.00514,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.184,
+    0.1678,
+    -0.062
+   ],
+   "inside": false
+  },
+  "control_stems": {
+   "min": 0.00978,
+   "node": "enclosure_front",
+   "at": [
+    0.0,
+    0.076,
+    0.204
+   ],
+   "inside": false
+  },
+  "controls": {
+   "min": 0.00378,
+   "node": "enclosure_front",
+   "at": [
+    -0.066,
+    0.075,
+    0.204
+   ],
+   "inside": false
+  },
+  "key_caps": {
+   "min": 0.02512,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.113,
+    0.132,
+    0.112
+   ],
+   "inside": false
+  },
+  "key_levers": {
+   "min": 0.01772,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.138,
+    0.082,
+    0.158
+   ],
+   "inside": false
+  },
+  "key_stems": {
+   "min": 0.03012,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.113,
+    0.131,
+    0.112
+   ],
+   "inside": false
+  },
+  "paper_path": {
+   "min": 0.01476,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.1837,
+    0.1539,
+    -0.0617
+   ],
+   "inside": false
+  },
+  "paper_table": {
+   "min": 0.02085,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.1847,
+    0.161,
+    -0.0751
+   ],
+   "inside": false
+  },
+  "ribbon": {
+   "min": 0.05744,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.0791,
+    0.156,
+    -0.0143
+   ],
+   "inside": false
+  },
+  "ribbon_spools": {
+   "min": 0.03175,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.1062,
+    0.156,
+    0.0049
+   ],
+   "inside": false
+  },
+  "rig_bell": {
+   "min": 0.02041,
+   "node": "enclosure_rear",
+   "at": [
+    0.086,
+    0.094,
+    -0.125
+   ],
+   "inside": false
+  },
+  "rig_carriage_beams": {
+   "min": 0.00435,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.184,
+    0.146,
+    -0.088
+   ],
+   "inside": false
+  },
+  "rig_rack": {
+   "min": 0.0022,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.1833,
+    0.128,
+    -0.132
+   ],
+   "inside": false
+  },
+  "rig_rocker": {
+   "min": 0.03856,
+   "node": "enclosure_rear",
+   "at": [
+    0.0,
+    0.106,
+    -0.12
+   ],
+   "inside": false
+  },
+  "rig_universal_bar": {
+   "min": 0.07723,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.094,
+    0.084,
+    0.006
+   ],
+   "inside": false
+  },
+  "typebar_slugs": {
+   "min": 0.01082,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.1264,
+    0.1614,
+    0.0542
+   ],
+   "inside": false
+  },
+  "typebars": {
+   "min": 0.01461,
+   "node": "enclosure_deck_left",
+   "at": [
+    -0.1255,
+    0.1611,
+    0.0525
+   ],
+   "inside": false
+  }
+ }
+}

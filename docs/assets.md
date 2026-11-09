@@ -128,6 +128,16 @@ Metals hold their measured F0 in albedo. `materials.json` holds the tile sizes a
 Files per set: `_albedo` (sRGB), `_normal` (linear, +G up), `_roughness`, `_metalness` (grey, three reads G and B of
 them), and `_roughness_mips` (below). 2048 px, seamless.
 
+**Encoding.** AVIF (AV1, 4:4:4, 8 bit; greyscale maps are single channel), written straight from the float data by `save()` in
+`materials.py` at quality 80 (albedo, metalness) and 85 (normal, roughness, mip atlas). Chosen against the float source, not
+against the old files: roughness, metalness and the mip atlases carry less error than the previous JPEGs (q92-95) at a
+quarter to a half of the size; albedo and normals sit within a step of 8 bits (about 46-50 dB, the floor of the YUV
+round trip), and normals keep more of the real slope signal (correlation with the source 0.85-0.89 against 0.80-0.87 for
+powder coat). The polished metals' normal maps hold about half an 8-bit step of signal, below what 8 bits can store in any
+format, so they come out a few KB. Whole folder 24 MB, was 70 MB. Browsers need AVIF in `createImageBitmap` (Chrome 85,
+Firefox 93, Safari 16.4). KTX2/Basis was measured too: UASTC is larger than the JPEGs, ETC1S loses 4-6 dB against AVIF at
+a larger size, so it would only pay for GPU memory, not download.
+
 | Set | Tile T (m) | `MeshPhysicalMaterial` beyond the maps | Use / notes |
 |---|---|---|---|
 | `powder_coat` | 0.08 | `clearcoat 0.2, clearcoatRoughness 0.42, ior 1.5` | enclosure (default). Orange peel + 2.8 % metallic flake |
@@ -143,7 +153,7 @@ them), and `_roughness_mips` (below). 2048 px, seamless.
 | `green_felt` | 0.08 | `sheen 0.35, sheenRoughness 0.65, sheenColor (0.1,0.26,0.13)` | felt |
 | `paper_fibre` | 0.2159 | — | sheet |
 | `ribbon_cloth` | 0.0248 | `sheen 0.3, sheenRoughness 0.5` | 40 threads at the definition's pitch |
-| `walnut_desk` | 2.2 | dielectric, `clearcoat` 0.45, `clearcoatRoughness` 0.2 | French-polished walnut boards, 4096 px (0.54 mm/texel), grain along U, one tile covers the desk so it never repeats |
+| `walnut_desk` | 2.2 | dielectric, `clearcoat` 0.45, `clearcoatRoughness` 0.2 | French-polished walnut boards, authored at 4096 px and written at 2048 (1.07 mm/texel): albedo box-filtered in linear light, normals averaged and renormalised, roughness taken from level 1 of its Toksvig chain; grain along U, one tile covers the desk so it never repeats |
 
 Set `metalness: 1` and `roughness: 1` whenever a map drives them (three multiplies), and leave `material.color` white so
 measured F0 and base colour are not altered. `repeat = uvMetresPerUnit / T`: for `frame.glb` and `enclosure.glb`
@@ -151,19 +161,21 @@ that is `0.2 / T`.
 
 `pinstripe_border.png` is a separate 2048 x 2048 RGBA decal (a gold line border with scrolled corners).
 
-### Crinkle paint for `element1971`: `element_crinkle_{albedo,normal,roughness,roughness_mips}.jpg`
+### Crinkle paint for `element1971`: `element_crinkle_{albedo,normal,roughness,roughness_mips}.avif`
 1024 px, tiling every 0.08 m. Made by `tools/gen/element_crinkle.py` from `tools/gen/raw/element_crinkle_s71002.png` (Qwen-Image 2.1 through
 ComfyUI, seed 71002, 30 steps, cfg 1, 1024 x 1024; the prompt and settings are in the `.json` beside it): the prompt asks for a macro of fine
 pebbled paint with no objects, text or logos. Periodic plus smooth decomposition makes it tile; the slope is normalised to 0.13 RMS and the colour
-set to the housing's putty, which `createElementMaterials` then multiplies down slightly.
+set to the housing's putty, which `createElementMaterials` then multiplies down slightly. (The AVIF files in the repository
+were transcoded from the earlier q92-95 JPEGs, since the raw source is not committed; running the script again writes them
+from the source.)
 
 ### Specular aliasing
 Each set's normal variance is folded into roughness at source (Toksvig: variance from the shortened mean normal):
-`_roughness.jpg` carries this at mip 0, and `_roughness_mips.jpg` is the full filtered chain, so glints widen and dim
+`_roughness.avif` carries this at mip 0, and `_roughness_mips.avif` is the full filtered chain, so glints widen and dim
 instead of shimmering with distance. Keep `normalScale` at or below 1. To use the chain, slice the atlas (L0 is
 `[0, 0, H, H]`, then L1, L2, ... stacked at `x = H`):
 ```js
-const atlas = await createImageBitmap(blob);                   // <name>_roughness_mips.jpg
+const atlas = await createImageBitmap(blob);                   // <name>_roughness_mips.avif
 const H = atlas.height, mips = [await createImageBitmap(atlas, 0, 0, H, H, { imageOrientation: 'flipY' })];
 for (let s = H >> 1, y = 0; s >= 1; y += s, s >>= 1) mips.push(await createImageBitmap(atlas, H, y, s, s, { imageOrientation: 'flipY' }));
 const tex = new THREE.Texture(mips[0]);
@@ -186,10 +198,11 @@ tests/e2e/xrun.sh node tools/gen/preview/studio.mjs out.png "mode=swatches"
 tests/e2e/xrun.sh node tools/gen/preview/studio.mjs out.png "mode=machine&paint=wrinkle_paint&cam=-0.5,0.32,0.55"
 ```
 
-## HDRI: `public/assets/hdri/combination_room_2k.hdr`
+## HDRI: `public/assets/hdri/combination_room_2k.exr`
 | | |
 |---|---|
 | Asset | Combination Room, 2048 x 1024 Radiance HDR, 6.5 MB, md5 `1f43bc52010775159f5c4270c68596b9` |
+| Served as | Half-float OpenEXR, DWAB level 45, 2.5 MB: `python3 tools/gen/hdri_exr.py combination_room_2k.hdr` (`pip install OpenEXR`). Against the .hdr, after exposure 0.6 and a Reinhard curve, 57 dB PSNR, largest error 0.013 (about 3/255) |
 | Source | https://polyhaven.com/a/combination_room, file `https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/combination_room_2k.hdr` |
 | Author | Sergej Majboroda |
 | Licence | CC0 1.0 (public domain dedication, no attribution required), stated on the asset's page; https://polyhaven.com/license |
@@ -204,7 +217,7 @@ far that a sharp copy would look wrong anyway, and blurred it reads as depth of 
 
 ### Renderer settings
 ```js
-const tex = await new RGBELoader().loadAsync('/assets/hdri/combination_room_2k.hdr');
+const tex = await new EXRLoader().loadAsync('/assets/hdri/combination_room_2k.exr');
 tex.mapping = THREE.EquirectangularReflectionMapping;
 scene.environment = tex;  scene.environmentIntensity = 0.6;   scene.environmentRotation.set(0, 3.0, 0);
 scene.background  = tex;  scene.backgroundIntensity  = 0.45;  scene.backgroundBlurriness = 0.06;  scene.backgroundRotation.set(0, 3.0, 0);

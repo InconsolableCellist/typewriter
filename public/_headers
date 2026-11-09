@@ -1,0 +1,4 @@
+# Cloudflare Pages / Workers static assets. Big assets are cached for a day and revalidated in the background
+# for a week after that, so a returning visitor does not re-request ~30 files on every load.
+/assets/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800

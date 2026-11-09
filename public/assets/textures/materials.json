@@ -125,7 +125,7 @@
    "clearcoatRoughness": 0.2,
    "ior": 1.5
   },
-  "note": "4096 px, 0.54 mm per texel; larger than the desk so it never repeats; grain along U; no metalnessMap needed"
+  "note": "2048 px (authored at 4096 and filtered down), 1.07 mm per texel; larger than the desk so it never repeats; grain along U; no metalnessMap needed"
  },
  "ribbon_cloth": {
   "tile": 0.0248,

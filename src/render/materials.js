@@ -147,7 +147,7 @@ function asTexture(img, { srgb, aniso, mipmaps }) {
 }
 
 async function mapTexture(name, kind, aniso, srgb = false, size = 0) {
-  const blob = await fetchImage(`${BASE}${name}_${kind}.jpg`);
+  const blob = await fetchImage(`${BASE}${name}_${kind}.avif`);
   if (!blob) return null;
   const opts = size ? { imageOrientation: 'flipY', resizeWidth: size, resizeHeight: size, resizeQuality: 'high' } : { imageOrientation: 'flipY' };
   return asTexture(await createImageBitmap(blob, opts), { srgb, aniso });
@@ -155,7 +155,7 @@ async function mapTexture(name, kind, aniso, srgb = false, size = 0) {
 
 /** Roughness with its authored mip chain (variance folded in at every level): the specular-aliasing fix at source. */
 async function roughnessChain(name, aniso) {
-  const blob = await fetchImage(`${BASE}${name}_roughness_mips.jpg`);
+  const blob = await fetchImage(`${BASE}${name}_roughness_mips.avif`);
   if (!blob) return mapTexture(name, 'roughness', aniso);
   const atlas = await createImageBitmap(blob);
   const H = atlas.height;
@@ -177,10 +177,10 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
 
   // Sets used by more than one material share one upload; only the repeat differs.
   const cache = new Map();
-  const loadSet = (name, { metal, sizes }) => {
+  const loadSet = (name, { metal, sizes, noAlbedo }) => {
     if (!cache.has(name)) {
       cache.set(name, Promise.all([
-        mapTexture(name, 'albedo', aniso, true, sizes?.albedo),
+        noAlbedo ? null : mapTexture(name, 'albedo', aniso, true, sizes?.albedo),
         mapTexture(name, 'normal', aniso, false, sizes?.detail),
         sizes ? mapTexture(name, 'roughness', aniso, false, sizes.detail) : roughnessChain(name, aniso),
         metal ? mapTexture(name, 'metalness', aniso) : null,
@@ -203,8 +203,8 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
     { name: 'vulcanised_rubber', mat: mats.rubber, repeat: [1.04, 2.4] },
     { name: 'green_felt', mat: mats.felt, repeat: [4, 0.3] },
   ];
-  // The desk is the one large set: grain needs the albedo at full size, but the other maps can be smaller, within the card's VRAM.
-  jobs.push({ name: 'walnut_desk', mat: mats.desk, repeat: [0.2 / tile('walnut_desk', 2.2), 0.2 / tile('walnut_desk', 2.2)], sizes: lowTier ? { albedo: 2048, detail: 1024 } : { albedo: 4096, detail: 2048 } });
+  // The desk is the one set without a mip-chain roughness (one tile covers it, so it never shrinks far); low tier halves its detail maps.
+  jobs.push({ name: 'walnut_desk', mat: mats.desk, repeat: [0.2 / tile('walnut_desk', 2.2), 0.2 / tile('walnut_desk', 2.2)], sizes: lowTier ? { detail: 1024 } : {} });
   if (paperMaterial) jobs.push({ name: 'paper_fibre', mat: paperMaterial, repeat: [1, 1.29], keepColor: true, noAlbedo: true });
   for (const j of jobs) {
     try {

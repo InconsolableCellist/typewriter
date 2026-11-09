@@ -4,8 +4,8 @@ derived from a photograph's luminance. Heights are in metres at a known tile siz
 
   python3 tools/gen/materials.py [set ...]
 
-Writes public/assets/textures/<set>_{albedo,normal,roughness,metalness}.jpg (2048 px, tileable) and
-<set>_roughness_mips.jpg, a mip atlas (see docs/assets.md) whose roughness grows with the normal variance lost at
+Writes public/assets/textures/<set>_{albedo,normal,roughness,metalness}.avif (2048 px, tileable) and
+<set>_roughness_mips.avif, a mip atlas (see docs/assets.md) whose roughness grows with the normal variance lost at
 each level, so glints turn into broader highlights at distance instead of aliasing.
 
 Conventions: albedo sRGB, base colour holding F0 for metals (linear F0 from published n,k data); normal +G up;
@@ -21,8 +21,13 @@ from PIL import Image, ImageDraw
 from scipy import ndimage
 from scipy.spatial import cKDTree
 
-OUT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "public", "assets", "textures"))
+OUT = os.environ.get("TEXTURE_OUT") or os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "public", "assets", "textures"))
 SIZE = 2048
+MAX_SIZE = 2048   # largest file written; a set authored larger (walnut_desk) is filtered down to this
+
+# AVIF (AV1, 4:4:4) quality per map, chosen against the float source: each map's error is at or below what the
+# previous JPEG files (q92-95) had, at a quarter to a tenth of the size. See docs/assets.md.
+QUALITY = {"albedo": 80, "normal": 85, "roughness": 85, "metalness": 80, "roughness_mips": 85}
 
 # Linear-light F0 (normal incidence reflectance) of the metals.
 F0 = {
@@ -193,20 +198,31 @@ def mip_atlas(chain):
     return atlas
 
 
-def save(path, a, q=93):
+def save(path, a, kind):
+    """AVIF, 4:4:4; a 2-D array is written as greyscale. kind is a QUALITY key."""
     a = np.clip(a, 0, 1)
-    if a.ndim == 2:
-        a = np.dstack([a] * 3)
-    Image.fromarray((a * 255 + 0.5).astype(np.uint8)).save(path, quality=q, subsampling=0)
+    Image.fromarray((a * 255 + 0.5).astype(np.uint8)).save(path, quality=QUALITY[kind], subsampling="4:4:4", speed=4)
+
+
+def downsample_n(x):
+    """downsample() over each channel of an (h, w) or (h, w, c) array."""
+    return downsample(x) if x.ndim == 2 else np.dstack([downsample(x[..., c]) for c in range(x.shape[2])])
 
 
 def write(name, albedo_linear, normal, rough, metal):
     chain = roughness_chain(rough, normal)
-    save(os.path.join(OUT, f"{name}_albedo.jpg"), linear_to_srgb(albedo_linear))
-    save(os.path.join(OUT, f"{name}_normal.jpg"), normal * 0.5 + 0.5, q=95)
-    save(os.path.join(OUT, f"{name}_roughness.jpg"), chain[0])
-    save(os.path.join(OUT, f"{name}_metalness.jpg"), metal if metal.ndim == 2 else np.mean(metal, axis=2), q=92)
-    save(os.path.join(OUT, f"{name}_roughness_mips.jpg"), mip_atlas(chain), q=92)
+    # Filter a larger set down to MAX_SIZE: albedo averaged in linear light, normals averaged then renormalised,
+    # and roughness taken from its own chain, so the variance of the dropped detail stays in the roughness.
+    while albedo_linear.shape[0] > MAX_SIZE:
+        albedo_linear, metal = downsample_n(albedo_linear), downsample_n(metal)
+        normal = downsample_n(normal)
+        normal /= np.linalg.norm(normal, axis=2, keepdims=True)
+        chain = chain[1:]
+    save(os.path.join(OUT, f"{name}_albedo.avif"), linear_to_srgb(albedo_linear), "albedo")
+    save(os.path.join(OUT, f"{name}_normal.avif"), normal * 0.5 + 0.5, "normal")
+    save(os.path.join(OUT, f"{name}_roughness.avif"), chain[0], "roughness")
+    save(os.path.join(OUT, f"{name}_metalness.avif"), metal if metal.ndim == 2 else np.mean(metal, axis=2), "metalness")
+    save(os.path.join(OUT, f"{name}_roughness_mips.avif"), mip_atlas(chain), "roughness_mips")
     print(f"{name}: rough {chain[0].mean():.3f}..L5 {chain[5].mean():.3f}, normal z mean {normal[..., 2].mean():.4f}, "
           f"metal {np.mean(metal):.3f}, albedo {albedo_linear.reshape(-1, 3).mean(axis=0).round(3)}", flush=True)
 
@@ -561,7 +577,7 @@ PARAMS = {
     "vulcanised_rubber": {"tile": 0.1, "physical": {"metalness": 0, "roughness": 1, "ior": 1.52}},
     "green_felt": {"tile": 0.08, "physical": {"metalness": 0, "roughness": 1, "sheen": 0.35, "sheenRoughness": 0.65, "sheenColor": [0.1, 0.26, 0.13]}, "note": "sheen simulates the fibre halo"},
     "paper_fibre": {"tile": 0.2159, "physical": {"metalness": 0, "roughness": 1}, "note": "laid lines along U"},
-    "walnut_desk": {"tile": 2.2, "physical": {"metalness": 0, "roughness": 1, "clearcoat": 0.45, "clearcoatRoughness": 0.2, "ior": 1.5}, "note": "4096 px, 0.54 mm per texel; larger than the desk so it never repeats; grain along U; no metalnessMap needed"},
+    "walnut_desk": {"tile": 2.2, "physical": {"metalness": 0, "roughness": 1, "clearcoat": 0.45, "clearcoatRoughness": 0.2, "ior": 1.5}, "note": "2048 px (authored at 4096 and filtered down), 1.07 mm per texel; larger than the desk so it never repeats; grain along U; no metalnessMap needed"},
     "ribbon_cloth": {"tile": 0.0248, "physical": {"metalness": 0, "roughness": 1, "sheen": 0.3, "sheenRoughness": 0.5, "sheenColor": [0.05, 0.05, 0.06]}, "note": "tile is 40 threads at the definition's pitch"},
 }
 
@@ -575,9 +591,9 @@ def main():
         json.dump(PARAMS, fh, indent=1)
     # The renderer still asks for nickel_plating_*: serve the worn nickel under that name too.
     for suffix in ("albedo", "normal", "roughness", "metalness", "roughness_mips"):
-        src = os.path.join(OUT, f"nickel_worn_{suffix}.jpg")
+        src = os.path.join(OUT, f"nickel_worn_{suffix}.avif")
         if os.path.exists(src):
-            shutil.copyfile(src, os.path.join(OUT, f"nickel_plating_{suffix}.jpg"))
+            shutil.copyfile(src, os.path.join(OUT, f"nickel_plating_{suffix}.avif"))
 
 
 if __name__ == "__main__":

@@ -217,8 +217,8 @@ export function createScene(canvas) {
 
 /** The room: one photographic HDRI lights the machine and, blurred, is the backdrop. */
 export async function loadRoom(scene, url, rotationY) {
-  const { RGBELoader } = await import('three/examples/jsm/loaders/RGBELoader.js');
-  const tex = await new RGBELoader().loadAsync(url);
+  const { EXRLoader } = await import('three/examples/jsm/loaders/EXRLoader.js');
+  const tex = await new EXRLoader().loadAsync(url);
   tex.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = tex; scene.environmentIntensity = 0.6; scene.environmentRotation.set(0, rotationY, 0);
   scene.background = tex; scene.backgroundIntensity = 0.45; scene.backgroundBlurriness = 0.06; scene.backgroundRotation.set(0, rotationY, 0);

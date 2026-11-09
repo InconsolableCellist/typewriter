@@ -27,7 +27,7 @@ export function createElementMaterials(mats, maxAniso = 8) {
   const out = { ...mats, paint, black, blackMatte, chrome, cast, keyPlastic, rubberFoot: mats.rubber };
   const TILE = 0.08, UV = 0.2;
   const load = async (name, srgb) => {
-    const blob = await (await fetch(`${BASE}${name}.jpg`)).blob();
+    const blob = await (await fetch(`${BASE}${name}.avif`)).blob();
     const img = await createImageBitmap(blob, { imageOrientation: 'flipY' });
     const t = new THREE.Texture(img);
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = maxAniso; t.flipY = false;

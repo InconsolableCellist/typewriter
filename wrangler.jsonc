@@ -3,5 +3,7 @@
 {
   "name": "typewriter",
   "compatibility_date": "2026-11-01",
-  "assets": { "directory": "./dist" }
+  "assets": { "directory": "./dist" },
+  // Also served at typewriter.<account>.workers.dev.
+  "routes": [{ "pattern": "typewriter.foxipso.com", "custom_domain": true }]
 }

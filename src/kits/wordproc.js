@@ -19,6 +19,7 @@ import { WpSpeaker } from '../audio/wp-speaker.js';
 import { installPrinter } from './wp/printer.js';
 import { installDiskettes } from './wp/diskettes.js';
 import { createSimClient } from '../sim/client.js';
+import { KEYS } from '../machine/wp-keys.js';
 import { loadGlyphs } from '../machine/glyphs.js';
 import { installPages } from '../pages/index.js';
 import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
@@ -69,14 +70,26 @@ export async function mount(ctx) {
   let sys = null;
   const drives = [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }];
   const glyphs = await loadGlyphs('glyphs_wp');
-  const sim = await createSimClient({ machine, geometry, glyphs, options: { drives: params.has('cold') ? [null, null] : drives } });
-  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, sim, glyphs, onDevice: (e) => sys?.deviceEvent(e) });
-  devices.printer = printer.device;
+  const cold = params.has('cold');
+  const sim = await createSimClient({ machine, geometry, glyphs, options: { cold, drives: cold ? [null, null] : drives } });
   const pickables = [];
+  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, sim, glyphs, onDevice: (e) => sys?.deviceEvent(e), controls: parts.printer, pickables });
+  devices.printer = printer.device;
   const diskettes = installDiskettes({ stage, machine, geometry, sim, unit: units.diskette, parts: parts.diskette, library, pickables });
   diskettes.onEvent((e) => sys?.deviceEvent(e));
   devices.disk = diskettes.device;
-  sys = createSystem({ devices, store, library, options: { cold: params.has('cold') } });
+  // The electronics module's power switch. A cold start (?cold) finds everything off and both drives empty: switch on
+  // the module and the printer, put the program diskette in the left drive and close its lever.
+  devices.power = { on: !cold };
+  const rocker = parts.station.rocker;
+  const setRocker = () => { rocker.rotation.x = devices.power.on ? -0.25 : 0.25; };
+  setRocker();
+  pickables.push({ object: rocker, part: () => ({ label: devices.power.on ? 'Power (on)' : 'Power: switch on', onClick: () => {
+    if (devices.power.on) return;
+    devices.power.on = true; setRocker();
+    sys.deviceEvent({ dev: 'power', ev: 'on' });
+  } }) });
+  sys = createSystem({ devices, store, library, options: { cold } });
   loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre'] }).catch((e) => console.info('textures', e));
   const pages = installPages({ stage, soft: printer.soft, paper: printer.paper, machine: { ...printer.softMachine, deskLayout: machine.deskLayout }, interaction: { picker: { add: (e) => pickables.push(e) } }, hands: { loadPaper: () => printer.loadSheet() } });
   const t0 = performance.now();
@@ -108,7 +121,7 @@ export async function mount(ctx) {
   const orbit = new Orbit(stage.camera, canvas, preset.target, { extent: { across: ext.halfX, up: 0.4, depth: ext.halfZ } });
   installOrbitInput(canvas, orbit, stage.camera, pickables, parts.keyboard, (i, f) => keyboard.press(i, f));
 
-  const panel = buildPanel(ctx, machine, orbit);
+  const panel = buildPanel(ctx, machine, orbit, printer.feeder);
 
   const resize = () => stage.resize(window.innerWidth, window.innerHeight);
   window.addEventListener('resize', resize); resize();
@@ -128,6 +141,7 @@ export async function mount(ctx) {
     printer.update();
     diskettes.update();
     pages.update(dt);
+    crt.gain = devices.power.on ? 1 : 0;
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();
@@ -141,11 +155,18 @@ export async function mount(ctx) {
 }
 
 /** The settings card for this kit: the machine picker and one button per camera preset. */
-function buildPanel(ctx, machine, orbit) {
+function buildPanel(ctx, machine, orbit, feeder) {
   const el = document.getElementById('panel');
   el.innerHTML = `
     <div class="actions">${Object.keys(machine.cameras).map((n) => `<button data-cam="${n}">${n}</button>`).join('')}</div>
+    <div class="actions"><button id="a-feeder" aria-pressed="true" title="the printer's sheet feeder lays each sheet in; off, click the fresh paper to lay one">sheet feeder</button><button id="a-keys" title="how the PC keyboard maps onto the machine's">keys</button></div>
+    <div class="note" id="keysNote" hidden>Letters, digits and punctuation: as marked · Alt: CODE · AltGr: ENTER · Enter: RETURN · Esc: CANCL ·
+      F1 REQST · F2 PRINT · F3 FIND · F4 GO TO · F5 MOVE · F6 LINE ADJ · F7 SPELL · F8 CHG FMT · F9 GET · F10 PAGE END ·
+      Delete: DEL · End: END · Insert: MSG · PageDown / PageUp: screen down / up · keys with no PC match: click them</div>
     <div class="actions"><select id="a-machine" title="machine" aria-label="machine"></select></div>`;
+  const fb = el.querySelector('#a-feeder');
+  fb.addEventListener('click', () => { feeder.on = !feeder.on; fb.setAttribute('aria-pressed', String(feeder.on)); });
+  el.querySelector('#a-keys').addEventListener('click', () => { const n = el.querySelector('#keysNote'); n.hidden = !n.hidden; });
   for (const b of el.querySelectorAll('[data-cam]')) b.addEventListener('click', () => orbit.flyTo(machine.cameras[b.dataset.cam]));
   const picker = el.querySelector('#a-machine');
   for (const m of ctx.machines) picker.add(new Option(m.name, m.id));
@@ -160,6 +181,12 @@ function buildPanel(ctx, machine, orbit) {
  * Pointer input: a click on something pickable (the page pile, the fresh paper) acts on it; a press on a key holds
  * that key down with a finger until release; anything else orbits (left), pans (right or shift) and zooms (wheel).
  */
+function keyLabel(i) {
+  const k = KEYS[i];
+  const top = k.top.replace('\n', ' / ') || 'blank';
+  return k.front ? `${top}  (CODE: ${k.front})` : top;
+}
+
 function installOrbitInput(canvas, orbit, camera, pickables, keyboardParts, press) {
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const hitAt = (e) => {
@@ -186,8 +213,22 @@ function installOrbitInput(canvas, orbit, camera, pickables, keyboardParts, pres
     mode = e.button === 2 || e.shiftKey ? 'pan' : 'rotate';
     orbit.dragging = true;
   });
+  // Hovering names what is under the pointer: a key's legend, or what a click will do.
+  const tip = document.getElementById('labelTip');
+  let tipAt = 0;
+  const hover = (e) => {
+    if (!tip || performance.now() - tipAt < 60) return;
+    tipAt = performance.now();
+    const hit = hitAt(e);
+    const label = hit?.key !== undefined ? keyLabel(hit.key) : hit?.entry?.part()?.label;
+    tip.style.display = label ? 'block' : 'none';
+    if (label) { tip.textContent = label; tip.style.left = `${e.clientX + 14}px`; tip.style.top = `${e.clientY + 12}px`; }
+    canvas.style.cursor = label ? 'pointer' : '';
+  };
+  canvas.addEventListener('pointerleave', () => { if (tip) tip.style.display = 'none'; });
   canvas.addEventListener('pointermove', (e) => {
-    if (!mode || mode === 'key') return;
+    if (!mode) { hover(e); return; }
+    if (mode === 'key') return;
     const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
     moved += Math.abs(dx) + Math.abs(dy);
     if (mode === 'pan') orbit.pan(dx, dy); else orbit.rotate(dx, dy);

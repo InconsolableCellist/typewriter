@@ -102,7 +102,7 @@ function buildPanel(ctx, machine, orbit) {
   picker.value = machine.id;
   picker.addEventListener('change', () => ctx.onPick(picker.value));
   const hint = document.getElementById('hint');
-  if (hint) hint.textContent = 'work in progress: the units are placeholders · drag to orbit · wheel to zoom · buttons move the camera';
+  if (hint) hint.textContent = 'work in progress: the software and mechanisms are not connected yet · drag to orbit · wheel to zoom · buttons move the camera';
   return el;
 }
 

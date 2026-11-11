@@ -1,6 +1,7 @@
 // Type-slug glyph height fields. public/assets/glyphs.bin holds N x N Uint8 height fields (see
 // tools/bake_glyphs.py); 255 is the printing face, 0 is at or below the relief depth. Works in the
-// browser (fetch) and in Node (fs, resolved relative to this module) so tests can load real faces.
+// browser (fetch) and in Node (fs, resolved relative to this module) so tests can load real faces. A machine names
+// its set (`machine.glyphs`, default 'glyphs'); a set whose JSON says `gzip` keeps its height fields gzipped.
 
 const SITE_BASE = '/assets/';
 
@@ -18,14 +19,24 @@ async function readAsset(name) {
   return new Uint8Array(await r.arrayBuffer());
 }
 
+async function gunzip(bytes) {
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    const zlibMod = 'node:zlib';
+    const { gunzipSync } = await import(/* @vite-ignore */ zlibMod);
+    return new Uint8Array(gunzipSync(bytes));
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
 /**
  * @returns {Promise<{N:number, texelMm:number, baselineV:number, chars:string, faceAreaMm2:number[],
  *   count:number, data:Uint8Array, indexOf:(c:string)=>number, face:(i:number)=>Uint8Array}>}
  */
-export async function loadGlyphs() {
-  const metaBytes = await readAsset('glyphs.json');
+export async function loadGlyphs(set = 'glyphs') {
+  const metaBytes = await readAsset(`${set}.json`);
   const meta = JSON.parse(new TextDecoder().decode(metaBytes));
-  const data = await readAsset('glyphs.bin');
+  const data = meta.gzip ? await gunzip(await readAsset(`${set}.bin.gz`)) : await readAsset(`${set}.bin`);
   const { N, chars } = meta;
   if (data.length !== N * N * chars.length) throw new Error(`glyph data size mismatch: ${data.length}`);
   return withGlyphApi({ ...meta, data });

@@ -563,6 +563,73 @@ stepper turns the platen. The rear slot and its window stand in for the paper ta
   the printer reports Load Paper, so a multi-page document prints unattended. A toggle (on by default) switches it
   off for manual feed: the hopper empties onto the fresh stack and the operator lays each sheet. No hand model.
 
+### 6.8 Decisions made in implementation (M5)
+
+Choices the design left open, settled while building the headless printer, each with its reason. Calibrated numbers
+are in `src/machine/wp-printer-cal.js`, written by `tools/wp/calibrate_printer.mjs`.
+
+1. **Selection is a closed loop on a switching curve, not a per-move brake point.** "A table indexed by remaining
+   steps" is read as the braking speed for each distance still to go: the loop pulls while the rotor is slower than
+   the table and brakes while it is faster. Per-move brake points were tried first and gave erratic, non-monotone
+   seat times (a 1/8-step pickup cannot place a fixed switch point well). The table is `sqrt(2 a r)` scaled by one
+   calibrated factor (`brakeScale` 0.65).
+2. **The pickups give speed as well as position.** A reluctance pickup's EMF goes with speed, so the controller reads
+   the rotor speed directly (`io.wheelSpeed`) and its position in eighths of a step. Speed from the time between
+   eighth-step crossings was too stale near the target to damp the hold.
+3. **Inside a capture distance (half a step) the wheel is servoed**, by choosing the phase that pushes the right way
+   and its current (PD on position and pickup speed), then seated and held on the target phase. A viscous inertia
+   damper (a ring in silicone) on the shaft adds mechanical damping. Without these, a single-phase VR hold rings for
+   tens of milliseconds.
+4. **Commutation is advanced by the coil current's rise time** (0.2 ms of speed), as chopper drives do.
+5. **Selection peak torque is 0.518 N m**, about twice the 0.25 N m first estimate: current rise time, the damper ring
+   and the settle all count against the 15.0 ms target of 6.6 item 1 (met at 14.95 ms).
+6. **Hammer energies are lower than the first guess**: 1.14 / 2.09 / 3.18 mJ (0.61 / 0.82 / 1.01 m/s) for the
+   low, medium and high groups, from 1.6 x the half-ink pressure on the median 12-pitch face. The largest pressure
+   on any group's smallest face is 80 MPa, under the 158 MPa perforation pressure. On-times 1.64 / 1.38 / 1.23 ms
+   at 2.2 / 2.8 / 3.4 A give flight targets of 3.20 / 2.74 / 2.43 ms.
+7. **Force groups for unlisted characters**: the manual lists 61 characters (three of the five low ones lost in OCR;
+   `.,-:'` are taken as the low five). Every other petal joins the group whose median face area is nearest its own.
+8. **The power-on on-time error is +20 %**, not -20 %: with 20 % less on-time the armature stops short of the platen
+   and there is no flight time to servo on. Heavier first characters that settle in eight strikes are what the manual
+   describes.
+9. **The next selection waits for the hammer to clear the petals** (calibrated `hammerClear`, 2.5 ms after impact),
+   not merely for the rebound: a wheel turned under a forward nose catches the next petal. The planner allows for
+   this and for how late an impact can come after its planned knot (`impactLag`, 0.55 ms).
+10. **Firing on the move uses the plan and the encoder together**: at each encoder edge the controller measures how
+    far the motor runs behind its profile and fires so that peak force falls on the column, allowing for the
+    follower's lag (`carrierLag`, 0.15 step, calibrated). Columns land within 0.020 mm, both directions within 0.014 mm.
+11. **The planner works on knot speeds**: constant acceleration between character knots, each knot no faster than
+    its intervals' average speed allowed by `impact_i = max(...)`, then backward and forward passes for the ramp.
+    A line starts with a run-up from where the carrier stopped; with less than 2 steps of run-up the first character
+    is printed at rest. A turn, an overstrike, an index or a late character that the carrier could not slow for ends
+    a segment; the carrier runs out a ramp's length past the last character and stops on a whole step.
+12. **A cancelled fire (55 or 45) stops the carrier and takes the character again from rest**; it is reported as a
+    recoverable error.
+13. **Wheel and petals**: 96 petals carry the 94 distinct characters of the 96-character keyboard; the comma and
+    period, which print the same in both cases, are on two petals each. Only the petal at the top meets the platen.
+    Each petal is its own sprung DOF, so a struck petal rings and returns while the wheel turns on.
+14. **Ribbon**: one ribbon-motor step feeds 0.031 mm; four steps a character (0.123 mm, a third of 0.37 mm, giving
+    about a million characters on 122 m) also turn the lift cam a third of a turn, so successive characters fall on
+    tracks 0, 1, 2 (lift 0, 3.87, 7.73 mm). Feeding at 600 steps/s keeps the lift follower on its cam.
+15. **Index**: a start rate of 250 steps/s (a stepper can start there from rest) ramping to 400; full holding current
+    and a damped belt. A 16-step feed settles within 5 % of a step in 60 ms. Escape and index words accumulate and
+    run at the next print or end of data; an index after a line's last character starts while the carrier runs out.
+16. **Homing at power-on** drives the carrier left at 40 % current until the encoder stops following (the left
+    stop) and takes logical 0 as 26 steps out from there; at full current it would compress the follower, and a
+    stepper driven on against a stop can run backwards. The wheel steps until the home pickup answers (error 56
+    after 32 three-step moves); the cam runs home. The internal checks take 14.8 s, so the whole test takes about 15 s (SET p.15).
+17. **Command encoding details**: escape and index direction is bit 11 (1 = left or reverse); PRINT impression 1 to 3
+    selects the low, medium or high group, and 4 is treated as high (no data on a fourth level). Credits are
+    coalesced into one `{ ev: 'credit', n }` per snapshot.
+18. **Paper cam motor**: switched off, its terminals are shorted, so it brakes on its back EMF and stops inside the
+    position's dwell; the worm never lets the followers drive it back.
+19. **Strike event**: the existing fields, plus `selectionError` (rad) and the pressure fields the element machine
+    already adds. `lateral` is tip radius x selection error.
+20. **Audio**: `WpAudioEngine` (`src/audio/wp-engine.js`) has the AudioEngine interface and drives the host silently
+    until the voices of section 10 arrive; it drains the acoustic events.
+21. **Glyphs**: `glyphs_wp.bin.gz` (44 KB) and `.json`, baked by `tools/bake_glyphs.py --set wp` from the existing
+    font at 12 pitch; `loadGlyphs(set)` reads a gzipped set with `DecompressionStream` or `zlib`.
+
 ---
 
 ## 7. Software
@@ -1060,6 +1127,11 @@ SCREEN FORMAT; INSTR keeps; pagination; Menu Bypass; Work Diskette Tasks e, f an
 E11, E13), `wp_functions`. Not done in M3: header and footer text (its two menu items answer "not available"),
 the LINE ADJ hyphenation prompt (it comes with dictionary hyphenation in M8), END cancelling a pagination under
 way, KYB CHG (one keyboard only). Print and Spell answer "not available" until M5 and M8.
+
+M5 headless printer done (2026-11-11): `stepper.js`, `printer-mech.js`, `printer-ctl.js`, the `WordprocSim` host
+with its layout, ports and inputs, registration in `host-factory.js`, `glyphs_wp`, the definition's printer block,
+the calibration tool, and `tests/wp_printer.test.js`. Decisions are listed in 6.8. Not done in M5, because they
+depend on the editor being built in parallel: the formatter, the spooler and E3, E4 against the virtual printer.
 
 ---
 

@@ -22,7 +22,11 @@ export function deriveWordprocGeometry(m) {
     return (units[name] = { origin, size: u.size, box, on: u.on ?? null });
   };
   for (const name of Object.keys(m.units)) place(name);
-  return { system: true, units, ...(m.printer ? { printer: printerGeometry(m.printer) } : null) };
+  return {
+    system: true, units,
+    ...(m.printer ? { printer: printerGeometry(m.printer) } : null),
+    ...(m.diskettes ? { diskettes: { drives: 2 } } : null),
+  };
 }
 
 /**

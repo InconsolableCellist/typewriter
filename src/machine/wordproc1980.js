@@ -3,7 +3,8 @@
 // axes as the typewriters (x right, y up, z toward the typist, origin at the desk reference point). Each unit has
 // local axes the same way round with its origin on the surface it stands on, under its centre.
 // Sources: docs/displaywriter/hardware.md (HW) and printer.md (PR); design in docs/displaywriter/architecture.md.
-// Units, placements and the desk layout (M0); the printer's mechanism (M5). The other mechanisms arrive later.
+// Units, placements and the desk layout (M0); the printer's mechanism (M5); the diskette unit's drives (M7). The
+// station's mechanisms arrive later.
 import base from './frontstrike1926.js';
 import calibration from './wp-printer-cal.js';
 
@@ -66,6 +67,7 @@ export default {
   glyphs: 'glyphs_wp',
 
   printer: printerBlock(),
+  diskettes: disketteBlock(),
 };
 
 // ---- printer (architecture.md 6; research in printer.md, cited PR) ----------------------------------------------
@@ -174,6 +176,94 @@ function printerBlock() {
     power: { travel: 20 * deg, inertia: 2e-6, snapTorque: 0.02, viscous: 1e-5, stopStiffness: 5, stopDamping: 5e-3, checksTime: 14.8 },
     fan: { inertia: 4e-5, stallTorque: 0.03, syncOmega: 2 * Math.PI * 50, drag: 1e-7, coulomb: 1e-4 },
   };
+}
+
+// ---- diskette unit (architecture.md 8.3; research in hardware.md 3, cited HW) ------------------------------------------
+// Two identical drives (HW 3.2). Per drive: an AC motor always running, a belt to the hub, the diskette clamped to the
+// hub by the collet's friction, the head carriage on a stepper and steel band, the head-load solenoid and arm, the
+// lever and the diskette's slide in its guide. Documented: 360 rpm, 1800 rpm motor, 1.8 degrees a track, 77 tracks,
+// 5 ms steps, 35 ms settle, the index window, the stop behind track 00. Everything else is assumed and marked so.
+function disketteBlock() {
+  const TPI = 48;                                   // 77 tracks at 48 tpi, the 8-inch standard
+  const track = IN / TPI;
+  const stepsPerRev = 200;                          // 1.8 degrees per track (HW 3.5)
+  const D = {
+    rpm: 360,                                       // HW 3.5
+    motor: {
+      // Capacitor start, four poles on 60 Hz (1800 rpm synchronous), Kloss curve; the start winding doubles the torque
+      // below the centrifugal switch. Rotor, pulley and fan; assumed.
+      syncOmega: 2 * Math.PI * 30, breakdownTorque: 0.12, breakdownSlip: 0.25, startBoost: 2, startSwitch: 0.75,
+      inertia: 6e-5, fanTorqueAtSync: 0.006, frictionTorque: 0.002, pulleyRadius: 0.012,
+    },
+    belt: { stiffness: 4e4, damping: 8 },           // N/m, N s/m; assumed
+    hub: { inertia: 1.6e-4, bearingTorque: 0.004, viscous: 2e-5 },   // hub, pulley and spindle; assumed
+    disk: {
+      // Mylar disk in its jacket: 2.5 g, 8 in; the liner rubs it (assumed). The index hole passes the sensor for
+      // 2 ms a turn (1.5 to 3.0 ms, HW 3.5).
+      inertia: 1.6e-5, linerTorque: 0.006, viscous: 1e-5, indexWidth: 0.002 * 2 * Math.PI * 6,
+      outerTrackRadius: 0.0985, trackPitch: track, readSpeedWindow: 0.04,
+    },
+    clamp: {
+      // The lever drives the collet through the actuator rod and the flat spring (HW 3.3): collet travel is a
+      // function of the lever angle, peaking before the lever is closed so the spring holds it closed (over centre).
+      colletTravel: 0.006, clearance: 0.002, peakAngle: 80 * deg,   // 2 mm clear with the handle open (HW 3.3)
+      springRate: 4000, mu: 0.35, radius: 0.016,                     // N/m; friction radius of the collet ring, m
+      stickStiffness: 50, stickDamping: 0.02, centreTolerance: 0.003, // N m/rad, N m s/rad; m of slide off home
+    },
+    lever: {
+      closed: 90 * deg, inertia: 2e-5, snapTorque: 0.02, viscous: 2e-4, coulomb: 0.002,
+      stopStiffness: 20, stopDamping: 0.01, tipRadius: 0.025, blockAngle: 30 * deg,
+      bailAngle: 70 * deg, switchAngle: 80 * deg,   // the head-load bail is free, and the ready switch made, past these
+      contactStiffness: 2e4, contactDamping: 10,
+    },
+    slide: {
+      // Leading-edge depth of the diskette in its guide, from the slot mouth. The lever sweeps a plane 5 mm in.
+      mass: 0.035, length: 0.2032, leverPlane: 0.005, leverClearance: 0.0015, homeClearance: 0.003,
+      friction: 0.25, viscous: 0.5, stopStiffness: 2e4, stopDamping: 60,
+    },
+    head: {
+      // Stepper and steel band to the carriage (HW 3.5): one full step a track. The carriage's mass is reflected into
+      // the rotor. A stop pin on the pulley sits 0.6 of a step behind track 00. Assumed but the step angle.
+      stepsPerRev, holdingTorque: 0.12, detentTorque: 0.004, tauE: 0.6e-3, rotorInertia: 1.2e-5,
+      carriageMass: 0.06, pulleyRadius: (track * stepsPerRev) / (2 * Math.PI), viscous: 0.01, coulomb: 0.003,
+      stop: -0.6, stopStiffness: 200, stopDamping: 0.04, tracks: 77, readWindow: 0.2,
+    },
+    headLoad: {
+      // Solenoid, bail and arm (HW 3.5): the arm presses the pad and diskette onto the head through a dashpot that
+      // keeps the head from bouncing. Load time is not documented (HW 3.5); these give about the 40 ms assumed in
+      // devices/timing.js. Assumed.
+      travel: 0.001, mass: 0.012, forceConstant: 1.5, tauE: 4e-3, spring: 0.5, rate: 300, damper: 26,
+      stopStiffness: 2e4, stopDamping: 20, padStiffness: 2e4, padDamping: 20, mu: 0.2, settledSpeed: 0.002,
+    },
+    // What is recorded on the diskette (HW 3.6): sectors per track, track 00 apart.
+    formats: { '1': { sides: 1, spt: 15, track0: 26 }, '2D': { sides: 2, spt: 26, track0: 26 } },
+    adapter: {
+      stepTime: 0.005, settle: 0.035, recalSteps: 77,      // HW 3.5
+      minPeriod: 0.1625, maxPeriod: 0.1709,                // index period accepted (HW 3.5)
+      headUnload: 2, retries: 3, searchTurns: 3,           // assumed; three retries (HW 3.5)
+    },
+  };
+  D.belt.ratio = beltRatio(D);
+  return D;
+}
+
+/**
+ * Pulley ratio that gives 360 rpm under load (the head loaded on a middle track): the documented 1800 / 360 = 5 is
+ * the synchronous ratio, and an induction motor runs a little below synchronous speed.
+ */
+function beltRatio(D) {
+  const M = D.motor, H = D.hub, K = D.disk, L = D.headLoad;
+  const wd = (D.rpm / 60) * 2 * Math.PI;
+  const pad = L.forceConstant - L.spring - L.rate * L.travel;
+  const Tdisk = K.linerTorque + K.viscous * wd + L.mu * pad * (K.outerTrackRadius - 37 * K.trackPitch);
+  let R = M.syncOmega / wd;
+  for (let i = 0; i < 20; i++) {
+    const wm = R * wd;
+    const T = M.fanTorqueAtSync * (wm / M.syncOmega) ** 2 + M.frictionTorque + (H.bearingTorque + H.viscous * wd + Tdisk) / R;
+    const s = (M.breakdownSlip * (M.breakdownTorque - Math.sqrt(M.breakdownTorque ** 2 - T * T))) / T;
+    R = (M.syncOmega * (1 - s)) / wd;
+  }
+  return R;
 }
 
 /**

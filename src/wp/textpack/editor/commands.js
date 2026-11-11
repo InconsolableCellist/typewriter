@@ -245,7 +245,7 @@ export function* handle(sys, ed, ev) {
   }
   if (ev.name === 'LINE ADJ') { lineAdjust(ed); return; }
   if (ev.name === 'REQST' && !ev.code) { yield* requestTasks(sys); return; }
-  if ((ev.name === 'PRINT' || ev.name === 'SPELL') && !ev.code) { sys.messages.show('notAvailable', { what: ev.name === 'PRINT' ? 'Printing' : 'Spelling' }); return; }
+  if (ev.name === 'SPELL' && !ev.code) { sys.messages.show('notAvailable', { what: 'Spelling' }); return; }
   const u = codeFor(sys, ev);
   if (u != null && ed.nta == null) typeUnits(ed, [u]);
 }

@@ -3,15 +3,17 @@
 // needs. Not allowed from TASK SELECTION or the program diskette menus; a target that does not fit where the cursor
 // is gives "(abbreviation) not allowed at this time." The keyword and short-form table is ORG p.85, 86.
 import { promptLine, splitName, Navigate } from './input.js';
+import { TASKS } from './tasks/common.js';
 
 // keyword: [short form, where it goes]. `task` targets run a task of a family; `text` targets act in the typing area;
-// `na` ones are printing, spelling, merge and file tasks this machine does not offer yet.
+// `request` targets are request tasks, done where the operator is; `na` ones are the shared-printer, spelling, merge
+// and file tasks this machine does not offer yet.
 export const ABBREVIATIONS = {
   create: ['c', { family: 'typingTasks', task: 'create' }],
   revise: ['r', { family: 'typingTasks', task: 'revise' }],
   paginate: ['pg', { family: 'typingTasks', task: 'paginate' }],
   index: ['i', { family: 'typingTasks', task: 'index' }],
-  print: ['p', { na: 'Print Document' }],
+  print: ['p', { family: 'typingTasks', task: 'print' }],
   deldoc: ['xdc', { family: 'workDiskTasks', task: 'deleteDocument' }],
   dupdoc: ['ddc', { family: 'workDiskTasks', task: 'duplicateDocument' }],
   docname: ['dcn', { family: 'workDiskTasks', task: 'changeDocName' }],
@@ -20,7 +22,7 @@ export const ABBREVIATIONS = {
   condisk: ['cdk', { family: 'workDiskTasks', task: 'condenseDiskette' }],
   erasedisk: ['e', { family: 'workDiskTasks', task: 'eraseInit' }],
   recover: ['rec', { family: 'workDiskTasks', task: 'recover' }],
-  printindex: ['pi', { na: 'Print Index of Diskette Contents' }],
+  printindex: ['pi', { family: 'workDiskTasks', task: 'printIndex' }],
   global: ['gl', { text: 'global' }],
   get: ['g', { text: 'get' }],
   martab: ['mt', { text: 'marginsTabs', at: 'line' }],
@@ -44,9 +46,9 @@ export const ABBREVIATIONS = {
   include: ['inc', { na: 'Include' }],
   pgnum: ['pn', { na: 'Page Number' }],
   sysnum: ['sn', { na: 'System Page Number' }],
-  printorder: ['po', { na: 'Change Printing Order' }],
-  contprint: ['ctp', { na: 'Continue Printing' }],
-  canprint: ['cp', { na: 'Display Print Queue or Cancel Print Job' }],
+  printorder: ['po', { request: 'printOrder' }],
+  contprint: ['ctp', { request: 'continuePrint' }],
+  canprint: ['cp', { request: 'printQueue' }],
   relptr: ['rlp', { na: 'Release Printer' }],
   reqptr: ['rqp', { na: 'Request Printer' }],
   startptr: ['stp', { na: 'Start Printer' }],
@@ -93,6 +95,7 @@ export function* bypassFromMenu(sys) {
   if (!b) return;
   if (b.unknown) { sys.messages.show('abbrInvalid', { abbr: b.abbr }); return; }
   if (b.target.na) { sys.messages.show('notAvailable', { what: b.target.na }); return; }
+  if (b.target.request) { yield* TASKS[b.target.request](sys, {}); return; }
   if (!b.target.task) { sys.messages.show('notAllowed', { abbr: b.abbr }); return; }
   throw new Navigate({ to: 'bypass', ...b.target, preset: b.preset });
 }

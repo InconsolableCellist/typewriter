@@ -10,6 +10,7 @@ import { Volume, DiskError, runSync } from './disk/fs.js';
 import { Messages } from './textpack/messages.js';
 import { coldStart } from './rom.js';
 import { shell, DEFAULT_SETTINGS } from './textpack/index.js';
+import { Spooler } from './textpack/print/spooler.js';
 
 const TONE_MS = { short: 60, long: 400 };          // assumed (architecture 5.4)
 const SAVE_COALESCE_S = 1;
@@ -35,6 +36,7 @@ export class WpSystem {
     this.lastDiskette = '';
     this.doc = null;
     this.printQueue = [];
+    this.spooler = new Spooler(this);
     this.pendingIo = new Map();
     this.saves = new Map();
     this.statusFields = null;                // the status fields last drawn, so a mount can refresh G and H
@@ -102,6 +104,9 @@ export class WpSystem {
           this.refreshDiskNames();
           this.sched.signal('diskGone', evt.drive);
         }
+        return;
+      case 'printer':
+        this.spooler.event(evt);
         return;
       case 'power':
         if (evt.ev === 'on') this.powerOn();

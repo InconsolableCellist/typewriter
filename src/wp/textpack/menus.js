@@ -177,10 +177,10 @@ export const MENUS = {
     title: 'TEXTPACK REQUEST TASKS', at: [4, 23], head: [[6, 10, 'ID'], [6, 16, 'ITEM']], cols: { id: 10, item: 16 },
     items: [
       { id: 'a', row: 8, item: 'Print Document', go: 'print' },
-      { id: 'b', row: 9, item: 'Display Print Queue or Cancel Print Job', na: true },
-      { id: 'c', row: 10, item: 'Change Printing Order', na: true },
+      { id: 'b', row: 9, item: 'Display Print Queue or Cancel Print Job', go: 'printQueue' },
+      { id: 'c', row: 10, item: 'Change Printing Order', go: 'printOrder' },
       { id: 'd', row: 11, item: 'Display Index of Diskette Contents', go: 'index' },
-      { id: 'e', row: 12, item: 'Continue Printing With Element Now On Printer', na: true },
+      { id: 'e', row: 12, item: 'Continue Printing With Element Now On Printer', go: 'continuePrint' },
       { id: 'f', row: 13, item: 'Request Printer', na: true },
       { id: 'g', row: 14, item: 'Release Printer', na: true },
       { id: 'h', row: 15, item: 'Start Printer', na: true },

@@ -651,7 +651,7 @@ src/wp/textpack/tasks/             typing.js, paginate.js, print.js, index.js, w
 src/wp/textpack/editor/            buffer.js, codes.js, format.js, layout.js, view.js, commands.js
 src/wp/textpack/print/             formatter.js, spooler.js
 src/wp/disk/                       geometry.js, image.js, fs.js, library.js, store.js
-src/wp/devices/virtual.js          analytic devices for Node (and `?wpdevices=virtual`)
+src/wp/devices/virtual.js          analytic devices for Node (and `?wpdevices=virtual`); the printer in virtual-printer.js
 src/wp/devices/timing.js           the timing formulas
 src/wp/testkit.js                  keystroke-script runner and screen matchers
 ```
@@ -808,6 +808,53 @@ commands and waits on credit. Neither places ink.
    sends them as credit allows. It posts the operator messages (printer not ready, load paper, change the
    printwheel, printed) and handles Cancel on Error.
 3. The printer controller does the rest.
+
+Decisions made in implementation (M5), where the design left a choice open:
+
+1. **Where things land.** Scale position p is struck p/pitch in right of the paper's left edge, which lies at logical 0
+   (the left end of the writing line, where the sheet is aligned), so the default margin 18 at 12 pitch is 1.5 in.
+   Line n is n - 1 lines below the top edge, so the default First Typing Line 7 is 1 in down (ORG p.180); after a
+   load the print line stands at the top edge. M6 lays the sheet and stops the load to match.
+2. **Line heights** for Lines/in 1 to 5 are 18, 16, 12, 4 and 19/96 in (5.08 an inch rounded); Line Spacing
+   multiplies them, rounded; a half index is half the line height. Escapement is 24, 20 and 16/240 in at 10, 12 and
+   15 pitch; proportional typestyles print at 20, as the screen shows them at 12 pitch (TB2 p.161).
+3. **Justification** spreads whole positions, only on lines that wrapped (a regular carrier return ends them), only over
+   the blanks after the line's last tab or centre code; the odd positions go from the left on one justified line and
+   from the right on the next, the alternation running on through a job. Half-Justify takes half, rounded down.
+4. **Second strikes.** Underline and overstrike characters follow their character with no escape; a continuous
+   underline also runs under the blanks and tabs between underlined text (stretched ones included), not under
+   trailing blanks. A Substitute code prints `_`, a syllable hyphen only on the line it ends, and Stop and Switch
+   codes print nothing (the print-time pause is in WSPG, not our sources).
+5. **Direction**: each line starts from whichever end is nearer the last strike; half indexes are index moves inside
+   the line; a line on more than one printwheel is printed once per typestyle.
+6. **Printwheel.** Before the first line that needs a typestyle other than the last one confirmed (none at
+   start-up), and once the printer has taken everything sent, `Put on printer element (086 001)` (typestyle and
+   keyboard number, TB2 p.553) is posted. START on the printer (the attachment reports it as a status with
+   `key: 'start'`) or REQST e answers it; errors meanwhile (the cover opened for the change) are part of it.
+7. **A sheet** is: PAPER load (Automatic Feed) and wait for the paper event; a load that finds no paper, and every
+   sheet with Manual Feed, posts `Load paper in printer; press LOAD.` and waits for the operator's LOAD. Then
+   RESTORE, the lines, PAPER eject. Continuous Paper indexes on to the next form by the Paper or Envelope Size (Other
+   counts as letter). END OF DATA closes a job, and its `done` posts `(name) printed.`
+8. **Credit** starts at the FIFO depth (`devices.printer.credit`, 32), each send spends it and `credit` events return
+   it; it is reset when the printer is switched on or its queue is cleared from the panel.
+9. **Errors**: a stopping error is posted (the cover with its own wording). With Cancel on Error Yes the job ends at
+   once and its sheet is ejected after the printer has printed what it holds; otherwise printing goes on after
+   START from where it stopped. Errors 55 and 45 are the printer's own retries and are not shown.
+10. **Pages.** A Print Document job reads each page from the diskette when it reaches it; a missing diskette is asked
+    for on the message line, since the operator may be in another task. The document open in the typing area cannot
+    be queued by Print Document (`already in use`). A PRINT-key job carries a copy of each page, so END never waits
+    for printing (TB2 p.160 says it may) and later stores cannot take sectors from under the spooler. A document's
+    PRINT pages gather in one job, up to 25, while it is queued or printing; PRINT on the last page makes a new page.
+11. **Request tasks**: the print queue display and Change Printing Order share a layout of our own (title centred on
+    row 4, `#` and the footnote as ORG p.134); a chosen job goes next after the one printing. Request and Release
+    Printer and Start Printer (shared printers) stay "not available". Print Index of Diskette Contents prints the
+    fixed form of ORG p.494, twelve documents a page, and is refused while anything is queued ("ignored if the
+    printer is busy").
+12. **The virtual printer** (`devices/virtual-printer.js`) takes the same commands and reports the same events as the
+    controller: 1440 steps/s on the move and at least 14 ms a character (60 cps at 10 pitch), other moves at 3000
+    steps/s ramped at 40 000, an index ramped from 250 to 400 steps/s (16 steps in 53 ms), a cam move 0.3 s, 15 s to
+    test itself after power-on. In the browser it stays switched off until the printer is on the desk (M6), so a job
+    queues and asks for it.
 
 ### 7.8 Scope
 
@@ -1133,6 +1180,14 @@ with its layout, ports and inputs, registration in `host-factory.js`, `glyphs_wp
 the calibration tool, and `tests/wp_printer.test.js`. Decisions are listed in 6.8. Not done in M5, because they
 depend on the editor being built in parallel: the formatter, the spooler and E3, E4 against the virtual printer.
 
+M5 printing software done (2026-11-11): `print/formatter.js`, `print/spooler.js`, `tasks/print.js` (Print Document,
+the PRINT key, the queue display, Change Printing Order, Continue Printing, Print Index of Diskette Contents), the
+virtual printer, and the Menu Bypass entries for them. Tests: `wp_print` (formatter units, encoding, spooler, E3, E4)
+and `wp_print_mech` (the spooler driving the headless mechanism; under half a second). Decisions are listed at the end
+of 7.7. Not done: header and footer text and page numbers (no header text exists yet, M3), proportional spacing,
+blocking Duplicate, Condense and Change Diskette Name while a job prints (ORG p.98, p.118), dropping the queue on a
+re-IPL, the shared-printer requests, and the kit's link to the mechanism (M6).
+
 ---
 
 ## 12. Tests, performance, assets
@@ -1144,7 +1199,8 @@ All Node tests run under `node --test tests/*.test.js`; browser tests only throu
 | File | What it proves |
 |---|---|
 | `wp_editor.test.js` | The 13 scripts of SS 4, written with `testkit`: `run(sys, 'a ENTER a ENTER "First Letter" ENTER "WORK01" ENTER ENTER')`, then `expectRow(sys, 24, ...)`, `expectScreen(sys, fixture)`. Fixtures are 25 x 80 text files in `tests/fixtures/wp-screens/`, transcribed once from the grids in SS (a `~` cell matches anything). The training documents the scripts name are not available, so fixture documents of our own contain the words the scripts act on |
-| `wp_menus.test.js`, `wp_buffer.test.js`, `wp_layout_text.test.js`, `wp_paginate.test.js`, `wp_fs.test.js`, `wp_format.test.js` | The units named in M1 to M3 and the print formatter |
+| `wp_menus.test.js`, `wp_buffer.test.js`, `wp_layout_text.test.js`, `wp_paginate.test.js`, `wp_fs.test.js`, `wp_format.test.js` | The units named in M1 to M3 |
+| `wp_print.test.js`, `wp_print_mech.test.js` | The formatter's columns and lines, encoding, the spooler against the virtual printer, E3 and E4; a short document through the real printer mechanism |
 | `wp_purity.test.js` | `src/wp/` imports nothing outside itself and uses no wall clock or DOM |
 | `wp_keyboard.test.js` | Slow-press force curve per class (peak 40 to 75 g, make 1.5 to 2.2 mm, break at least 0.3 mm above); a 30 g press does not actuate; a 20 ms tap gives one make; hold 1 s gives one make and nine repeats +/- 1; five keys inside 10 ms give four bytes and an overrun; energy of stem and plate is conserved without damping |
 | `wp_printer.test.js` | Full mechanism in Node: cps targets of 6.6; strike x within 0.03 mm of commanded; bidirectional registration within 0.05 mm; no lost carrier steps in 1000 random moves; selection error under a quarter step at every impact; flight time within 5 % of target by the eighth strike of a group; face pressure in the ink window and under perforation; 16-step feed within 66 ms; cover opened while printing stops the carrier and reports 06; export and import mid-line continues identically. Kept under 8 simulated seconds |

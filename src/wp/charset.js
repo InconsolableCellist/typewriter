@@ -68,3 +68,13 @@ for (const [k, s] of Object.entries(STAND_IN)) if (!SYMBOL_OF.has(s)) SYMBOL_OF.
 export function isText(code) {
   return (code >= 0x20 && code < 0x7f) || (code >= 0xa0 && code <= 0xff);
 }
+
+// The printwheel's petals in order from home (lowercase a), as the printer's definition places them
+// (architecture 6.2); a test holds the two equal. The software sends petal numbers, so it needs the map. Comma and
+// period are on two petals each; the first is used.
+export const PETALS = "aeonhdcmfyb.kIS'MBHRE1LG2)9346:?jz/UQZ%#*=¢±½]²§.,¶³[¼°_+@$&XVK!qx;785YJ(OF0NDPW\"C-ATv,pgwulrsit";
+const PETAL_OF = new Map();
+[...PETALS].forEach((ch, i) => { if (!PETAL_OF.has(ch)) PETAL_OF.set(ch, i); });
+
+/** The petal that prints a character code; one the wheel does not carry prints as an underscore (MIM p.199). */
+export function petalOf(code) { return PETAL_OF.get(String.fromCharCode(code)) ?? PETAL_OF.get('_'); }

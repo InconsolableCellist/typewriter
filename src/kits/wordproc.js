@@ -16,6 +16,8 @@ import { IdbStore, restoreLibrary } from './wp/store.js';
 import { KeyboardHost } from './wp/keyboard-host.js';
 import { WpKeyboardInput } from '../interact/wp-keyboard.js';
 import { WpSpeaker } from '../audio/wp-speaker.js';
+import { installPrinter } from './wp/printer.js';
+import { installPages } from '../pages/index.js';
 import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
@@ -30,7 +32,6 @@ export async function mount(ctx) {
   const desk = new Desk({ scene: stage.scene, mats });
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
   loadRoom(stage.scene, '/assets/hdri/combination_room_2k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
-  loadStudioTextures(mats, null, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk'] }).catch((e) => console.info('textures', e));
 
   // The units, each in its own group at its world origin.
   const umats = createUnitMaterials();
@@ -62,11 +63,20 @@ export async function mount(ctx) {
   const speaker = new WpSpeaker();
   devices.kbd = { click: () => speaker.click(), tone: (ms) => speaker.tone(ms) };
   const sys = createSystem({ devices, store, library, options: { cold: params.has('cold') } });
+
+  // The printer: its own mechanism host and soft bodies, reached by the software only through the device interface.
+  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, onDevice: (e) => sys.deviceEvent(e) });
+  devices.printer.send = printer.device.send;
+  loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre'] }).catch((e) => console.info('textures', e));
+  const pickables = [];
+  const pages = installPages({ stage, soft: printer.soft, paper: printer.paper, machine: { ...printer.softMachine, deskLayout: machine.deskLayout }, interaction: { picker: { add: (e) => pickables.push(e) } }, hands: { loadPaper: () => printer.loadSheet() } });
+  printer.loadSheet();     // warm start: a sheet in the printer
   const t0 = performance.now();
+  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done) { unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
   const simNow = () => (performance.now() - t0) / 1000;
   const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
-  new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => speaker.unlock() });
-  window.addEventListener('pointerdown', () => speaker.unlock(), { once: true });
+  new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => unlockAudio() });
+  window.addEventListener('pointerdown', () => unlockAudio(), { once: true });
   window.addEventListener('beforeunload', (e) => { if (sys.doc) { e.preventDefault(); e.returnValue = ''; } });
 
   // The CRT on the display's front.
@@ -87,7 +97,7 @@ export async function mount(ctx) {
   stage.camera.position.fromArray(preset.position);
   const ext = machine.deskLayout.extent;
   const orbit = new Orbit(stage.camera, canvas, preset.target, { extent: { across: ext.halfX, up: 0.4, depth: ext.halfZ } });
-  installOrbitInput(canvas, orbit);
+  installOrbitInput(canvas, orbit, stage.camera, pickables, parts.keyboard, (i, f) => keyboard.press(i, f));
 
   const panel = buildPanel(ctx, machine, orbit);
 
@@ -106,6 +116,8 @@ export async function mount(ctx) {
     sys.advance(t);
     const keys = parts.keyboard.keys, x = keyboard.mech.x, dir = parts.keyboard.pressDir;
     for (let i = 0; i < keys.length; i++) keys[i].position.copy(keys[i].userData.rest).addScaledVector(dir, x[i]);
+    printer.update(dt);
+    pages.update(dt);
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();
@@ -114,7 +126,7 @@ export async function mount(ctx) {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, panel, crt, screen, sys, keyboard, devices };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, panel, crt, screen, sys, keyboard, devices, printer, pages, sim: printer.sim, soft: printer.soft };
   return window.__tw;
 }
 
@@ -134,22 +146,47 @@ function buildPanel(ctx, machine, orbit) {
   return el;
 }
 
-/** Orbit, pan and zoom with the pointer. The typewriter kit does this inside Interaction, which picks parts first. */
-function installOrbitInput(canvas, orbit) {
-  let mode = null, lx = 0, ly = 0;
+/**
+ * Pointer input: a click on something pickable (the page pile, the fresh paper) acts on it; a press on a key holds
+ * that key down with a finger until release; anything else orbits (left), pans (right or shift) and zooms (wheel).
+ */
+function installOrbitInput(canvas, orbit, camera, pickables, keyboardParts, press) {
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  const hitAt = (e) => {
+    const r = canvas.getBoundingClientRect();
+    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    const live = pickables.filter((p) => p.enabled?.() ?? true);
+    const hit = ray.intersectObjects([...keyboardParts.keys, ...live.map((p) => p.object)], true)[0];
+    if (!hit) return null;
+    const key = keyboardParts.keys.indexOf(hit.object);
+    if (key >= 0) return { key };
+    let o = hit.object, entry = null;
+    while (o && !entry) { entry = live.find((p) => p.object === o); o = o.parent; }
+    return entry ? { entry } : null;
+  };
+  let mode = null, lx = 0, ly = 0, moved = 0, held = null, click = null;
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
-    mode = e.button === 2 || e.shiftKey ? 'pan' : 'rotate';
-    lx = e.clientX; ly = e.clientY;
-    orbit.dragging = true;
+    lx = e.clientX; ly = e.clientY; moved = 0;
     canvas.setPointerCapture(e.pointerId);
+    const hit = e.button === 0 ? hitAt(e) : null;
+    if (hit?.key !== undefined) { held = hit.key; press(held, 1.2); mode = 'key'; return; }
+    click = hit?.entry ?? null;
+    mode = e.button === 2 || e.shiftKey ? 'pan' : 'rotate';
+    orbit.dragging = true;
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (!mode) return;
+    if (!mode || mode === 'key') return;
     const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
+    moved += Math.abs(dx) + Math.abs(dy);
     if (mode === 'pan') orbit.pan(dx, dy); else orbit.rotate(dx, dy);
   });
-  const end = () => { mode = null; orbit.dragging = false; };
+  const end = () => {
+    if (mode === 'key' && held !== null) { const k = held; setTimeout(() => press(k, 0), 40); held = null; }
+    if (click && moved < 4) click.part()?.onClick?.();
+    click = null; mode = null; orbit.dragging = false;
+  };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('wheel', (e) => {
@@ -158,17 +195,4 @@ function installOrbitInput(canvas, orbit) {
     orbit.zoom(Math.exp(e.deltaY * 0.0012), ((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   }, { passive: false });
   canvas.addEventListener('dblclick', () => orbit.reset());
-}
-
-/** A screen object in the software's format, filled from 25 strings. */
-function screenFrom(lines, cursor = { row: 1, col: 1, on: false }, attrsFor = () => 0) {
-  const chars = new Uint8Array(COLS * ROWS), attrs = new Uint8Array(COLS * ROWS);
-  lines.forEach((ln, r) => { for (let c = 0; c < Math.min(COLS, ln.length); c++) { chars[r * COLS + c] = ln.charCodeAt(c) & 0xff; attrs[r * COLS + c] = attrsFor(r, c); } });
-  return { chars, attrs, cursor, version: 1 };
-}
-
-function testCardScreen() {
-  const L = [];
-  for (let r = 0; r < ROWS; r++) { let s = ''; for (let c = 0; c < COLS; c++) s += String.fromCharCode(32 + ((r * COLS + c) % 95)); L.push(s); }
-  return screenFrom(L, { row: 13, col: 41, on: true }, (r, c) => (r === 2 ? 1 : r === 4 ? 2 : r === 6 ? 4 : 0));
 }

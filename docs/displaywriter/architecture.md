@@ -627,7 +627,7 @@ are in `src/machine/wp-printer-cal.js`, written by `tools/wp/calibrate_printer.m
     already adds. `lateral` is tip radius x selection error.
 20. **Audio**: `WpAudioEngine` (`src/audio/wp-engine.js`) has the AudioEngine interface and drives the host silently
     until the voices of section 10 arrive; it drains the acoustic events.
-21. **Glyphs**: `glyphs_wp.bin.gz` (44 KB) and `.json`, baked by `tools/bake_glyphs.py --set wp` from the existing
+21. **Glyphs**: `glyphs_wp.gz.bin` (44 KB) and `.json`, baked by `tools/bake_glyphs.py --set wp` from the existing
     font at 12 pitch; `loadGlyphs(set)` reads a gzipped set with `DecompressionStream` or `zlib`.
 
 ---
@@ -1170,7 +1170,7 @@ All Node tests run under `node --test tests/*.test.js`; browser tests only throu
 | Kit JavaScript (software, host, views, shaders), gzip | 120 KB | Its own chunk; the typewriter kit likewise |
 | `wp_station.glb`, `wp_display.glb`, `wp_keyboard.glb`, `wp_diskette.glb`, `wp_printer.glb` | 1.1 MB together | Procedural, `tools/blender/build_wp_*.py`, with clearance checks against the moving parts as the existing builders do. No badges, no lettering |
 | `wp_plastic` texture set (pebble normal and roughness, 1024, AVIF) | 250 KB | One set for all pearl-white covers; colour in the material |
-| `glyphs_wp.bin.gz` and `.json` | 80 KB | 96 faces at 12 pitch from the existing font, baked by `tools/bake_glyphs.py --set wp`; unpacked with `DecompressionStream` in the browser and `zlib` in Node |
+| `glyphs_wp.gz.bin` and `.json` | 80 KB | 96 faces at 12 pitch from the existing font, baked by `tools/bake_glyphs.py --set wp`; unpacked with `DecompressionStream` in the browser and `zlib` in Node |
 | Font, key legends, diskette labels | 0 | In the JavaScript; canvas at run time |
 | Spelling word list, gzip | 150 KB | Fetched when Spelling Tasks first loads, behind the program-load wait |
 | **Total for a first visit** | **under 2 MB** (1.7 MB without spelling) | |

@@ -20,6 +20,7 @@ async function readAsset(name) {
 }
 
 async function gunzip(bytes) {
+  if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes;   // already unpacked on the way in
   if (typeof process !== 'undefined' && process.versions?.node) {
     const zlibMod = 'node:zlib';
     const { gunzipSync } = await import(/* @vite-ignore */ zlibMod);
@@ -36,7 +37,8 @@ async function gunzip(bytes) {
 export async function loadGlyphs(set = 'glyphs') {
   const metaBytes = await readAsset(`${set}.json`);
   const meta = JSON.parse(new TextDecoder().decode(metaBytes));
-  const data = meta.gzip ? await gunzip(await readAsset(`${set}.bin.gz`)) : await readAsset(`${set}.bin`);
+  // `.gz.bin`, not `.bin.gz`: servers label a .gz file Content-Encoding gzip and the browser would unpack it first.
+  const data = meta.gzip ? await gunzip(await readAsset(`${set}.gz.bin`)) : await readAsset(`${set}.bin`);
   const { N, chars } = meta;
   if (data.length !== N * N * chars.length) throw new Error(`glyph data size mismatch: ${data.length}`);
   return withGlyphApi({ ...meta, data });

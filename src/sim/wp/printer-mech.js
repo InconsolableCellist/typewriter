@@ -108,7 +108,7 @@ export class PrinterMech {
   panelKey(i) { return this.kx[i] > this.def.panel.make * this.def.panel.travel; }
   powered() { return this.power > 0.5 * this.def.power.travel; }
   ribbonLeft() { return this.def.ribbon.length - this.rib.th * this.feedPerRad; }
-  paperAtSensor() { const v = this.sim.env.paperEdgeV; return this.sim.env.paperPresent && v !== undefined && v >= 0; }
+  paperAtSensor() { const v = this.sim.env.paperEdgeV; return v !== undefined && v >= 0; }   // the sensor is on the frame, not the carrier
 
   // ---- position of the print point --------------------------------------------------------------------------
   carriageX() { return -this.xc; }

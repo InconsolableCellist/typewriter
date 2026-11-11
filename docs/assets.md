@@ -246,3 +246,14 @@ The far edge of the desk is meant to be seen, against the room. To keep the near
 `rMax` about 1.2 (now 2.2) and `phiMax` about 1.45 (now 1.54) in `src/interact/orbit.js`, checked from the default
 azimuth only. Past that the whole table shows, standing on nothing: the legs end at y = -0.74 with no floor under them.
 
+
+## Word processor (`wordproc1980`)
+- **Unit models**: built in code by `src/render/wp/units.js` to the documented sizes (docs/displaywriter/hardware.md),
+  shaped from the 1982 brochure's product photographs. No model files are downloaded.
+- **CRT font**: `tools/wp/font8x16.txt`, our own 8 x 16 dot drawing to the documented cell metrics (capitals rows 3-B,
+  underscore row D, cursor row E), drawn by `tools/wp/draw_font.py` and built into `src/wp/font/font8x16.js` by
+  `tools/wp/build_font.mjs`. Font 2 holds the code symbols in the order of `src/wp/charset.js`.
+- **Printwheel faces**: `public/assets/glyphs_wp.gz.bin` and `.json`, baked by `tools/bake_glyphs.py --set wp` from
+  the existing font at 12 pitch. Served as `.gz.bin`, not `.bin.gz`, because servers label `.gz` files with
+  `Content-Encoding: gzip` and the browser would unpack them before the loader does.
+- **Diskette labels and key legends**: drawn at run time.

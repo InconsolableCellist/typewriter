@@ -7,6 +7,7 @@ import { createScene, loadRoom } from '../render/scene.js';
 import { createMaterials, loadStudioTextures } from '../render/materials.js';
 import { Desk } from '../render/desk.js';
 import { Orbit } from '../interact/orbit.js';
+import { CRT, COLS, ROWS, makeTubeFace } from '../render/wp/crt.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -41,6 +42,20 @@ export async function mount(ctx) {
     if (!u.on) footprints.push(u.box);
   }
   desk.setFootprints(footprints);
+
+  // The CRT on the display's front. Until the software lands (milestones M1-M3) it shows a still picture.
+  const screen = params.has('screentest') ? testCardScreen() : placeholderScreen();
+  const crt = new CRT({ renderer: stage.renderer, screen });
+  const dsz = geometry.units.display.size;
+  const face = new THREE.Mesh(makeTubeFace(0.245, 0.17), crt.material);
+  face.position.set(0, 0.165, dsz[2] / 2 + 0.002);
+  units.display.add(face);
+  // The screen's own light on the keyboard and desk: shadowless, from a little in front of the glass.
+  const spill = new THREE.SpotLight(0x66ff99, 0, 1.5, 1.1, 0.9, 2);
+  spill.position.set(0, 0.165, dsz[2] / 2 + 0.03);
+  spill.target.position.set(0, -0.25, dsz[2] / 2 + 0.6);
+  units.display.add(spill.target);
+  units.display.add(spill);
   stage.fitShadow(machine.deskLayout.extent);
 
   const preset = machine.cameras[params.get('cam') ?? machine.defaultCamera] ?? machine.cameras[machine.defaultCamera];
@@ -61,13 +76,15 @@ export async function mount(ctx) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     const t0 = performance.now();
     orbit.update(dt);
+    crt.update(dt);
+    spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();
     frameTimes[nFt++ % frameTimes.length] = performance.now() - t0;
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, desk, orbit, panel };
+  window.__tw = { stage, machine, geometry, units, desk, orbit, panel, crt, screen };
   return window.__tw;
 }
 
@@ -111,4 +128,30 @@ function installOrbitInput(canvas, orbit) {
     orbit.zoom(Math.exp(e.deltaY * 0.0012), ((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   }, { passive: false });
   canvas.addEventListener('dblclick', () => orbit.reset());
+}
+
+/** A screen object in the software's format, filled from 25 strings. */
+function screenFrom(lines, cursor = { row: 0, col: 0, on: false }, attrsFor = () => 0) {
+  const chars = new Uint8Array(COLS * ROWS), attrs = new Uint8Array(COLS * ROWS);
+  lines.forEach((ln, r) => { for (let c = 0; c < Math.min(COLS, ln.length); c++) { chars[r * COLS + c] = ln.charCodeAt(c) & 0xff; attrs[r * COLS + c] = attrsFor(r, c); } });
+  return { chars, attrs, cursor, version: 1 };
+}
+
+function placeholderScreen() {
+  const L = Array(ROWS).fill('');
+  L[3] = '                               TASK SELECTION';
+  L[6] = '      ID   ITEM';
+  L[8] = '      a    Typing Tasks';
+  L[9] = '      b    Work Diskette Tasks';
+  L[10] = '      c    Program Diskette Tasks';
+  L[11] = '      d    Printer Tasks';
+  L[12] = '      e    Spelling Tasks';
+  L[23] = 'Type ID letter to choose ITEM; press ENTER:';
+  return screenFrom(L, { row: 23, col: 44, on: true }, (r) => (r === 23 ? 4 : 0));
+}
+
+function testCardScreen() {
+  const L = [];
+  for (let r = 0; r < ROWS; r++) { let s = ''; for (let c = 0; c < COLS; c++) s += String.fromCharCode(32 + ((r * COLS + c) % 95)); L.push(s); }
+  return screenFrom(L, { row: 12, col: 40, on: true }, (r, c) => (r === 2 ? 1 : r === 4 ? 2 : r === 6 ? 4 : 0));
 }

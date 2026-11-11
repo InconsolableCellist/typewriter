@@ -12,7 +12,12 @@ export const WP_PORT = {
   CAM: 7,         // paper-handling cam followers (N m)
   COVER: 8,       // access cover on its seat and latch (N m)
   PANEL: 9,       // panel keys on their stops (N)
-  COUNT: 10,
+  DISK_HEAD_STOP: 10, // head stepper's pulley on its stop pin, both drives (N m)
+  DISK_PAD: 11,   // head-load pad on the diskette, both drives (N)
+  DISK_LEVER: 12, // levers on their stops and on a diskette's edge (N m)
+  DISK_SLIDE: 13, // diskettes on their guides' end stops (N)
+  DISK_STEPPER: 14, // head steppers' torque magnitude (N m): the seek and recalibrate buzz
+  COUNT: 15,
 };
 
 export const WAC = {
@@ -21,4 +26,8 @@ export const WAC = {
   CARRIER_STOP: 3,// b carrier speed (m/s) as it meets an end stop
   COVER: 4,       // a 0 closes on its seat, 1 leaves it; b angular speed (rad/s)
   PANEL_KEY: 5,   // a key, b speed (m/s), key reaches its bottom
+  HEAD_STOP: 6,   // a drive, b rotor speed (rad/s) as the head pulley meets its stop pin
+  HEAD_LAND: 7,   // a drive, b arm speed (m/s) as the pad lands on the diskette
+  LEVER: 8,       // a drive, b angular speed (rad/s) as the lever reaches an end (closed or open)
+  SLIDE_HOME: 9,  // a drive, b speed (m/s) as a diskette meets its guide's end stop
 };

@@ -1017,6 +1017,55 @@ or in a slot guide.
 The kit tells the mechanism which diskette entered a guide (`{ dev: 'disk', op: 'media', drive, mediaId, type }`).
 The label shows the diskette's name as handwriting and the media mark.
 
+### 8.7 Decisions made in implementation (M7, headless)
+
+Choices left open above, settled while building `diskette-mech.js`, `diskette-ctl.js` and their place in
+`WordprocSim`. Parameters are in the definition's `diskettes` block; everything not in HW 3 is marked assumed there.
+
+1. **Speed is an outcome of the motor.** The induction motor runs below its 1800 rpm, so the pulley ratio is not the
+   synchronous 5:1 but 4.94:1, computed in the definition so the diskette turns at 360 rpm with the head loaded on a
+   middle track. With the head lifted it runs 0.24 % fast; index periods stay within 0.6 ms of 166.7 ms.
+2. **The collet grips by friction**, as a bristle that sticks up to mu N r and slips beyond it. The collet's travel is
+   a cam on the lever angle that peaks at 80 degrees, so the flat spring (15.5 N closed) resists closing and then
+   holds the lever closed; a bistable detent works at both ends. With no diskette the collet seats in the hub with the
+   same force, so the lever feels the same. The collet grips from about 17 degrees, so the diskette is at the hub's
+   speed before the lever switch makes; ready follows 0.29 s after the switch (two index pulses, one in-range period).
+3. **Lever against diskette** is one contact in the lever's plane, resolved toward whichever went in less: a
+   half-inserted diskette stops the lever at 30 degrees, a closed lever stops a diskette at the mouth or holds one
+   home, and a diskette within the 1.5 mm of the tip's chamfer is pushed home. When the diskette is the one pushed,
+   the reaction goes into the lever's pivot and is not modelled.
+4. **The slide** sticks under its guide's 0.25 N of friction (and the collet's grip once clamped) and stops on an
+   elastic end stop; let go after a hard push it springs off by under a millimetre. The collet centres a diskette
+   within 3 mm of home.
+5. **The read channel is the only data-side sensor.** At each sector boundary, with the head loaded and settled (pad
+   in contact, arm under 2 mm/s), within 0.2 of a track centre and the diskette within 4 % of speed, the mechanism
+   interrupts the adapter with the ID field: the physical track under the head and the sector now starting. Sectors
+   are equal angles from the index hole, as the model has them. A transfer starts at the wanted sector's ID and ends
+   at the ID after its last sector, so rotational latency and transfer time are the diskette's own turning.
+6. **A misplaced head is found by its ID fields**: a track that does not match is a seek error, answered by a
+   recalibrate and a retry, three retries at most (then `seek`). A sector not found within three turns is the same.
+7. **Recalibrate steps back at least 77 times and ends on track 00's phase** (77 to 80 steps, 420 to 435 ms against
+   the model's 420): the adapter knows the track modulo four from its own phase count, and the stop pin, 0.6 of a step
+   behind track 00, lets the rotor buzz between the pin and track 1 until the last phase pulls it to track 00. After
+   power-on the track is unknown and the first transfer recalibrates first, as `devices/virtual.js` does.
+8. **The head loads after the settle**, not during the seek, as in the model. The arm is slowed by a dashpot so it
+   does not bounce; it is readable 41 ms after the solenoid is switched on (40 ms assumed in `timing.js`). It lifts
+   after 2 s idle. With the lever under 70 degrees the bail holds it lifted (HW 3.3).
+9. **Not ready** comes at once from the lever switch (80 degrees), from an index period outside 162.5 to 170.9 ms,
+   or from a missing pulse (a watchdog at 170.9 ms). It ends the operation in hand with `notReady`. A command to a drive
+   that is not ready answers `notReady` after two turns, as the model does.
+10. **The kit places a diskette at the mouth** (`op: 'media'`, slide depth 0) and takes one only from there; from then
+    on it moves by forces. Which diskette it is (`mediaId`) is the host's knowledge, added to `ready` events and to
+    `diskStatus(drive)`; the type comes from the media LED. Disk device events carry the time `t` they happened.
+11. **Warm start**: `new WordprocSim({ drives: [media, media] })` puts the diskettes home with their levers closed and
+    every speed at its running value, computed rather than settled. The spinning parts sleep once their speeds stop
+    changing; anything that changes a load (lever, slide, head, arm, a parameter) wakes them. Two idle drives cost about
+    9 ms of computation per simulated second in Node, half again the idle printer's. `cold` starts the motors from
+    rest; they are at speed in 0.2 s.
+12. **One adapter for both drives**, one operation at a time, queued in order; each drive has its own head-unload
+    timer and ready line. The snapshot carries per drive `lever`, `slide` (-1 when empty), `clamp`, `diskOmega`,
+    `diskAngle`, `headTrack`, `headLoad`, `motorOmega` and `diskReady`.
+
 ---
 
 ## 9. Display
@@ -1187,6 +1236,17 @@ and `wp_print_mech` (the spooler driving the headless mechanism; under half a se
 of 7.7. Not done: header and footer text and page numbers (no header text exists yet, M3), proportional spacing,
 blocking Duplicate, Condense and Change Diskette Name while a job prints (ORG p.98, p.118), dropping the queue on a
 re-IPL, the shared-printer requests, and the kit's link to the mechanism (M6).
+
+M7 headless diskette unit done (2026-11-11): `diskette-mech.js` (motor, belt, hub, collet, diskette, lever, slide, head
+stepper and stop, head-load arm, index sensor, read channel) and `diskette-ctl.js` (step timing, settle, recalibrate,
+head load and unload, sector search, retries, ready and not ready) for both drives in `WordprocSim`, with the
+`diskettes` block in the definition, the snapshot fields, the `lever` and `disketteSlide` DOFs and the disk device
+commands and events. Tests: `tests/wp_disk.test.js` (insertion and the lever, ready after spin-up, 20 transfers within
+4 ms of the analytic model, recalibrate against the stop, not ready mid-transfer, no controller writing a mechanical
+state, export and import). Decisions are listed in 8.7. Not done, because they need the browser: `KitDevices` over
+the host's disk commands in place of the virtual disk, the drive model and view, the holder and the scripted hand,
+drive sound, and the e2e run; so the software in Node still uses `VirtualDevices`, and the 12.1 checks that run the
+software on the mechanism (program load, lever opened mid-write leaving a document that needs recovery) wait for it.
 
 ---
 

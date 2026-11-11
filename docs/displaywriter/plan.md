@@ -4,9 +4,26 @@ A third machine for the desk: a faithful physical recreation of the IBM 6580 Dis
 station with a separate keyboard, a diskette unit and a daisywheel printer. It also needs software that feels like the
 real editor to use. **Not an emulator.** The editor's behaviour is reimplemented from the manuals.
 
-Status: **research not started.** This file is the hand-off. It records what is already established, the sources to
-read, the spec sheet to fill in, and how the machine fits the existing code. The session that wrote it could not reach
-the sources (see *Network* below).
+Status: **phase 1 research done** (2026-11-11). The filled spec is in four files beside this one, with a PDF page
+cited for every value:
+
+| File | Contents |
+|---|---|
+| `hardware.md` | Display station, electronics module, keyboard, diskette unit, physical planning, colours |
+| `printer.md` | The 5218 printwheel printer: mechanism, steppers, hammer, ribbon, panel, interface |
+| `software-reference.md` | Textpack 4: every key and CODE combination, control codes, prompts and messages, format menus, limits |
+| `software-screens.md` | Textpack 4: start-up, the menu tree with 80 x 25 grids, the typing screen, 13 keystroke scripts for tests |
+
+Corrections to the assumptions below, from the research:
+- The keyboard uses **capacitive "fly-plate" key modules**, not buckling springs. The click is electronic, from a
+  speaker in the keyboard that also sounds the 1 kHz beeps. Typematic: 350 ms delay, about 14 per second.
+- The diskette unit has **no doors**: each vertical slot has a lever (vertical open, horizontal closed). The drives
+  spin at 360 rpm from an always-on AC motor; steps take 5 ms and settling 35 ms.
+- The logic is a flat **electronics module** (483 x 356 x 178 mm) that the display sits on.
+- The desk fits: about 0.75 (printer, estimated) + 0.48 (module) + 0.25 (diskettes) m across, so no wider desk needed.
+- Gaps the research could not fill: printer dimensions and dynamics (wheel inertia, hammer energy), phosphor
+  persistence, the CPU clock, head-load time, and the full message list (the *Prompts and Messages Guide*,
+  S544-2122, is not on Bitsavers).
 
 ## Ground rules
 - **No names or marks.** As with `element1971` and `docs/assets.md`, nothing shows a manufacturer name, logo or

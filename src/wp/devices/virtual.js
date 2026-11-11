@@ -1,12 +1,17 @@
 // Analytic devices for Node (architecture 7.6): the device interface the software sees, answered on the software's
 // own clock with completion times from timing.js. Sector bytes stay with the software, as with the real devices;
 // these only time the operations and report media. One adapter serves both drives, one operation at a time (ST p.103).
+// The printer is virtual-printer.js.
 import { MEDIA, sectorsPerTrack } from '../disk/geometry.js';
 import { DRIVE, seek, latency, transfer, RECALIBRATE_S } from './timing.js';
+import { VirtualPrinter } from './virtual-printer.js';
 
 export class VirtualDevices {
-  /** drives: two entries, each null or { mediaId, type }, in place (lever closed) when the system starts. */
-  constructor({ drives = [null, null] } = {}) {
+  /**
+   * drives: two entries, each null or { mediaId, type }, in place (lever closed) when the system starts.
+   * printer: the virtual printer's options (power, feeder).
+   */
+  constructor({ drives = [null, null], printer = {} } = {}) {
     this.sys = null;
     this.drives = drives.map((d) => ({ media: d ? { ...d } : null, track: 0, known: false, headUntil: -1 }));
     this.busyUntil = 0;
@@ -24,7 +29,7 @@ export class VirtualDevices {
         return d.media ? { ready: true, mediaId: d.media.mediaId, type: d.media.type } : { ready: false };
       },
     };
-    this.printer = { send: () => {}, credit: 0, status: { ready: false } };
+    this.printer = new VirtualPrinter(this, printer);
   }
 
   attach(sys) { this.sys = sys; }

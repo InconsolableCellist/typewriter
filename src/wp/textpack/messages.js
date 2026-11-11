@@ -29,6 +29,9 @@ export const TEXT = {
   newDiskName: ['Type new diskette name; press ENTER.', 'ours'],
   eraseConfirm: ['Contents of diskette will be erased. Press ENTER to continue or press CANCL.', 'ours, after TB2 p.523'],
   recoverDoc: ['({name}) will be recovered. Press ENTER.', 'ours'],
+  cancelJob: ['Type ID letter to cancel print job; press ENTER:', 'ORG p.134'],
+  printNext: ['Type ID letter of document to be printed next; press ENTER:', 'TB2 p.159'],
+  printingNow: ['# This document is printing now.', 'ORG p.134'],
 
   // Status line 1, field A
   loadingProgram: ['Loading Program', 'ORG p.59'],
@@ -83,6 +86,21 @@ export const TEXT = {
   firstLast: ['First typing line must not be after last typing line.', 'ours'],
   preserved: ['Preserve Page Numbers is Yes. Document not paginated.', 'ours, after ORG p.211'],
   abbrInvalid: ['({abbr}) not a valid abbreviation.', 'ours'],
+
+  // Printing (the printer's needs and errors go to the message line, SS 0)
+  printerOn: ['Turn printer on.', 'ours, after SS E3 step 5'],
+  printerNotReady: ['Printer not ready. Press START on the printer.', 'ours'],
+  loadPaper: ['Load paper in printer; press LOAD.', 'ours, after TB1 p.14'],
+  putOnWheel: ['Put on printer element ({style} {kbd})', 'TB2 p.553'],
+  printed: ['({name}) printed.', 'ours, after TB1 p.15'],
+  printCancelled: ['({name}) printing cancelled.', 'ours'],
+  coverOpen: ['Printer cover open. Close it; press START.', 'ours, after MIM p.183'],
+  printerError: ['Printer error {code}. Correct it; press START.', 'ours, after MIM p.123'],
+  queueFull: ['Print queue full: 6 jobs are queued.', 'ours, after ORG p.213'],
+  printKeyFull: ['25 pages already queued with PRINT.', 'ours, after ORG p.494'],
+  insertToPrint: ['Insert diskette {disk} to print ({name}).', 'ours, after SR 7.6'],
+  pagesNotFound: ['Pages to print not in document.', 'ours'],
+  printerBusy: ['Printer busy. Index not printed.', 'ours, after ORG p.494'],
 };
 
 export function fmt(key, args = {}) {

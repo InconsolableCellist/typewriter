@@ -55,10 +55,11 @@ export async function mount(ctx) {
   desk.setFootprints(footprints);
 
   // The software, on a clock that follows the wall clock. The diskettes are timed analytically until the diskette unit's
-  // mechanism exists (M7); the work diskettes persist in IndexedDB.
+  // mechanism exists (M7); the work diskettes persist in IndexedDB. Until the printer stands on the desk (M6) the
+  // virtual one is switched off, so a print job queues and asks for it.
   const store = await IdbStore.create();
   const library = restoreLibrary(firstRunLibrary(), store);
-  const devices = new VirtualDevices({ drives: [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }] });
+  const devices = new VirtualDevices({ drives: [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }], printer: { power: false } });
   const speaker = new WpSpeaker();
   devices.kbd = { click: () => speaker.click(), tone: (ms) => speaker.tone(ms) };
   const sys = createSystem({ devices, store, library, options: { cold: params.has('cold') } });

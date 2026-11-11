@@ -17,7 +17,7 @@ import { fmt } from '../messages.js';
 import { formatSelection, formatSubmenu } from '../formats.js';
 import { textUnits } from '../samples.js';
 import { SYMBOL_TEXT, SYM } from '../../charset.js';
-import { volumeNamed } from '../tasks/common.js';
+import { volumeNamed, TASKS } from '../tasks/common.js';
 
 const WHAT = {
   delete: ['deleteWhat', 'deleteText'], move: ['moveWhat', 'moveText'], copy: ['copyWhat', 'copyText'],
@@ -475,6 +475,7 @@ function* bypass(sys, ed) {
   if (b.unknown) { sys.messages.show('abbrInvalid', { abbr: b.abbr }); return; }
   const t = b.target;
   if (t.na) { sys.messages.show('notAvailable', { what: t.na }); return; }
+  if (t.request) { yield* TASKS[t.request](sys, {}); return; }
   if (t.task) {
     yield* ed.doc.close();
     sys.doc = null;

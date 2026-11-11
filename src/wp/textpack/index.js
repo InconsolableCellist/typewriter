@@ -12,6 +12,7 @@ import { TASKS, menuKeys } from './tasks/common.js';
 import './tasks/typing.js';
 import './tasks/index.js';
 import './tasks/workdisk.js';
+import './tasks/print.js';
 import './formats.js';
 import './editor/functions.js';
 import { waitSignal } from '../sched.js';

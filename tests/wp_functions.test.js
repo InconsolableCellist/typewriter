@@ -201,14 +201,14 @@ test('Duplicate Diskette and Condense Diskette', () => {
   assert.match(row(sys, 25), /Diskette TRAIN condensed on COPY\./);
 });
 
-test('the request menu over the typing area; print and spelling are not available yet', () => {
+test('the request menu over the typing area; the shared-printer items and spelling are not available yet', () => {
   const { sys } = revise('text\n');
   run(sys, 'REQST');
   expectScreen(sys, fixture('request-tasks').split('\n').map((r, i) => (i === 0 ? '~'.repeat(80) : r)).join('\n'));
-  run(sys, 'b ENTER');
-  assert.match(row(sys, 25), /not available/);
+  run(sys, 'f ENTER');
+  assert.match(row(sys, 25), /Request Printer not available/);
   run(sys, 'CANCL');
   assert.equal(text(sys, 4), 'text');
-  run(sys, 'PRINT');
-  assert.match(row(sys, 25), /Printing not available/);
+  run(sys, 'SPELL');
+  assert.match(row(sys, 25), /Spelling not available/);
 });

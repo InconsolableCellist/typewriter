@@ -39,9 +39,10 @@ export class Scheduler {
 
   pushKey(ev) { this.keys.push(ev); this.run(); }
 
-  /** Wake every task blocked on the signal `name`, with `value`. */
+  /** Wake every task blocked on the signal `name` (or on a list that holds it), with `value`. */
   signal(name, value) {
-    for (const task of this.tasks) if (task.state === 'signal' && task.signal === name) this.resume(task, value);
+    const waits = (s) => s === name || (Array.isArray(s) && s.includes(name));
+    for (const task of this.tasks) if (task.state === 'signal' && waits(task.signal)) this.resume(task, value);
     this.run();
   }
 

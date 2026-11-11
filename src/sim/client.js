@@ -20,9 +20,10 @@ class Emitter {
 
 /** Runs MechanicalSim synchronously. `advance` steps it; in the browser a timer calls advance on real time. */
 export class LocalHost extends Emitter {
-  constructor({ machine, geometry, glyphs, autoRun = true }) {
+  /** options: anything else the machine's mechanism host takes at construction (the word processor's `drives`). */
+  constructor({ machine, geometry, glyphs, autoRun = true, options = {} }) {
     super();
-    this.sim = createMechanism({ machine, geometry, glyphs });
+    this.sim = createMechanism({ ...options, machine, geometry, glyphs });
     this.layout = this.sim.layout;
     this.state = new Float32Array(this.layout.length);
     this.engine = createAudioEngine(this.sim, 48000);
@@ -241,8 +242,8 @@ class SimClient {
   advance(seconds) { this.host.advance?.(seconds); }
 }
 
-export async function createSimClient({ machine, geometry, glyphs, audioContext, autoRun } = {}) {
-  const host = new LocalHost({ machine, geometry, glyphs, autoRun: autoRun ?? (typeof window !== 'undefined') });
+export async function createSimClient({ machine, geometry, glyphs, audioContext, autoRun, options } = {}) {
+  const host = new LocalHost({ machine, geometry, glyphs, options, autoRun: autoRun ?? (typeof window !== 'undefined') });
   const client = new SimClient({ machine, geometry, glyphs, host });
   // Before a user gesture a context is suspended and resume() would never settle: stay local, the UI
   // calls unlockAudio() from its first gesture.

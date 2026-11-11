@@ -17,6 +17,9 @@ import { KeyboardHost } from './wp/keyboard-host.js';
 import { WpKeyboardInput } from '../interact/wp-keyboard.js';
 import { WpSpeaker } from '../audio/wp-speaker.js';
 import { installPrinter } from './wp/printer.js';
+import { installDiskettes } from './wp/diskettes.js';
+import { createSimClient } from '../sim/client.js';
+import { loadGlyphs } from '../machine/glyphs.js';
 import { installPages } from '../pages/index.js';
 import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
 
@@ -55,20 +58,26 @@ export async function mount(ctx) {
   }
   desk.setFootprints(footprints);
 
-  // The software, on a clock that follows the wall clock. The diskettes are timed analytically until the diskette unit's
-  // mechanism exists in the browser (M7); the work diskettes persist in IndexedDB.
+  // The software, on a clock that follows the wall clock; the work diskettes persist in IndexedDB.
   const store = await IdbStore.create();
   const library = restoreLibrary(firstRunLibrary(), store);
-  const devices = new VirtualDevices({ drives: [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }] });
+  const devices = new VirtualDevices();   // its keyboard, printer and disk are replaced by the real ones below
   const speaker = new WpSpeaker();
   devices.kbd = { click: () => speaker.click(), tone: (ms) => speaker.tone(ms) };
-  // The printer: its own mechanism host and soft bodies, reached by the software only through the device interface.
+  // One mechanism host for the printer and the diskette unit, started warm: both diskettes home with their levers
+  // closed. The software reaches them only through the device interface.
   let sys = null;
-  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, onDevice: (e) => sys?.deviceEvent(e) });
+  const drives = [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }];
+  const glyphs = await loadGlyphs('glyphs_wp');
+  const sim = await createSimClient({ machine, geometry, glyphs, options: { drives: params.has('cold') ? [null, null] : drives } });
+  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, sim, glyphs, onDevice: (e) => sys?.deviceEvent(e) });
   devices.printer = printer.device;
+  const pickables = [];
+  const diskettes = installDiskettes({ stage, machine, geometry, sim, unit: units.diskette, parts: parts.diskette, library, pickables });
+  diskettes.onEvent((e) => sys?.deviceEvent(e));
+  devices.disk = diskettes.device;
   sys = createSystem({ devices, store, library, options: { cold: params.has('cold') } });
   loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre'] }).catch((e) => console.info('textures', e));
-  const pickables = [];
   const pages = installPages({ stage, soft: printer.soft, paper: printer.paper, machine: { ...printer.softMachine, deskLayout: machine.deskLayout }, interaction: { picker: { add: (e) => pickables.push(e) } }, hands: { loadPaper: () => printer.loadSheet() } });
   const t0 = performance.now();
   const unlockAudio = () => { speaker.unlock(); if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done && !params.has('localsim')) {   // ?localsim keeps the mechanism on the main thread (machines with no audio device, tests)
@@ -117,6 +126,7 @@ export async function mount(ctx) {
     const keys = parts.keyboard.keys, x = keyboard.mech.x, dir = parts.keyboard.pressDir;
     for (let i = 0; i < keys.length; i++) keys[i].position.copy(keys[i].userData.rest).addScaledVector(dir, x[i]);
     printer.update();
+    diskettes.update();
     pages.update(dt);
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
@@ -126,7 +136,7 @@ export async function mount(ctx) {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, panel, crt, screen, sys, keyboard, devices, printer, pages, sim: printer.sim, soft: printer.soft };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, panel, crt, screen, sys, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft };
   return window.__tw;
 }
 

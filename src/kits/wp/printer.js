@@ -2,17 +2,14 @@
 // film ribbon as soft bodies in the printer's own frame, ink from the existing strike path, the sheet feeder, and
 // finished pages to the pile. The software reaches the printer only through `device` (the 7.6 interface).
 import * as THREE from 'three';
-import { loadGlyphs } from '../../machine/glyphs.js';
-import { createSimClient } from '../../sim/client.js';
 import { SoftWorld } from '../../soft/index.js';
 import { PaperView, RibbonView } from '../../render/paper-view.js';
 import { printerSoftMachine } from './printer-soft.js';
 
 const LOAD = 0x5001;
 
-export async function installPrinter({ stage, machine, geometry, mats, group, onDevice }) {
-  const glyphs = await loadGlyphs('glyphs_wp');
-  const sim = await createSimClient({ machine, geometry, glyphs });
+/** sim: the word processor's mechanism client (it hosts every unit); glyphs: the printwheel's faces. */
+export async function installPrinter({ stage, machine, geometry, mats, group, sim, glyphs, onDevice }) {
   const softMachine = printerSoftMachine(machine);
   const soft = new SoftWorld({ machine: softMachine, geometry: geometry.printer, glyphs, origin: geometry.units.printer.origin });
   const paper = new PaperView({ renderer: stage.renderer, soft, mats, keyDir: new THREE.Vector3() });
@@ -39,6 +36,7 @@ export async function installPrinter({ stage, machine, geometry, mats, group, on
   // The device the software talks to (7.6), with the status fields the spooler reads.
   const st = { on: true, ready: true, online: true, coverOpen: false, error: 0, paper: false, feeder: Infinity, queued: 0 };
   sim.on('device', (e) => {
+    if (e.dev !== 'printer') return;
     if (e.ev === 'status') Object.assign(st, e, { on: sim.state[sim.layout.printerPower] > 0.5 });
     if (e.ev === 'paper') st.paper = e.kind === 'load';
     onDevice?.({ ...e, ...(e.ev === 'status' ? st : null) });

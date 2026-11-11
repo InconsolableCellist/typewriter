@@ -116,11 +116,12 @@ export function buildDiskette(size, mats) {
   const levers = [], slots = [];
   for (const [i, x] of [[0, -0.05], [1, 0.05]]) {
     const slot = at(box(0.008, 0.215, 0.01, 0.002, mats.dark), x, plinth + 0.035 + 0.1075, d / 2 - 0.002);
-    // The lever pivots at its top; vertical is open, horizontal (turned a quarter) is closed.
+    // The lever pivots at its top, beside the slot's lower half: hanging straight down is open, turned a quarter to
+    // lie across the slot is closed (CSG p.42).
     const lever = new THREE.Group();
-    lever.position.set(x, plinth + 0.25, d / 2 + 0.006);
-    lever.add(at(box(0.012, 0.2, 0.008, 0.003, mats.dark), 0, -0.1, 0));
-    lever.add(at(box(0.034, 0.016, 0.012, 0.003, mats.dark), 0, -0.175, 0.004));
+    lever.position.set(x, plinth + 0.13, d / 2 + 0.006);
+    lever.add(at(box(0.011, 0.075, 0.008, 0.003, mats.dark), 0, -0.0375, 0));
+    lever.add(at(box(0.03, 0.014, 0.012, 0.003, mats.dark), 0, -0.07, 0.004));
     lever.name = `lever${i}`;
     g.add(slot, lever); levers.push(lever); slots.push(slot);
   }

@@ -75,7 +75,7 @@ out vec2 vUv;
 void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
 export class CRT {
-  /** screen: { chars: Uint8Array(2000), attrs: Uint8Array(2000), cursor: { row, col, on }, version } */
+  /** screen: { chars: Uint8Array(2000), attrs: Uint8Array(2000), cursor: { row, col, on } (1-based, as src/wp/screen.js), version } */
   constructor({ renderer, screen }) {
     this.renderer = renderer;
     this.screen = screen;
@@ -133,9 +133,9 @@ export class CRT {
     const s = this.screen;
     let changed = false;
     if (s.version !== this.lastVersion) { this._upload(); changed = true; }
-    const c = s.cursor ?? { row: 0, col: 0, on: false };
+    const c = s.cursor ?? { row: 1, col: 1, on: false };
     const cu = this.pass.uniforms.uCursor.value;
-    if (cu.x !== c.col || cu.y !== c.row || (cu.z > 0.5) !== !!c.on) { cu.set(c.col, c.row, c.on ? 1 : 0); changed = true; }
+    if (cu.x !== c.col - 1 || cu.y !== c.row - 1 || (cu.z > 0.5) !== !!c.on) { cu.set(c.col - 1, c.row - 1, c.on ? 1 : 0); changed = true; }
     this.blinkT += dt;
     const blinkOn = (this.blinkT * BLINK_HZ) % 1 < 0.5 ? 1 : 0;
     const blinking = this._hasBlink();

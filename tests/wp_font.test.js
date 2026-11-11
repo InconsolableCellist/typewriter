@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FONT8X16, SYMBOLS } from '../src/wp/font/font8x16.js';
+import { SYM } from '../src/wp/charset.js';
 
 const rows = (ch, font = 1) => { const g = (font - 1) * 256 + (typeof ch === 'number' ? ch : ch.charCodeAt(0)); return [...FONT8X16.subarray(g * 16, g * 16 + 16)]; };
 const litRows = (ch, font) => rows(ch, font).map((b, r) => (b ? r : -1)).filter((r) => r >= 0);
@@ -30,9 +31,14 @@ test('glyph widths are within the documented 3 to 7 dots, and every printable AS
   assert.ok(width('i') <= 3 && width('l') <= 3);
 });
 
-test('font 2 holds the code symbols, scale marks and start-up blocks by name', () => {
-  for (const name of ['carrierReturn', 'tab', 'reqSpace', 'pageEnd', 'reqPageEnd', 'formatChange', 'leftMargin', 'rightMargin', 'statusBar', 'fullBlock', 'stripes']) {
-    assert.ok(SYMBOLS[name] > 0, name);
-    assert.ok(litRows(SYMBOLS[name], 2).length > 0, name);
+test('font 2 has a glyph for every symbol code the software writes, and the start-up block', () => {
+  for (const [name, code] of Object.entries(SYM)) {
+    assert.equal(SYMBOLS[name], code, name);
+    assert.ok(litRows(code, 2).length > 0, name);
   }
+  assert.equal(litRows(SYM.BLOCK, 2).length, 16);
+});
+
+test('every Latin-1 character the software can write has a text glyph', () => {
+  for (const ch of '±½²§°¢¼³¶×') assert.ok(litRows(ch).length > 0, ch);
 });

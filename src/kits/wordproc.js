@@ -8,6 +8,14 @@ import { createMaterials, loadStudioTextures } from '../render/materials.js';
 import { Desk } from '../render/desk.js';
 import { Orbit } from '../interact/orbit.js';
 import { CRT, COLS, ROWS, makeTubeFace } from '../render/wp/crt.js';
+import { createSystem } from '../wp/index.js';
+import { VirtualDevices } from '../wp/devices/virtual.js';
+import { firstRunLibrary } from '../wp/textpack/samples.js';
+import { PROGRAM_NAME } from '../wp/disk/library.js';
+import { IdbStore, restoreLibrary } from './wp/store.js';
+import { KeyboardHost } from './wp/keyboard-host.js';
+import { WpKeyboardInput } from '../interact/wp-keyboard.js';
+import { WpSpeaker } from '../audio/wp-speaker.js';
 import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
@@ -46,8 +54,23 @@ export async function mount(ctx) {
   }
   desk.setFootprints(footprints);
 
-  // The CRT on the display's front. Until the software lands (milestones M1-M3) it shows a still picture.
-  const screen = params.has('screentest') ? testCardScreen() : placeholderScreen();
+  // The software, on a clock that follows the wall clock. The diskettes are timed analytically until the diskette unit's
+  // mechanism exists (M7); the work diskettes persist in IndexedDB.
+  const store = await IdbStore.create();
+  const library = restoreLibrary(firstRunLibrary(), store);
+  const devices = new VirtualDevices({ drives: [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }] });
+  const speaker = new WpSpeaker();
+  devices.kbd = { click: () => speaker.click(), tone: (ms) => speaker.tone(ms) };
+  const sys = createSystem({ devices, store, library, options: { cold: params.has('cold') } });
+  const t0 = performance.now();
+  const simNow = () => (performance.now() - t0) / 1000;
+  const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
+  new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => speaker.unlock() });
+  window.addEventListener('pointerdown', () => speaker.unlock(), { once: true });
+  window.addEventListener('beforeunload', (e) => { if (sys.doc) { e.preventDefault(); e.returnValue = ''; } });
+
+  // The CRT on the display's front.
+  const screen = params.has('screentest') ? testCardScreen() : sys.screen;
   const crt = new CRT({ renderer: stage.renderer, screen });
   const face = new THREE.Mesh(makeTubeFace(0.245, 0.17), crt.material);
   face.position.set(displayFace.x, displayFace.y, displayFace.z);
@@ -78,6 +101,11 @@ export async function mount(ctx) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     const t0 = performance.now();
     orbit.update(dt);
+    const t = simNow();
+    keyboard.advance(t);
+    sys.advance(t);
+    const keys = parts.keyboard.keys, x = keyboard.mech.x, dir = parts.keyboard.pressDir;
+    for (let i = 0; i < keys.length; i++) keys[i].position.copy(keys[i].userData.rest).addScaledVector(dir, x[i]);
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();
@@ -86,7 +114,7 @@ export async function mount(ctx) {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, panel, crt, screen };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, panel, crt, screen, sys, keyboard, devices };
   return window.__tw;
 }
 
@@ -102,7 +130,7 @@ function buildPanel(ctx, machine, orbit) {
   picker.value = machine.id;
   picker.addEventListener('change', () => ctx.onPick(picker.value));
   const hint = document.getElementById('hint');
-  if (hint) hint.textContent = 'work in progress: the software and mechanisms are not connected yet · drag to orbit · wheel to zoom · buttons move the camera';
+  if (hint) hint.textContent = 'type on your keyboard · Alt = CODE, AltGr = ENTER, F1-F10 = function keys, Esc = CANCL · drag to orbit · wheel to zoom · buttons move the camera';
   return el;
 }
 
@@ -133,27 +161,14 @@ function installOrbitInput(canvas, orbit) {
 }
 
 /** A screen object in the software's format, filled from 25 strings. */
-function screenFrom(lines, cursor = { row: 0, col: 0, on: false }, attrsFor = () => 0) {
+function screenFrom(lines, cursor = { row: 1, col: 1, on: false }, attrsFor = () => 0) {
   const chars = new Uint8Array(COLS * ROWS), attrs = new Uint8Array(COLS * ROWS);
   lines.forEach((ln, r) => { for (let c = 0; c < Math.min(COLS, ln.length); c++) { chars[r * COLS + c] = ln.charCodeAt(c) & 0xff; attrs[r * COLS + c] = attrsFor(r, c); } });
   return { chars, attrs, cursor, version: 1 };
 }
 
-function placeholderScreen() {
-  const L = Array(ROWS).fill('');
-  L[3] = '                               TASK SELECTION';
-  L[6] = '      ID   ITEM';
-  L[8] = '      a    Typing Tasks';
-  L[9] = '      b    Work Diskette Tasks';
-  L[10] = '      c    Program Diskette Tasks';
-  L[11] = '      d    Printer Tasks';
-  L[12] = '      e    Spelling Tasks';
-  L[23] = 'Type ID letter to choose ITEM; press ENTER:';
-  return screenFrom(L, { row: 23, col: 44, on: true }, (r) => (r === 23 ? 4 : 0));
-}
-
 function testCardScreen() {
   const L = [];
   for (let r = 0; r < ROWS; r++) { let s = ''; for (let c = 0; c < COLS; c++) s += String.fromCharCode(32 + ((r * COLS + c) % 95)); L.push(s); }
-  return screenFrom(L, { row: 12, col: 40, on: true }, (r, c) => (r === 2 ? 1 : r === 4 ? 2 : r === 6 ? 4 : 0));
+  return screenFrom(L, { row: 13, col: 41, on: true }, (r, c) => (r === 2 ? 1 : r === 4 ? 2 : r === 6 ? 4 : 0));
 }

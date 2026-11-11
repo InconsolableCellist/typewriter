@@ -8,6 +8,7 @@ import { createMaterials, loadStudioTextures } from '../render/materials.js';
 import { Desk } from '../render/desk.js';
 import { Orbit } from '../interact/orbit.js';
 import { CRT, COLS, ROWS, makeTubeFace } from '../render/wp/crt.js';
+import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -23,22 +24,24 @@ export async function mount(ctx) {
   loadRoom(stage.scene, '/assets/hdri/combination_room_2k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
   loadStudioTextures(mats, null, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk'] }).catch((e) => console.info('textures', e));
 
-  // Block-out bodies: one box per unit, in its own group at its world origin.
-  const units = {};
-  const footprints = [];
+  // The units, each in its own group at its world origin.
+  const umats = createUnitMaterials();
+  const builders = {
+    station: (u) => buildStation(u.size, umats),
+    display: (u) => buildDisplay(u.size, umats),
+    keyboard: (u) => buildKeyboard(u.size, machine.units.keyboard.slope, umats),
+    diskette: (u) => buildDiskette(u.size, umats),
+    printer: (u) => buildPrinter(u.size, umats),
+  };
+  const units = {}, parts = {}, footprints = [];
+  let displayFace = null;
   for (const [name, u] of Object.entries(geometry.units)) {
-    const def = machine.units[name];
-    const group = new THREE.Group();
-    group.name = `unit-${name}`;
-    group.position.fromArray(u.origin);
-    const mat = new THREE.MeshPhysicalMaterial({ color: def.color ?? 0xcccccc, roughness: 0.55, metalness: 0, clearcoat: 0.1 });
-    const box = new THREE.Mesh(new THREE.BoxGeometry(...u.size), mat);
-    box.position.y = u.size[1] / 2;
-    box.castShadow = box.receiveShadow = true;
-    box.name = name;
-    group.add(box);
-    stage.scene.add(group);
-    units[name] = group;
+    const built = builders[name](u);
+    built.group.name = `unit-${name}`;
+    built.group.position.fromArray(u.origin);
+    stage.scene.add(built.group);
+    units[name] = built.group; parts[name] = built.parts;
+    if (built.face) displayFace = built.face;
     if (!u.on) footprints.push(u.box);
   }
   desk.setFootprints(footprints);
@@ -46,14 +49,13 @@ export async function mount(ctx) {
   // The CRT on the display's front. Until the software lands (milestones M1-M3) it shows a still picture.
   const screen = params.has('screentest') ? testCardScreen() : placeholderScreen();
   const crt = new CRT({ renderer: stage.renderer, screen });
-  const dsz = geometry.units.display.size;
   const face = new THREE.Mesh(makeTubeFace(0.245, 0.17), crt.material);
-  face.position.set(0, 0.165, dsz[2] / 2 + 0.002);
+  face.position.set(displayFace.x, displayFace.y, displayFace.z);
   units.display.add(face);
   // The screen's own light on the keyboard and desk: shadowless, from a little in front of the glass.
   const spill = new THREE.SpotLight(0x66ff99, 0, 1.5, 1.1, 0.9, 2);
-  spill.position.set(0, 0.165, dsz[2] / 2 + 0.03);
-  spill.target.position.set(0, -0.25, dsz[2] / 2 + 0.6);
+  spill.position.set(displayFace.x, displayFace.y, displayFace.z + 0.03);
+  spill.target.position.set(displayFace.x, -0.25, displayFace.z + 0.6);
   units.display.add(spill.target);
   units.display.add(spill);
   stage.fitShadow(machine.deskLayout.extent);
@@ -84,7 +86,7 @@ export async function mount(ctx) {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, desk, orbit, panel, crt, screen };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, panel, crt, screen };
   return window.__tw;
 }
 

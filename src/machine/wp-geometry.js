@@ -1,5 +1,5 @@
 // World placements of a system machine's units (machine.kind === 'system'). Pure data from the definition; shared
-// by the scene, the layout tests and, later, the mechanism host. See docs/displaywriter/architecture.md 3.2.
+// by the scene, the layout tests and the mechanism host. See docs/displaywriter/architecture.md 3.2.
 
 /**
  * Each unit's world origin (on the surface it stands on, under its centre) and its world-space box.
@@ -22,5 +22,25 @@ export function deriveWordprocGeometry(m) {
     return (units[name] = { origin, size: u.size, box, on: u.on ?? null });
   };
   for (const name of Object.keys(m.units)) place(name);
-  return { system: true, units };
+  return { system: true, units, ...(m.printer ? { printer: printerGeometry(m.printer) } : null) };
+}
+
+/**
+ * The printer in its own unit coordinates, shaped as the geometry SoftWorld and buildFaceTables take (6.2): the
+ * print point on the platen's front at axle height, and one "bar" per petal. The wheel's axis runs front to back
+ * below the print line, with its top petal standing in front of the print point.
+ */
+function printerGeometry(p) {
+  const { center, radius } = p.platen;
+  const printPoint = [center[0], center[1], center[2] + radius];
+  const W = p.wheel;
+  const bars = [...W.order].map((ch, index) => ({ index, lower: ch, upper: ch, skew: 0, offsetX: 0, offsetY: 0 }));
+  return {
+    printPoint, printNormal: [0, 0, 1], strikeDown: [0, -1, 0],
+    bars, nPrint: bars.length, keys: [], nKeys: 0,
+    wheel: {
+      center: [printPoint[0], printPoint[1] - W.tipRadius, printPoint[2] + p.hammer.petalTravel],
+      axis: [0, 0, 1], radius: W.tipRadius, petalStep: (2 * Math.PI) / W.petals, order: W.order,
+    },
+  };
 }

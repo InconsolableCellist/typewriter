@@ -8,7 +8,7 @@ function warmUp(machine, geometry, glyphs) {
   const sim = createMechanism({ machine, geometry, glyphs });
   const eng = createAudioEngine(sim, sampleRate);
   const buf = new Float32Array(128);
-  sim.pressKey(10, 28, 0.09);
+  if (sim.warmUp) sim.warmUp(); else sim.pressKey(10, 28, 0.09);
   for (let i = 0; i < 180; i++) eng.process(buf, 128);
 }
 
@@ -39,6 +39,7 @@ class TypewriterProcessor extends AudioWorkletProcessor {
     switch (m.c) {
       case 'pressKey': sim.pressKey(m.k, m.f, m.d, m.g); break;
       case 'flickBell': sim.flickBell(); break;
+      case 'dev': sim.command?.(m.msg); break;
       case 'grab': this.grabs.set(m.id, sim.grab(m.dof, m.index, m.opts)); break;
       case 'moveGrab': { const g = this.grabs.get(m.id); if (g !== undefined) sim.moveGrab(g, m.target); break; }
       case 'release': { const g = this.grabs.get(m.id); if (g !== undefined) { sim.release(g); this.grabs.delete(m.id); } break; }

@@ -3,12 +3,14 @@
 // without touching the transport. The typewriters' MechanicalSim and AudioEngine are unchanged.
 import { MechanicalSim } from './mechanics.js';
 import { AudioEngine } from '../audio/engine.js';
+import { WordprocSim } from './wp/index.js';
+import { WpAudioEngine } from '../audio/wp-engine.js';
 
 // Every typewriter action (front strike, upstrike, single element) runs in MechanicalSim, which dispatches on
 // action.type itself. Families with their own host are listed here by action.type.
 const TYPEWRITER = { sim: (o) => new MechanicalSim(o), engine: (sim, rate) => new AudioEngine(sim, rate) };
 const HOSTS = {
-  'printwheel-system': null,   // the word processor's WordprocSim arrives with milestone M4/M5
+  'printwheel-system': { sim: (o) => new WordprocSim(o), engine: (sim, rate) => new WpAudioEngine(sim, rate) },
 };
 
 function hostFor(machine) {

@@ -1,0 +1,25 @@
+Format Change       |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+.«.2....:....3....:....4....:....5...▼:....6....:....7....:....8....:....»....:.
+                             MARGINS AND TABS
+
+   SET MARGIN: Use <- or -> key to move cursor to margin (<< or >>).
+                Use SPACE bar or BKSP key to move margin.
+
+      SET TAB: Use <- or -> key to move cursor to where you want tab.
+               For Flush Left Tab, Press TAB  For Center Tab, press CTR
+               For Decimal Tab, press .  For Flush Right Tab, press RET
+               For Comma Tab, press ,
+
+    CLEAR TAB: Use <- or -> key to move cursor to tab; press DEL.
+
+    MOVE TABS: Use <- or -> key to move cursor to tab.
+               Use SPACE bar or BKSP key to move tabs.
+
+ SET ALL TABS: Use <- or -> key to move cursor to left margin (<<).
+               Type number for spacing between tabs; press ENTER.
+CLEAR ALL TABS: Use <- or -> key to move cursor to left margin (<<);
+                press DEL.
+
+When finished, press ENTER.
+

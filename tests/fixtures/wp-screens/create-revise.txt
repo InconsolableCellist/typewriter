@@ -1,0 +1,24 @@
+                    |~~~~~~~~~~~~~~~~~~~~|    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                     CREATE OR REVISE DOCUMENT
+
+                                   YOUR      POSSIBLE
+  ID  ITEM                         CHOICE    CHOICES
+
+  a   Document Comment
+
+  b   Change Document Format
+
+  c   Change Alternate Format
+
+  d   Preserve Page Numbers        2         1 = Yes    2 = No
+
+
+
+
+
+
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:

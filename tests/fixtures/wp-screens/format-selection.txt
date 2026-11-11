@@ -1,0 +1,25 @@
+Chg Document Fmt    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                          FORMAT SELECTION
+
+                   ID    ITEM
+
+                   a     Change Line Format
+                   b     Change Margins and Tabs
+                   c     Change Page Format
+                   d     Change Header and Footer
+                   e     Change Alternating Headers and Footers
+
+
+
+
+
+
+
+
+
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:
+

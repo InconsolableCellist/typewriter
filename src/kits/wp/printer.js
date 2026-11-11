@@ -26,9 +26,12 @@ export async function installPrinter({ stage, machine, geometry, mats, group, on
   // The sheet feeder (owner's answer 5): a LOAD from the software first lays the next sheet on the table, then the
   // printer's own load takes it in. Switched off, LOAD finds no paper unless the operator laid a sheet (the fresh stack).
   const feeder = { on: true };
+  // The software counts columns from the paper's left edge at the carrier's home (7.7), so the sheet goes in with its
+  // left edge there, against the paper guide. `lateral` is the sheet centre's x on the platen.
+  const homeX = -sim.state[sim.layout.carriageX];
   const laySheet = () => {
     for (let i = 0; i < 3; i++) soft.step(1 / 240, sim.state, sim.layout);
-    soft.spawnSheet({ onTable: { offset: 0.002 } });
+    soft.spawnSheet({ onTable: { offset: 0.002, lateral: homeX + softMachine.paper.width / 2 } });
   };
   // A sheet run off the rollers is finished: parking it retires it to the page pile (installPages).
   soft.paperSim.onEjected = () => setTimeout(() => soft.parkSheet(), 300);
@@ -53,13 +56,20 @@ export async function installPrinter({ stage, machine, geometry, mats, group, on
       setTimeout(() => sim.command({ dev: 'printer', words: w.slice(load) }), 400);
     },
   };
-  let lastEnv = '';
+  let lastEnv = '', lastT = null;
   return {
     sim, soft, softMachine, paper, ribbon, feeder, device, internals,
     /** The operator lays a sheet and presses LOAD (manual feed, or a click on the fresh stack). */
     loadSheet() { laySheet(); setTimeout(() => sim.command({ dev: 'printer', words: [LOAD] }), 400); },
-    update(dt) {
-      soft.step(dt, sim.state, sim.layout);
+    /**
+     * The paper steps by the mechanism's own elapsed time, not the frame's: on a slow frame the mechanism has run on,
+     * and a paper that fell behind would see the platen turn a whole line between two of its steps and slip.
+     */
+    update() {
+      const t = sim.state[sim.layout.time];
+      const dt = lastT === null ? 0 : Math.min(0.25, Math.max(0, t - lastT));
+      lastT = t;
+      if (dt > 0) soft.step(dt, sim.state, sim.layout);
       const env = soft.env(), key = JSON.stringify(env);
       if (key !== lastEnv) { lastEnv = key; sim.setEnv(env); }
       paper.update(); ribbon.update();

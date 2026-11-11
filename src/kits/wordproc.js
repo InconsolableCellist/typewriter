@@ -116,7 +116,7 @@ export async function mount(ctx) {
     sys.advance(t);
     const keys = parts.keyboard.keys, x = keyboard.mech.x, dir = parts.keyboard.pressDir;
     for (let i = 0; i < keys.length; i++) keys[i].position.copy(keys[i].userData.rest).addScaledVector(dir, x[i]);
-    printer.update(dt);
+    printer.update();
     pages.update(dt);
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;

@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                        PAGINATE DOCUMENT
+
+                                       YOUR     POSSIBLE
+  ID  ITEM                             CHOICE   CHOICES
+
+  a   Paginate From Page               1        1 - 5
+
+  b   Paginate on Exact Line Count     2        1 = Yes    2 = No
+
+  c   Adjust Line Endings              1        1 = Yes    2 = No
+
+  d   Adjust Page Endings              1        1 = Yes    2 = No
+
+
+
+
+
+
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:
+

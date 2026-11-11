@@ -1,0 +1,25 @@
+Displaying Index    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+Diskette: DISK01    Available: 70%     Unusable: 0%   Displaying: 1 to 4 of 4
+
+ DOCUMENT NAME         TYPE                     COMMENT
+  Mtg Ltr A          Document                 First Notice
+  Mtg Ltr B          Document                 Second Notice
+  Names              File                     Name and Address List
+  Donor Shell        Document                 Letter to Donors
+
+
+
+
+
+
+
+
+
+
+
+                  END OF INDEX OF DISKETTE CONTENTS
+* indicates that document needs recovery.
+Press ↓ key or ↑ key to see more.       When finished, press ENTER.
+

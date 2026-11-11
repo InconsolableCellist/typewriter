@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                      WORK DISKETTE TASKS
+
+               ID   ITEM
+
+               a    Delete Document
+               b    Duplicate Document
+               c    Change Document Name
+               d    Change Diskette Name
+               e    Duplicate Diskette
+               f    Condense Diskette
+               g    Erase or Initialize (Name) Diskette
+               h    Recover Documents
+               i    Print Index of Diskette Contents
+               j    Display Final-form Document
+               k    Convert Final-form Document
+               l    Go to Task Selection
+
+
+
+
+Type ID letter to choose ITEM; press ENTER:
+

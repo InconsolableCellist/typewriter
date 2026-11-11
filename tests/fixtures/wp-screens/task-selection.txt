@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+                       TASK SELECTION
+             ID   ITEM
+             a    Typing Tasks:
+                   Create, Revise or Paginate Documents
+             b    Work Diskette Tasks:
+                   Delete or Duplicate Documents,
+                   Duplicate, Condense or
+                   Erase/Initialize(Name) Diskette,
+                   Print Index of Diskette Contents, Change
+                   Document or Diskette Name, Recover Documents,
+                   Display or Convert Final-form Documents
+             c    Program Diskette Tasks:
+                   Default Formats, Duplicate Setups,
+                   Printer and Work Station Description,
+                   Duplicate and Erase Program Diskette,
+                   Feature Program Diskette Tasks,
+                   Create and Update Combined Program Diskette
+             d    Spelling Tasks
+             e    Feature Tasks
+             f    Key-To-Print Task
+             g    Merge Tasks
+Type ID letter to choose ITEM; press ENTER:
+

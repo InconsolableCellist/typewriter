@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                         PRINT DOCUMENT
+
+                          YOUR     POSSIBLE
+  ID  ITEM                CHOICE   CHOICES
+
+  a   Print From Page     0        0 = First Page,
+                                   1 = 9999.9.9
+  b   Print Through Page  0        0 = Last Page,
+                                   1 = 9999.9.9
+  c   Print Quantity      1        1 - 99
+
+  d   Paper Handling      2        1 = Cut Paper, Manual Feed
+                                   2 = Cut Paper, Automatic Feed
+                                   3 = Continuous Paper
+
+  e   Cancel on Error     2        1 = Yes     2 = No
+
+
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:
+

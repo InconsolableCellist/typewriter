@@ -750,6 +750,25 @@ to 7.7); Work Diskette Tasks a to i; Request Tasks; Menu Bypass; Spelling Tasks 
 menus only: Program Diskette Tasks other than Work Station Description, Feature, Key-To-Print, Merge, math,
 column layout, final-form documents, alternate tasks.
 
+### 7.9 Decisions made in implementation
+
+Choices the research and this document left open, made while building M1 to M3, with the page they rest on.
+
+| Where | Decision | Source |
+|---|---|---|
+| Clicks | A task names the keys it accepts. A key it does not accept (a cursor key in a menu, say) is dropped with no click, so "accepted" in HW 2.3 is decided where the key is used, not when it arrives | HW 2.3; 13.3 (no click for invalid keys); ORG p.32 |
+| LOCK | A shift lock: it shifts every key, digits included, until either SHIFT releases it | HW 2.2, 2.6 |
+| Attributes | The prompt line is bright. Changed YOUR CHOICE values, an item chosen ahead (TYPING TASKS after END) and selections are reverse video | HW 1.6 (reverse for selected menu items); ORG p.33 |
+| Message line | The waiting-message indicator is `==>`, blinking, in columns 1 to 3 of row 25; a shown message starts in column 5 | SR 1 (`==>`); TB1 p.13 (bottom left) |
+| TASK SELECTION | Title on row 3, items packed into rows 4 to 23 as the SS 2.1 grid | SS 2.1, ORG p.233 |
+| Program segments | One task-family segment (typing, work diskette, spelling) in memory at a time beside the nucleus. While one loads, TASK SELECTION stays up with the chosen task highlighted | TB2 p.68, p.74; 8.2 |
+| Program-diskette prompt | `Insert desired program or feature diskette; press ENTER`, the nearest attested wording | TB2 p.610; SS 1 item 7 |
+| Power-on test | 05 at 3 s, 06 at 4 s, 09 at 7 s, `*11*` and the initials at 10 s ("a few seconds" each) | TP4 p.1 |
+| Re-IPL | CONTROL+RET then ENTER on TASK SELECTION; the initials return after 3 s ("a few seconds") | ORG p.59 |
+| Index entries | 124 bytes, two per sector: a chain sector's 4-byte header leaves 252 bytes, so 8.2's 128-byte entries do not fit two to a sector | 8.2 |
+| Logical sectors | Both sides of a track before the next track, so one seek serves 52 sectors of a 2D diskette. The program load then takes 8.8 s from the lever closing | 8.1; SS 1 (about 10 s) |
+| Drive | The head unloads after 2 s with no command; spin-up to ready 0.5 s | 8.4 (head load assumed); 12.1 (ready under 0.6 s) |
+
 ---
 
 ## 8. Diskettes
@@ -995,6 +1014,10 @@ M5 can run in parallel with M3 and M4; it depends only on M0.
 The shared parts move up into `main.js` in M4, when the word-processor kit needs them, so the boundary is drawn
 from real use. `src/kits/wordproc.js` builds its own stage, desk and orbit for now. `host-factory.js` has no
 word-processor host yet and throws for it; the kit does not create a mechanism until M4.
+
+M1 done (2026-11-11): the software kernel in `src/wp/` (scheduler, screen, keys, start-up, menus as data and the
+menu runner, messages, virtual devices, the diskette layout the program load needs, testkit), tested by
+`tests/wp_kernel.test.js`. Decisions taken while building are listed in 7.9.
 
 ---
 

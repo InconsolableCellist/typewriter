@@ -1,0 +1,25 @@
+Format Change       |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                             LINE FORMAT
+
+                          YOUR       POSSIBLE
+  ID  ITEM                CHOICE     CHOICES
+
+  a   Line Spacing        1          1 = Single  2 = Double  3 = Triple
+                                     4 = Half    5 = 1 and 1/2
+  b   Line Alignment      1          1 = Left    2 = Justify
+                                     3 = 1/2 Justify
+  c   Typestyle Number    86         1 - 31 (10 pitch)
+                                     80 - 111 (12 Pitch)
+                                     154 - 175 (Proportional)
+                                     215 - 230 (15 Pitch)
+  d   Lines/cm or in.     2          1 = 2.09/cm or 5.3/in.
+                                     2 = 2.36/cm or 6/in.   3 = 3.15/cm or 8/in.
+                                     4 = 9.45/cm or 24/in.  5 = 2.0/cm or 5.08/i
+  e   Adjust Line Endings 1          1 = Yes     2 = No
+  f   Zone Width          6          1 - 30
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:
+

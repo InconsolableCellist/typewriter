@@ -142,8 +142,16 @@ Pages typed and printed go to the existing finished-page pile and PDF export, as
 6. **Polish.** Power-on sequence, errors (no diskette, door open, printer cover open), the size budget (target
    under 5 MB added per visit), performance on integrated GPUs.
 
-## Decisions for the owner
-- Which printer: the daisywheel (most natural next to the other two machines) or the element printer.
-- Which software release to reproduce. Textpack 4 is suggested, because its manual is available.
-- Desk layout: the word processor replaces the typewriter on the desk (as the machine menu does now), or shares it.
-- Standard 25 x 80 display or the large 66 x 100 display.
+## Decisions
+- **Display: standard 25 x 80** (decided). The 66 x 100 large display was a real configuration, but less common, and it needs a bigger monitor.
+- **Desk layout** (decided). The machine dominates the desk: the printer on the left, the dual 8-inch diskette
+  unit on the right, and the display station in the middle at the front with the keyboard in front of it. The
+  ashtray sits on the machine. The desk lamp is removed for lack of space, and the cables run out at the back.
+  Check the measured footprints against the 2.0 x 1.2 m desk (`desk.glb`); if they do not fit, widen the desk or
+  put one unit on its own stand beside it.
+- **Printer: open, daisywheel recommended.** Options: the printwheel printer (5218), which is a new mechanism and the
+  one most associated with the machine; the element printer (5215), which reuses the `element1971` action but
+  repeats it; or the ink-jet (5258), which is quiet and least interesting to simulate.
+- **Software release: open, Textpack 4 recommended**, because its manual is confirmed on Bitsavers. Options:
+  Textpack 1 or 2 (original, fewer features), 4 (mid-life), or 6 (late, most to build). Choose whichever has
+  complete operator guides on Bitsavers.

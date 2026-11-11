@@ -1,6 +1,7 @@
 // The stack of finished pages on the desk to the right of the machine. Only the top sheets are real meshes, and only the
 // top few carry a printed texture; anything below them shows no more than an edge.
 import * as THREE from 'three';
+import { deskSpot } from '../render/desk-layout.js';
 
 const AT = { x: 0.315, z: -0.1 };           // m, desk coordinates; the desk top is y = 0. In view from the default camera, clear of the machine
 const MAX_SHEETS = 12, TEXTURED = 3;
@@ -26,7 +27,8 @@ export class DeskPile {
     this.paper = paperMaterial; this.maxAniso = maxAniso;
     this.W = machine.paper.width; this.H = machine.paper.height;
     this.group = new THREE.Group();
-    this.group.position.set(AT.x + (machine.deskSpread ?? 0), 0, AT.z);
+    const at = deskSpot(machine, 'pagePile', AT, +1);
+    this.group.position.set(at.x, 0, at.z);
     scene.add(this.group);
     this.sheets = [];             // bottom first
     this.count = 0;

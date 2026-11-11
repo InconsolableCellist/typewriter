@@ -1,5 +1,6 @@
 // A stack of blank sheets on the desk to the left of the machine. Clicking it takes the top sheet and winds it in.
 import * as THREE from 'three';
+import { deskSpot } from '../render/desk-layout.js';
 
 const AT = { x: -0.31, z: -0.06 };           // m, desk coordinates; the desk top is y = 0
 const BLOCK_H = 0.012;                      // m, the body of the stack
@@ -11,7 +12,8 @@ export class FreshStack {
     this.paper = paperMaterial;
     const W = machine.paper.width, H = machine.paper.height;
     this.group = new THREE.Group();
-    this.group.position.set(AT.x - (machine.deskSpread ?? 0), 0, AT.z);
+    const at = deskSpot(machine, 'freshStack', AT, -1);
+    this.group.position.set(at.x, 0, at.z);
     scene.add(this.group);
     this.material = new THREE.MeshStandardMaterial({ color: paperMaterial.color.clone(), roughness: paperMaterial.roughness, metalness: 0 });
     const block = new THREE.Mesh(new THREE.BoxGeometry(W, BLOCK_H, H), this.material);

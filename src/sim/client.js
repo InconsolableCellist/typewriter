@@ -1,9 +1,9 @@
 // SimClient: the contract between the mechanism and everything else. A LocalHost runs the same
 // MechanicalSim on the main thread until audio is unlocked by a gesture (and in tests); after
 // unlockAudio the worklet carries on from the same mechanical state, sample accurate from then on.
-import { MechanicalSim, SUBSTEP_HZ } from './mechanics.js';
+import { SUBSTEP_HZ } from './mechanics.js';
+import { createMechanism, createAudioEngine } from './host-factory.js';
 import { makeLayout } from './layout.js';
-import { AudioEngine } from '../audio/engine.js';
 import { loadSamples } from '../audio/samples.js';
 
 const WORKLET_NAME = 'typewriter-sim';
@@ -19,10 +19,10 @@ class Emitter {
 export class LocalHost extends Emitter {
   constructor({ machine, geometry, glyphs, autoRun = true }) {
     super();
-    this.sim = new MechanicalSim({ machine, geometry, glyphs });
+    this.sim = createMechanism({ machine, geometry, glyphs });
     this.layout = this.sim.layout;
     this.state = new Float32Array(this.layout.length);
-    this.engine = new AudioEngine(this.sim, 48000);
+    this.engine = createAudioEngine(this.sim, 48000);
     this.engine.setEnabled(false);
     this.engine.onSnapshot = (snap, events) => {
       this.state.set(snap);

@@ -1,13 +1,12 @@
 // AudioWorklet entry: hosts the MechanicalSim and the acoustic model on the audio thread. Bundled for
 // both `vite dev` and `vite build` through the `?worker&url` import in src/sim/client.js. Everything
 // runs from typed arrays; the only allocation in the audio path is the snapshot buffer pool.
-import { MechanicalSim } from '../sim/mechanics.js';
-import { AudioEngine } from './engine.js';
+import { createMechanism, createAudioEngine } from '../sim/host-factory.js';
 
 /** Run the mechanism once on a scratch instance so the JIT has compiled the hot paths before audio starts. */
 function warmUp(machine, geometry, glyphs) {
-  const sim = new MechanicalSim({ machine, geometry, glyphs });
-  const eng = new AudioEngine(sim, sampleRate);
+  const sim = createMechanism({ machine, geometry, glyphs });
+  const eng = createAudioEngine(sim, sampleRate);
   const buf = new Float32Array(128);
   sim.pressKey(10, 28, 0.09);
   for (let i = 0; i < 180; i++) eng.process(buf, 128);
@@ -17,10 +16,10 @@ class TypewriterProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
     const { machine, geometry, glyphs, state } = options.processorOptions;
-    this.sim = new MechanicalSim({ machine, geometry, glyphs });
+    this.sim = createMechanism({ machine, geometry, glyphs });
     warmUp(machine, geometry, glyphs);
     if (state) this.sim.importState(state);
-    this.engine = new AudioEngine(this.sim, sampleRate);
+    this.engine = createAudioEngine(this.sim, sampleRate);
     this.mono = new Float32Array(128);
     this.pool = [];
     this.grabs = new Map();

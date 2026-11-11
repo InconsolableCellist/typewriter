@@ -990,6 +990,12 @@ Each one ends with the listed tests green, all existing tests green, and somethi
 
 M5 can run in parallel with M3 and M4; it depends only on M0.
 
+**Progress.** M0 done (2026-11-11). One deviation from 3.3: `src/kits/typewriter.js` holds the whole of the old
+`main()`, including the stage, desk, room, loop and governor, and `src/main.js` is only the chooser and kit loader.
+The shared parts move up into `main.js` in M4, when the word-processor kit needs them, so the boundary is drawn
+from real use. `src/kits/wordproc.js` builds its own stage, desk and orbit for now. `host-factory.js` has no
+word-processor host yet and throws for it; the kit does not create a mechanism until M4.
+
 ---
 
 ## 12. Tests, performance, assets

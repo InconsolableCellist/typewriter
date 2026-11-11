@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SheetBurn } from '../pages/burn.js';
+import { deskSpot } from './desk-layout.js';
 
 const AT = { x: 0.29, z: 0.122 };            // m, desk coordinates of the ashtray's centre; the desk top is y = 0
 const LIGHTER_AT = { x: -0.01, z: 0.088, yaw: 0.5 };    // m and rad, relative to the ashtray; lying on its broad side, seam and hinge showing
@@ -607,7 +608,8 @@ function buildSparks(canvas) {
 export function installDeskProps({ stage, interaction, soft, paper, hands, machine }) {
   const group = new THREE.Group();
   group.name = 'desk-props';
-  group.position.set(AT.x + (machine.deskSpread ?? 0), 0, AT.z);
+  const at = deskSpot(machine, 'ashtray', AT, +1);
+  group.position.set(at.x, 0, at.z);
   stage.scene.add(group);
 
   const solid = (geometry, material) => {

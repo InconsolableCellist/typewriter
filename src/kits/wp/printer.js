@@ -8,7 +8,7 @@ import { SoftWorld } from '../../soft/index.js';
 import { PaperView, RibbonView } from '../../render/paper-view.js';
 import { printerSoftMachine } from './printer-soft.js';
 
-const LOAD = 0x5001, EJECT = 0x5002;
+const LOAD = 0x5001;
 
 export async function installPrinter({ stage, machine, geometry, mats, group, onDevice }) {
   const glyphs = await loadGlyphs('glyphs_wp');
@@ -23,33 +23,41 @@ export async function installPrinter({ stage, machine, geometry, mats, group, on
   group.add(internals.group);
 
   sim.on('strike', (e) => soft.applyStrike(e));
-  // The sheet feeder (owner's answer 5): when the printer asks for paper, the next sheet goes onto the table and is
-  // loaded. Switched off, the operator lays each sheet by clicking the fresh stack.
+  // The sheet feeder (owner's answer 5): a LOAD from the software first lays the next sheet on the table, then the
+  // printer's own load takes it in. Switched off, LOAD finds no paper unless the operator laid a sheet (the fresh stack).
   const feeder = { on: true };
-  let loading = false;
-  const loadSheet = () => {
-    if (loading) return;
-    loading = true;
+  const laySheet = () => {
     for (let i = 0; i < 3; i++) soft.step(1 / 240, sim.state, sim.layout);
     soft.spawnSheet({ onTable: { offset: 0.002 } });
-    setTimeout(() => sim.command({ dev: 'printer', words: [LOAD] }), 250);
   };
+  // A sheet run off the rollers is finished: parking it retires it to the page pile (installPages).
+  soft.paperSim.onEjected = () => setTimeout(() => soft.parkSheet(), 300);
+
+  // The device the software talks to (7.6), with the status fields the spooler reads.
+  const st = { on: true, ready: true, online: true, coverOpen: false, error: 0, paper: false, feeder: Infinity, queued: 0 };
   sim.on('device', (e) => {
-    if (e.ev === 'paper' && e.kind === 'load') loading = false;
-    if (e.ev === 'error' && e.code === 'loadPaper') { loading = false; if (feeder.on) loadSheet(); }
-    onDevice?.(e);
+    if (e.ev === 'status') Object.assign(st, e, { on: sim.state[sim.layout.printerPower] > 0.5 });
+    if (e.ev === 'paper') st.paper = e.kind === 'load';
+    onDevice?.({ ...e, ...(e.ev === 'status' ? st : null) });
   });
-  // A sheet run off the rollers is finished: it is parked, which retires it to the pile (installPages).
-  soft.paperSim.onEjected = () => setTimeout(() => { soft.parkSheet(); if (feeder.on) loadSheet(); }, 300);
-
   const device = {
-    send: (words) => sim.command({ dev: 'printer', words: Array.from(words) }),
-    eject: () => sim.command({ dev: 'printer', words: [EJECT] }),
+    credit: 32,
+    get status() { return { ...st, feeder: feeder.on ? Infinity : 0 }; },
+    send(words) {
+      const w = Array.from(words);
+      const load = w.indexOf(LOAD);
+      if (load < 0 || !feeder.on) { sim.command({ dev: 'printer', words: w }); return; }
+      // Everything before the LOAD goes now; the LOAD and what follows once the feeder has laid a sheet.
+      if (load > 0) sim.command({ dev: 'printer', words: w.slice(0, load) });
+      laySheet();
+      setTimeout(() => sim.command({ dev: 'printer', words: w.slice(load) }), 400);
+    },
   };
-
   let lastEnv = '';
   return {
-    sim, soft, softMachine, paper, ribbon, feeder, device, loadSheet, internals,
+    sim, soft, softMachine, paper, ribbon, feeder, device, internals,
+    /** The operator lays a sheet and presses LOAD (manual feed, or a click on the fresh stack). */
+    loadSheet() { laySheet(); setTimeout(() => sim.command({ dev: 'printer', words: [LOAD] }), 400); },
     update(dt) {
       soft.step(dt, sim.state, sim.layout);
       const env = soft.env(), key = JSON.stringify(env);

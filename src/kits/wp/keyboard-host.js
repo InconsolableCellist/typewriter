@@ -5,19 +5,20 @@ import { KeyboardMech } from '../../sim/wp/keyboard-mech.js';
 import { KeyboardCtl } from '../../sim/wp/keyboard-ctl.js';
 
 const H = 1 / 384000;
-const MAX_LAG = 1;        // s of mechanism time caught up in one frame at most; a tab left in the background does not replay minutes
+const MAX_LAG = 30;       // s caught up in one frame at most (asleep it costs only the scanner's catch-up); a tab back from the background does not replay minutes
 
 export class KeyboardHost {
   /** onScan(event) receives each scan byte the processor sends; the system acknowledges by return. now() is the clock. */
   constructor(onScan, now) {
     this.mech = new KeyboardMech();
-    this.ctl = new KeyboardCtl(this.mech, (e) => { onScan(e); this.ctl.command({ op: 'ack' }, this.t); });
+    this.log = [];        // the last scan bytes sent, for diagnosis
+    this.ctl = new KeyboardCtl(this.mech, (e) => { this.log.push(e.byte); if (this.log.length > 200) this.log.shift(); onScan(e); this.ctl.command({ op: 'ack' }, this.t); });
     this.now = now;
     this.t = 0;
     this.queue = [];      // { t, i, f }, in time order
   }
 
-  press(i, force) { this.queue.push({ t: Math.max(this.now(), this.queue.at(-1)?.t ?? 0), i, f: force }); }
+  press(i, force) { this.queue.push({ t: Math.max(this.now(), this.queue.at(-1)?.t ?? 0), i, f: force }); this.presses = (this.presses ?? 0) + (force > 0 ? 1 : 0); }
 
   advance(t) {
     if (t - this.t > MAX_LAG) {

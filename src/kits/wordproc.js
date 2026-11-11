@@ -56,24 +56,23 @@ export async function mount(ctx) {
   desk.setFootprints(footprints);
 
   // The software, on a clock that follows the wall clock. The diskettes are timed analytically until the diskette unit's
-  // mechanism exists (M7); the work diskettes persist in IndexedDB. Until the printer stands on the desk (M6) the
-  // virtual one is switched off, so a print job queues and asks for it.
+  // mechanism exists in the browser (M7); the work diskettes persist in IndexedDB.
   const store = await IdbStore.create();
   const library = restoreLibrary(firstRunLibrary(), store);
-  const devices = new VirtualDevices({ drives: [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }], printer: { power: false } });
+  const devices = new VirtualDevices({ drives: [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }] });
   const speaker = new WpSpeaker();
   devices.kbd = { click: () => speaker.click(), tone: (ms) => speaker.tone(ms) };
-  const sys = createSystem({ devices, store, library, options: { cold: params.has('cold') } });
-
   // The printer: its own mechanism host and soft bodies, reached by the software only through the device interface.
-  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, onDevice: (e) => sys.deviceEvent(e) });
-  devices.printer.send = printer.device.send;
+  let sys = null;
+  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, onDevice: (e) => sys?.deviceEvent(e) });
+  devices.printer = printer.device;
+  sys = createSystem({ devices, store, library, options: { cold: params.has('cold') } });
   loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre'] }).catch((e) => console.info('textures', e));
   const pickables = [];
   const pages = installPages({ stage, soft: printer.soft, paper: printer.paper, machine: { ...printer.softMachine, deskLayout: machine.deskLayout }, interaction: { picker: { add: (e) => pickables.push(e) } }, hands: { loadPaper: () => printer.loadSheet() } });
-  printer.loadSheet();     // warm start: a sheet in the printer
   const t0 = performance.now();
-  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done) { unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
+  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done && !params.has('localsim')) {   // ?localsim keeps the mechanism on the main thread (machines with no audio device, tests)
+     unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
   const simNow = () => (performance.now() - t0) / 1000;
   const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
   new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => unlockAudio() });

@@ -90,3 +90,21 @@ test('state export and import round-trip mid-press', () => {
   const m2 = new KeyboardMech(); m2.importState(JSON.parse(JSON.stringify(r.mech.exportState())));
   assert.equal(m2.x[i], r.mech.x[i]); assert.equal(m2.y[i], r.mech.y[i]);
 });
+
+test('the browser host registers every tap however slowly frames come', async () => {
+  const { KeyboardHost } = await import('../src/kits/wp/keyboard-host.js');
+  const { KEY_BY_POS } = await import('../src/machine/wp-keys.js');
+  const I = (pos) => KEY_BY_POS[pos].index;
+  const seq = []; let t = 0.1;
+  const tap = (pos, shift) => { if (shift) { seq.push([t, I(50), 1.2]); t += 0.04; } seq.push([t, I(pos), 1.2], [t + 0.11, I(pos), 0]); t += 0.31; if (shift) { seq.push([t, I(50), 0]); t += 0.08; } };
+  for (const p of [43, 32, 33, 33, 31]) tap(p);
+  tap(45, true); tap(19); tap(10);
+  const expected = '43,32,33,33,31,50,45,178,19,10';
+  for (const frame of [1 / 60, 0.5, 1.2, 3]) {
+    let now = 0; const bytes = [];
+    const h = new KeyboardHost((e) => bytes.push(e.byte), () => now);
+    let k = 0;
+    for (let f = 0; f <= t + frame + 0.5; f += frame) { while (k < seq.length && seq[k][0] <= f) { now = seq[k][0]; h.press(seq[k][1], seq[k][2]); k++; } now = f; h.advance(f); }
+    assert.equal(bytes.join(','), expected, `frames ${frame} s apart`);
+  }
+});

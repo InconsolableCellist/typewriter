@@ -4,8 +4,9 @@ A third machine for the desk: a faithful physical recreation of the IBM 6580 Dis
 station with a separate keyboard, a diskette unit and a daisywheel printer. It also needs software that feels like the
 real editor to use. **Not an emulator.** The editor's behaviour is reimplemented from the manuals.
 
-Status: **phase 1 research done** (2026-11-11). The filled spec is in four files beside this one, with a PDF page
-cited for every value:
+Status: **research done, architecture decided** (2026-11-11). The filled spec is in four files beside this one,
+with a PDF page cited for every value. The design that the build follows is in `architecture.md`; where this
+plan and that document differ, that document is right.
 
 | File | Contents |
 |---|---|
@@ -13,6 +14,7 @@ cited for every value:
 | `printer.md` | The 5218 printwheel printer: mechanism, steppers, hammer, ribbon, panel, interface |
 | `software-reference.md` | Textpack 4: every key and CODE combination, control codes, prompts and messages, format menus, limits |
 | `software-screens.md` | Textpack 4: start-up, the menu tree with 80 x 25 grids, the typing screen, 13 keystroke scripts for tests |
+| `architecture.md` | Module layout, interfaces, threads, data structures, tuning method, tests, budgets, milestones, open questions |
 
 Corrections to the assumptions below, from the research:
 - The keyboard uses **capacitive "fly-plate" key modules**, not buckling springs. The click is electronic, from a
@@ -21,6 +23,7 @@ Corrections to the assumptions below, from the research:
   spin at 360 rpm from an always-on AC motor; steps take 5 ms and settling 35 ms.
 - The logic is a flat **electronics module** (483 x 356 x 178 mm) that the display sits on.
 - The desk fits: about 0.75 (printer, estimated) + 0.48 (module) + 0.25 (diskettes) m across, so no wider desk needed.
+  The laid-out row spans x = -0.90 to +0.66 m on the 2.0 m desk (`architecture.md`, 3.1).
 - Gaps the research could not fill: printer dimensions and dynamics (wheel inertia, hammer energy), phosphor
   persistence, the CPU clock, head-load time, and the full message list (the *Prompts and Messages Guide*,
   S544-2122, is not on Bitsavers).
@@ -76,7 +79,8 @@ guides and Textpack references beyond those found by search.
 - A MAME driver exists and is incomplete. A full emulator is out of scope anyway.
 
 ## Working assumptions to check (from memory, unverified)
-Do not build on these until a manual confirms them.
+Checked by the research; kept for the record. Results are in `hardware.md` section 7 and at the top of this file.
+The keyboard is not buckling spring, and Type A / Type B are memory cards, not keyboard modules.
 - Announced 1980. Logic is an Intel 8086 at about 5 MHz.
 - The 8-inch drives are double-density, double-sided on 2D media, and spin at 360 rpm (standard for 8-inch).
 - The keyboard is a capacitive buckling-spring design of the period, as a separate unit on a coiled cable.
@@ -130,34 +134,37 @@ Every entry needs a value and a source (`doc id, page`). Where only photos give 
 - Printing: queueing, background print while editing, the printer's status shown on the display
 
 ## How it fits the code
-Same contracts as the other two machines (`docs/ARCHITECTURE.md`). New pieces:
+Decided in `architecture.md`. The first-cut mapping that stood here is replaced by this summary.
 
 | Piece | Where | Notes |
 |---|---|---|
-| Machine definition | `src/machine/wordproc1980.js`, registered in `src/machine/index.js` | Several bodies: display, keyboard, diskette unit, printer; each with dimensions, masses and camera presets |
-| Keyboard mechanism | `src/sim/` key DOFs as now | Buckling-spring force curve; a key emits a *scan event* at the buckling point instead of driving a type bar. The real-keyboard shortcut stays the same (timed finger press) |
-| Printer action | `src/sim/printwheel-action.js` behind the Action interface | Moving carriage over a fixed platen, the same frame trick as `element1971` (`SoftWorld.carrierOffset`). Wheel rotation DOF with motor torque limits; hammer DOF with Hunt-Crossley contact on the glyph face, so ink, emboss and paper are reused unchanged |
-| Software layer | `src/wp/`: document model, editor, screens, diskette file system | Plain JS with no DOM, so it runs and tests in Node. Input is scan events; output is a character grid plus attributes. It drives the printer the way `src/terminal/driver.js` drives keys: by commanding the mechanism, never by placing ink |
-| Diskette drives | `src/wp/diskette.js` (timing model) + mechanism DOFs for door, latch and head load | All file operations take real time (head load, seeks at the step rate, rotation latency) and queue sound events |
-| CRT | `src/render/crt.js` | Character grid to texture with our own bitmap font; a phosphor shader with persistence (decay over frames), bloom, slight curvature, raster lines, glass reflection of the room HDRI |
-| Sound | `src/audio/wp-synth.js` | Modal and noise synthesis: key buckle and bottom-out, fan hum, CRT whine (optional, quiet), head load clunk and seek ticks, printwheel whir, hammer, carriage, line feed |
-| Assets | `tools/blender/build_wp_*.py`, `docs/assets.md` | Shells built procedurally to the spec sheet, with clearance checks like the existing builders. Materials reuse `materials.py` (textured plastic, painted steel), encoded as AVIF |
-| Tests | `tests/wp-*.test.js`, `tests/e2e/` | Editor behaviour from manual examples (keystroke script, then expected screen), diskette timing, print timing in cps |
+| Machine definition | `src/machine/wordproc1980.js`, `wp-geometry.js`, `wp-keys.js`, registered in `src/machine/index.js` | One definition with five units (station, display, keyboard, diskette, printer), their placements, the desk layout and camera presets |
+| App structure | `src/kits/typewriter.js`, `src/kits/wordproc.js`, loaded by `main.js` | The shared stage, desk, room, panel and loop stay in `main.js`. Switching machines is a page reload, as now |
+| Mechanisms | `src/sim/wp/` (`WordprocSim`), behind the same `SimClient` contract | **Not** an `Action` inside `MechanicalSim`: none of the typewriter's common mechanism exists here. Keys are stems with capacitive fly plates; steppers and the hammer are integrated DOFs timed by controllers (keyboard scanner, printer processors, diskette adapter) |
+| Printer | `printer-mech.js`, `printer-ctl.js` in `src/sim/wp/` | Moving carrier over a fixed platen in the `element1971` carrier frame. Emits the existing `strike` event, so `SoftWorld`, ink, emboss, the page pile and PDF export are reused |
+| Software layer | `src/wp/` | Plain modules, no DOM, runs in Node. Generator tasks on a simulated clock. Input is scan bytes; output is an 80 x 25 buffer with attributes, speaker, diskette and printer commands. It never places ink |
+| Diskettes | Data and file layout in `src/wp/disk/`; drive mechanics in `src/sim/wp/diskette-mech.js` | No doors: a lever per slot. Timing comes from the mechanism in the browser and from an analytic model of the same drive in Node tests. Work diskettes persist in IndexedDB |
+| CRT | `src/render/wp/crt.js` | 80 x 25 data texture, our own 8 x 16 font, phosphor pass with two decay components, curved glass with halation in the shader (no bloom pass) |
+| Sound | `src/audio/wp-engine.js`, `src/audio/wp-synth.js` | Synthesised from mechanism forces, speeds and events on three panned buses. The click and beep are the keyboard speaker |
+| Assets | `tools/blender/build_wp_*.py`, `tools/wp/`, `docs/assets.md` | Procedural shells with clearance checks. Under 2 MB added per visit; nothing added to a typewriter visit |
+| Tests | `tests/wp_*.test.js`, `tests/e2e/wp.mjs` | The 13 keystroke scripts, keyboard force curve and scan, printer cps, diskette timing, an e2e run that types, prints and reloads |
 
 Pages typed and printed go to the existing finished-page pile and PDF export, as now.
 
 ## Phases
-1. **Research.** Fill in the spec sheet above, with page references. Collect Commons photos, then decide the
-   printer model and Textpack version. Deliverable: this file with every field filled in, plus reference images
-   in `tools/gen/raw/` (gitignored) and their URLs listed here.
-2. **Editor in Node.** Document model, typing screen, function keys, Task Selection menu, diskette timing.
-   Keystroke-script tests taken from the manuals' worked examples. No graphics.
-3. **CRT and keyboard on the desk.** Display station and keyboard models, the CRT shader and the bitmap font,
-   with the editor running on screen. Synthesised key and fan sound.
-4. **Printer.** The printwheel action, hammer and carriage physics, ink on the existing paper. Print from the editor.
-5. **Diskette unit.** Model, door and latch interaction, inserting and removing diskettes on the desk, drive sounds.
-6. **Polish.** Power-on sequence, errors (no diskette, door open, printer cover open), the size budget (target
-   under 5 MB added per visit), performance on integrated GPUs.
+Phase 1 (research) is done. The build follows the milestones of `architecture.md` section 11, each shippable:
+
+| M | Deliverable |
+|---|---|
+| M0 | Scaffolding: kits, units, desk layout, mechanism-host factory, block-out bodies. No visible change |
+| M1 | Software kernel in Node: scheduler, screen, keys, start-up, menus |
+| M2 | Storage and typing: diskette images and files, create and revise, the typing screen |
+| M3 | Editing functions, format menus, pagination, Menu Bypass |
+| M4 | On the desk: font, CRT, station, display and keyboard with the key mechanism, click and beep. First public version |
+| M5 | Printer mechanism and controller, headless, tuned to 60 cps; print formatter and spooler |
+| M6 | Printer on the desk: model, paper in and pages out, ink, sound |
+| M7 | Diskette unit: mechanism, levers, inserting diskettes, sound |
+| M8 | Finish: cold start, errors, spelling, budgets, contract documents |
 
 ## Decisions
 - **Display: standard 25 x 80** (decided). The 66 x 100 large display was a real configuration, but less common, and it needs a bigger monitor.
@@ -167,3 +174,15 @@ Pages typed and printed go to the existing finished-page pile and PDF export, as
   If the measured footprints do not fit the 2.0 x 1.2 m desk (`desk.glb`), widen the desk (decided).
 - **Printer: the daisywheel printwheel printer (5218)** (decided).
 - **Software release: Textpack 4** (decided).
+
+## Decisions proposed by the architecture (owner to confirm)
+Defaults the build proceeds on; details and the full list are in `architecture.md` section 13.2.
+- **Warm start.** The machine is found switched on at TASK SELECTION with a sheet in the printer. `?cold` gives the
+  full power-on and program load.
+- **No names or marks on screen either.** Blocks in place of the maker's initials on the power-on screen, and the two
+  menu titles that contain the program's product name are shortened.
+- **One combined program diskette** in the left drive (a documented configuration), so there is no volume swapping.
+- **Diskettes persist** between visits. A document left open needs recovery, as after a power cut.
+- **An auto-feed hand** lays the next sheet in the printer when it asks, with a toggle for manual feed.
+- **Real keyboard:** the two Alt keys are CODE and ENTER, Enter is RETURN, function keys reach the function clusters.
+- **Ashtray** on top of the diskette unit; fresh paper and finished pages in front of the printer.

@@ -1,6 +1,6 @@
 # Dedicated word processor, c. 1980: hardware research (display station, keyboard, diskette unit, planning)
 
-Research notes for the `wordproc1980` machine (see `docs/displaywriter-plan.md`). Everything below is summarised
+Research notes for the `wordproc1980` machine (see `docs/displaywriter/plan.md`). Everything below is summarised
 from the manuals in my own words; numbers and short labels are quoted as facts. Ground rule reminder: the real
 machine's name, logo and model numbers appear here only as research context and must not appear in the build.
 

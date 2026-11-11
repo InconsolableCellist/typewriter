@@ -1,6 +1,6 @@
 # Textpack 4 on screen: screens, menus and workflows
 
-Research for `wordproc1980` (see `docs/displaywriter-plan.md`, "Software (editor)"). This is a behavioural
+Research for `wordproc1980` (see `docs/displaywriter/plan.md`, "Software (editor)"). This is a behavioural
 reimplementation, so everything here comes from the 1982 manuals. I have kept screen, prompt and message
 wording exactly where it is short functional UI text. Everything else is summarised. Where a source is unclear
 or two sources disagree, the item is marked **UNCLEAR** or **CONFLICT**.

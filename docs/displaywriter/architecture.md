@@ -1,0 +1,1097 @@
+# Dedicated word processor, c. 1980: architecture
+
+Design decisions for the `wordproc1980` machine. It is written for the engineer who builds it: every option is
+closed here, with the reason, so that implementation and testing do not re-decide them. Read `plan.md` first
+(goals, ground rules, the owner's decisions), then `hardware.md`, `printer.md`, `software-reference.md` and
+`software-screens.md` (the research this document cites as HW, PR, SR and SS with their section numbers).
+
+Status: design, 2026-11-11. No code exists yet. Section 13 lists what the owner still has to confirm; each item
+has a default, and the plan in section 11 proceeds on the defaults.
+
+Contents: 1 summary; 2 physics and logic; 3 multi-unit machine; 4 mechanism host; 5 keyboard; 6 printer;
+7 software; 8 diskettes; 9 display; 10 audio; 11 plan and milestones; 12 tests, budgets; 13 risks, questions, gaps.
+
+---
+
+## 1. Summary of decisions
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | The machine is **one definition with five units** (`station`, `display`, `keyboard`, `diskette`, `printer`), each with its own local coordinates and a placement on the desk. The desk layout, camera presets, shadow extent and prop positions come from the definition | One registry entry and one picker entry, like the other machines. Nothing in the scene hard-codes where things stand |
+| 2 | `main.js` becomes a shell plus a **kit** per machine family, loaded with a dynamic import: `src/kits/typewriter.js` (today's code, moved) and `src/kits/wordproc.js`. Switching machines stays a page reload | The two families share the stage, desk, room, panel and loop and nothing else. Code splitting keeps each visit from downloading the other family |
+| 3 | The mechanisms run in a **separate mechanism host**, `WordprocSim` (`src/sim/wp/`), behind the unchanged `SimClient` contract. It is **not** a new `Action` inside `MechanicalSim` | `MechanicalSim`'s common mechanism (universal bar, dogs and rack, drawband, line-space lever, bell, shift) does not exist here, keys do not drive the print mechanism, and three of the four bodies have DOFs with no place in it. See 4.1 |
+| 4 | The printer still emits the **existing `strike` event** and publishes `carriageX`, `platenPsi`, `vibratorLift`, `ribbonPawlTravel`, `paperRelease` and `bail` under the existing layout names, in the carrier frame used by `element1971`. `SoftWorld`, `Printer`, the page archive, the pile and the PDF export are reused with one added option (`origin`) | The ink, emboss, paper and page pipeline is the expensive, tested part. It needs no second implementation |
+| 5 | Steppers, the hammer and the keys are **integrated DOFs**. Their timing comes from **controllers** (keyboard scanner, printer processors, diskette adapter) that run in the same thread as event-driven logic and can only switch phases, set coil currents and read sensors | This is the legitimate departure from "nothing is animated": the real machine has firmware. The controllers never set a position (section 2) |
+| 6 | The Textpack reimplementation lives in `src/wp/` as plain modules with no DOM, no three.js and no wall clock. It is a **scheduler of generator tasks over a simulated clock**. All waiting is waiting for a device completion or a timer on that clock | Runs headless in Node. A test jumps the clock, so a 10 s program load takes microseconds. Type-ahead, CANCL levels and background printing fall out of the task model |
+| 7 | The software runs **on the main thread, in process**, behind a device interface that a Worker could implement later | Simplest thing that meets the click-latency budget (5.5). No third thread, no port transfer into the worklet |
+| 8 | Diskette **data** lives with the software (`src/wp/disk/`): raw sector images in the documented geometry with our own index and file layout. Diskette **motion and timing** live in the mechanism host. Node tests use an analytic timing model of the same drive | The real format is undocumented, so only geometry, capacities and timings are faithful. Splitting data from motion keeps megabytes out of the audio thread |
+| 9 | Work diskettes **persist** in IndexedDB. The machine starts **warm** (powered, program loaded, TASK SELECTION on screen, a sheet in the printer); `?cold` gives the full power-on | A visitor should be typing within seconds, and should find yesterday's document. The 35 s cold start is there for those who want it |
+| 10 | One **combined program diskette** (2D) in the left drive, work diskette in the right | A documented Textpack 4 configuration (SS 2) that removes the three-volume swapping without inventing anything |
+| 11 | The CRT is a **GPU character generator**: an 80 x 25 two-byte data texture (the 4 KB display buffer), a font atlas of our own 8 x 16 glyphs, a phosphor pass with two decay components into a 1280 x 800 half-float target, and a curved glass material with in-shader halation. No canvas, no post-process bloom | 4 KB uploaded only when the screen changes; under 1 ms of GPU time; exact dots at any zoom |
+| 12 | All sound is synthesised in a `WpAudioEngine` (`src/audio/wp-engine.js`) from mechanism forces, speeds and events, on three stereo-panned buses. The keyboard click and beep are an electrical pulse and a 1 kHz tone through a small-speaker model | No recordings exist. The existing engine's bar and sample voices do not apply; its room, radiation filter, limiter and resonator bank are reused |
+| 13 | Added download for a word-processor visit is at most **2 MB**, and a typewriter visit gains **0 bytes** | Free-tier hosting. The plan's 5 MB was a first guess |
+
+What is overruled in `plan.md` is listed in 11.1.
+
+---
+
+## 2. Physics and logic: where this machine departs from the contract
+
+`docs/ARCHITECTURE.md` says nothing is animated and a special case means missing physics. This machine has three
+kinds of thing, and the line between them is fixed here.
+
+| Kind | Examples | Rule |
+|---|---|---|
+| **Mechanism** | Key stems and fly plates; the wheel, carrier, platen, ribbon and head steppers; leadscrew and follower; hammer armature, petal and platen contact; paper and ribbon; levers, collet, diskette slide; power rocker, knobs, cover, tilt and swivel; fans and AC motors | Integrated every substep from forces. Position is never assigned. Grabbable where a hand can reach it |
+| **Controller** (firmware of the real machine) | Keyboard scanner and typematic timer; printer attachment, escapement, selection, hammer and index processors; diskette adapter (step timing, head load, sector wait) | Event-driven logic in the mechanism thread. Inputs are sensors (capacitance, reluctance pickups, encoder, index pulse, reed switches, the hammer sense coil). Outputs are phase states, coil currents and status. It may fail, as the real one does (late selection, lost position, not ready) |
+| **Software** | Power-on test, program load, Textpack | Logic on a simulated clock. It talks to devices only through commands and completions |
+
+Must hold, and is tested:
+
+1. No controller or software writes a mechanical state. A carrier arrives because its motor turned the screw.
+2. No ink is placed by software. Ink appears only from a `strike` event through `SoftWorld.applyStrike`.
+3. No duration is scripted in the browser build. Characters per second, line-feed time, seek, settle, rotational
+   latency and spin-up are outcomes. The analytic timing model (8.4) exists only for Node tests of the software
+   and for checking the mechanism against the documented figures.
+4. No sound is triggered by intent. Sound comes from contact forces, rotor speeds and mechanism events. The one
+   exception is the keyboard speaker, which is an electrical transducer driven by the Click and Tone lines.
+5. A scan event exists only because a fly plate left its pad. The real keyboard presses a key with a finger.
+
+Sanctioned shortcuts, all through the same grabs a pointer makes: the real keyboard (a held finger), a scripted
+hand that inserts a diskette or lays a sheet in the printer, and the warm start.
+
+---
+
+## 3. Multi-unit machine
+
+### 3.1 Definition shape
+
+`src/machine/wordproc1980.js`. SI units. World axes as now (x right, y up, z toward the typist), world origin
+at the desk reference point where a typewriter stands. Each unit has local coordinates with the same axes and
+its origin on the surface it stands on, under its centre.
+
+```js
+export default {
+  id: 'wordproc1980',
+  name: 'Dedicated word processor, c. 1980',
+  kind: 'system',                                   // absent on the typewriters
+  action: { type: 'printwheel-system' },            // selects the kit, the mechanism host and the audio engine
+  audio: { samples: false },                        // no sprite is fetched; the path stays open for later
+  glyphs: 'glyphs_wp',                              // printwheel faces (12.3)
+  textures: ['walnut_desk', 'paper', 'wp_plastic'], // the only studio texture sets this machine loads
+
+  units: {
+    station:  { size: [0.483, 0.178, 0.356], mass: 14,  place: { x: 0.12,    z: -0.13 }, model: 'wp_station.glb' },
+    display:  { size: [0.381, 0.292, 0.348], mass: 6.6, on: 'station', at: [0, 0.178, -0.004],
+                tilt: [0, 20 * deg], swivel: [-12 * deg, 12 * deg], model: 'wp_display.glb' },
+    keyboard: { size: [0.538, 0.101, 0.213], mass: 5,   place: { x: 0.12,    z: 0.20 },  slope: 12 * deg, model: 'wp_keyboard.glb' },
+    diskette: { size: [0.254, 0.292, 0.398], mass: 16,  place: { x: 0.5285,  z: -0.13 }, model: 'wp_diskette.glb' },
+    printer:  { size: [0.74, 0.23, 0.58],    mass: 29,  place: { x: -0.5315, z: -0.19 }, model: 'wp_printer.glb' },
+  },
+
+  deskLayout: {
+    extent: { halfX: 1.05, halfZ: 0.75 },           // shadow frustum and contact-shade bounds
+    freshStack: { x: -0.76, z: 0.36 },              // in front of the printer
+    pagePile:   { x: -0.48, z: 0.36 },
+    ashtray:    { on: 'diskette', at: [0.0, 0.292, 0.05] },
+    disketteHolder: { x: 0.80, z: -0.05 },
+    lamp: false,                                    // owner's decision: no desk lamp
+    cablesOut: 'back',
+  },
+  cameras: {
+    operator: { position: [0.12, 0.42, 0.66], target: [0.12, 0.30, 0.04] },    // default: raster at least 640 px wide at 1600 x 1000
+    overview: { position: [0.0, 0.95, 2.0],   target: [-0.05, 0.15, -0.05] },
+    keyboard: { position: [0.12, 0.48, 0.62], target: [0.12, 0.06, 0.20] },
+    printer:  { position: [-0.53, 0.62, 0.70], target: [-0.53, 0.16, -0.16] },
+    diskette: { position: [0.62, 0.36, 0.62], target: [0.53, 0.15, 0.07] },
+  },
+  defaultCamera: 'operator',
+
+  keyboard: { /* 5.1 parameters; key table imported from ./wp-keys.js */ },
+  display:  { /* 9: raster, phosphor, knobs */ },
+  diskettes: { /* 8: drive parameters */ },
+  system:   { /* power supply, fan, self-test durations */ },
+  printer:  { /* 6: a machine-shaped block, see below */ },
+};
+```
+
+`size` is width, height, depth. The display's size, the module's size and the others are documented (HW 1.2,
+2.1, 3.1). The printer's is the mid-range of the photo estimate (PR 1), so it is the one number likely to move;
+placements are computed in the file from sizes and two gaps (40 mm between bodies, 45 mm between module and
+keyboard), not typed in. With these values the row spans x = -0.90 to +0.66 on a field of +/-0.948, and
+z = -0.48 to +0.31 on a field of -0.51 to +0.59, so **the existing desk fits and `desk.glb` does not change**.
+
+`printer` is **machine-shaped**: it carries the blocks the soft bodies and face tables already read, in
+printer-unit coordinates, so they need no knowledge of the system around it.
+
+```js
+printer: {
+  action: { fixedPlaten: true },
+  platen: { radius: 0.021223, length: 0.415, center: [0, 0.150, -0.060], rubberE, rubberNu, rubberDepth, huntCrossleyAlpha, surfaceFriction, inertia },
+  printPoint: { beta: 0 },                          // the petal meets the platen on its front, at axle height
+  slug: { faceHeight, faceWidth, reliefDepth, caseOffset: 0, faceRadius, foundationKPerM2, ... },
+  paper: { ...as the typewriters, feed-roll and bail angles for this path... },
+  ribbon: { film: true, width: 0.0116, length: 122, tracks: 3, ... },
+  bodyProxy: { ... },
+  carriage: { typingDirection: -1, travel: 0.340 },
+  escapement: { pitch: 0.0254 / 12 },               // read by consumers that want a nominal pitch
+  wheel, selection, hammer, carrier, index, ribbonFeed, cam, panel, cover, fan,   // 6.2
+},
+```
+
+### 3.2 Registry and geometry
+
+```js
+// src/machine/index.js
+export const MACHINES = { frontstrike1926, element1971, wordproc1980 };
+export const DEFAULT_MACHINE = 'frontstrike1926';
+export const KITS = {                               // by action.type; definitions stay plain data (they are cloned into the worklet)
+  'typebar-frontstrike': () => import('../kits/typewriter.js'),
+  'single-element':      () => import('../kits/typewriter.js'),
+  'printwheel-system':   () => import('../kits/wordproc.js'),
+};
+export function geometryFor(machine) { /* deriveGeometry or deriveWordprocGeometry */ }
+```
+
+`src/machine/wp-geometry.js` exports `deriveWordprocGeometry(m)`:
+
+```js
+{
+  system: true,
+  units: { station: { origin:[x,0,z] }, display: {...}, keyboard: {...}, diskette: {...}, printer: {...} },   // world placements
+  keys: [ { pos: 1..84, id, row, pos3: [x,y,z] /* keyboard-local, on the 12 degree slope */, width, travel, cls, typematic, makeBreak } ],
+  nKeys: 84,
+  printer: {                                         // the geometry SoftWorld and buildFaceTables take
+    printPoint, printNormal, strikeDown,
+    bars: [ { index, lower: ch, upper: ch, skew: 0, offsetX: 0, offsetY: 0 } ],   // 96 petals; "bar" i is petal i
+    nPrint: 96, keys: [], nKeys: 0,
+    wheel: { center, axis, radius, petalStep: 2 * Math.PI / 96, order: 'a...'}  // 6.2
+  },
+}
+```
+
+### 3.3 `main.js`, kits and the scene
+
+`main.js` keeps what every machine shares: stage, materials, desk, room, environment, ambience, panel shell,
+machine picker, orbit, the audio-unlock gesture, the frame loop and the quality governor. Everything else moves.
+
+```js
+// src/kits/*.js
+export async function mount(ctx): Promise<Kit>
+// ctx  = { stage, canvas, params, machine, geometry, mats, desk, orbit, panel, environment, onUnlock(fn) }
+// Kit  = { sim, soft?, update(dt, now), afterRender?(), debug }     // debug is merged into window.__tw
+```
+
+- `src/kits/typewriter.js` is the present body of `main()` from `createAtlases` to `installTerminal`, moved
+  without edits other than taking its inputs from `ctx`. It is the first commit of the work and must leave
+  every existing test and e2e script green before anything else lands.
+- `src/kits/wordproc.js` builds the unit views, the mechanism client, the software, the CRT, the printer's
+  `SoftWorld`, pages, props and input.
+
+Changes to shared scene code, all backward compatible:
+
+| File | Change |
+|---|---|
+| `src/render/desk-layout.js` (new) | `deskSpot(machine, name)` returns `machine.deskLayout[name]`, or today's constant plus `deskSpread` when the machine has no layout. `desk-pile.js`, `fresh-stack.js`, `desk-props.js` and `environment.js` call it instead of adding `deskSpread` themselves |
+| `src/render/desk.js` | The contact shade takes up to four rectangles (`uFoot[4]`, `vec4` centre and half-size); `setFootprints(boxes)`. `setFootprint(box)` remains as a wrapper |
+| `src/render/scene.js` | `stage.fitShadow({ halfX, halfZ })` resizes the key light's shadow camera; called with `deskLayout.extent`. The map stays 2048 (1.0 mm per texel at this extent) |
+| `src/render/environment.js` | `deskLayout.lamp === false` builds no lamp. In the dark a room light with no visible fixture holds the key light at 35 % of its day level, so the CRT is the brightest thing in view |
+| `src/render/desk-props.js` | The ashtray group is parented to the unit named in `deskLayout.ashtray.on`; the ember position used for burning is taken from its world matrix |
+| `src/render/materials.js` | `loadStudioTextures(..., { only: machine.textures })` |
+| `src/interact/orbit.js` | `orbit.flyTo(preset)`; the panel shows one button per entry of `machine.cameras` |
+| `src/interact/drag.js` | One generic part kind, `{ kind: 'dof', dof, index, mode: 'rotary' | 'linear' | 'toggle', axis, range, label }`, mapped to `sim.grab`. Every word-processor control uses it; keys keep the existing `key` kind |
+| `src/ui/panel.js` | `panel.setReadouts([{ label, get(state, layout) }])` supplied by the kit; the typewriter sliders are hidden when `machine.kind === 'system'` |
+
+Unit views live in `src/render/wp/`: `units.js` (one `THREE.Group` per unit at its placement, GLB loading,
+footprints), `station-view.js` (module, display on its turntable with tilt and swivel, knobs, power rocker, CRT),
+`keyboard-view.js`, `diskette-view.js`, `printer-view.js`. Each has `update(state, layout)` and a list of
+pickables, like `ElementView`.
+
+Units are axis-aligned on the desk (no yaw), except the display, whose swivel and tilt are DOFs. The printer is
+the unit the `SoftWorld` runs in, and a yawed soft-body frame is not worth its cost.
+
+### 3.4 `SoftWorld` in a unit
+
+`new SoftWorld({ machine: def.printer, geometry: geo.printer, glyphs, origin: geo.units.printer.origin })`.
+`origin` (default `[0, 0, 0]`) is subtracted in `_toFrame`, so pointer grabs and the burn test take world points
+as now. The paper and ribbon meshes are added to the printer's group instead of the scene, which places them
+with no further change. `HeadView` gets the same `origin` and `followX = () => -soft.carrierOffset`, so the
+Print Point window works for the printer. The sheet's desk plane is still y = 0.
+
+Two small edits inside `src/soft`: `RibbonSim.weave()` returns 1 when `ribbon.film` is set, and the film uses
+its own `depletionPerStrike`. Nothing else in `src/soft` changes.
+
+---
+
+## 4. Mechanism host
+
+### 4.1 Why not an `Action`
+
+The first-cut mapping in the plan put the printer behind the `Action` interface as `element1971` is. That
+interface exists so different print actions can share `MechanicalSim`'s keys, universal bar, escapement dogs,
+carriage on a drawband, line-space lever, bell and shift. Here none of that is shared:
+
+- The carrier is positioned by a stepper on a leadscrew. There is no rack, no dog and no mainspring. Reusing
+  the carriage DOF would mean holding the dogs off, zeroing the drawband and moving the bell out of reach, then
+  pushing the carriage with a force that pretends to be a screw.
+- The keys are in another body and do not act on the printer. `stepKeys` couples every key to the universal bar,
+  the vibrator, the shift and the backspace pawl.
+- Printing starts from a command queue, not from a key.
+- The display station and the diskette unit have about twenty DOFs and three controllers with nowhere to live.
+
+So the host is new and the contract around it is kept. What is reused, by import: `buildFaceTables` and the
+Hunt-Crossley contact (`src/sim/faces.js`), the strike event shape, the snapshot and event transport
+(`LocalHost`, the worklet, `SimClient`), the sleeping pattern, grab and finger semantics, `SUBSTEP_HZ`.
+`src/sim/mechanics.js`, `actions.js` and `element-action.js` are not edited, so the two existing machines
+cannot regress.
+
+### 4.2 Modules
+
+```
+src/sim/host-factory.js        createMechanism({ machine, geometry, glyphs }), createAudioEngine(sim, sampleRate)
+src/sim/wp/index.js            WordprocSim: owns time, inputs, sub-mechanisms, controllers, snapshot, events
+src/sim/wp/layout.js           makeWpLayout(geometry)
+src/sim/wp/ports.js            WP_PORT (contact forces for audio), WAC (acoustic events)
+src/sim/wp/inputs.js           fingers (Hill-type, as MechanicalSim) and grabs, shared by all sub-mechanisms
+src/sim/wp/stepper.js          Stepper2Phase, StepperVR3: the two motor models (6.3)
+src/sim/wp/keyboard-mech.js    84 stems and fly plates              src/sim/wp/keyboard-ctl.js   scanner, typematic, buffer, click, tone
+src/sim/wp/station-mech.js     power rocker, PSU fan, knobs, tilt, swivel, CRT heater and HV states
+src/sim/wp/diskette-mech.js    two drives                           src/sim/wp/diskette-ctl.js   adapter
+src/sim/wp/printer-mech.js     wheel, carrier, platen, hammer, ribbon, cam, cover, panel keys
+src/sim/wp/printer-ctl.js      attachment, planner, selection, hammer, index, panel, self-test
+```
+
+`LocalHost` and `src/audio/worklet.js` construct through `host-factory.js` instead of naming `MechanicalSim` and
+`AudioEngine`. The worklet gains one command, `case 'dev': sim.command(m)`, and calls `sim.warmUp?.()`.
+
+### 4.3 Interface
+
+```js
+export class WordprocSim {
+  constructor({ machine, geometry, glyphs })
+  kind = 'wordproc'; h = 1 / 384000; t; layout; ports /* Float64Array(WP_PORT.COUNT) */;
+  step()                                  // one substep
+  pressKey(k, peakForceN, durationS)      // timed finger on keyboard key index k (0..83)
+  grab(dof, index, { target, k, c, maxF }) -> id;  moveGrab(id, target);  release(id)
+  command(msg)                            // device commands from the software (7.6)
+  setEnv(env)                             // from SoftWorld.env(): paperPresent, paperEdgeV, calipers, ribbonInGap
+  setParam(path, value)
+  writeSnapshot(Float32Array);  drainEvents(out)
+  exportState();  importState(s)          // every sub-mechanism and controller, structured-cloneable
+  carriageX()                             // minus the carrier's x in printer coordinates
+}
+```
+
+Grabbable DOFs: `key[0..83]`, `panelKey[0..7]`, `powerSwitch`, `printerPower`, `knob[0..1]` (contrast,
+brightness), `displayTilt`, `displaySwivel`, `lever[0..1]`, `disketteSlide[0..1]`, `printerCover`, `ribbonKnob`.
+
+`SimClient` gains two generic members, no-ops on the typewriters: `sim.command(msg)` and
+`sim.on('device', fn)`. Device events travel in the snapshot message's event list (250 Hz), like every other
+event.
+
+Snapshot layout (`makeWpLayout`). Names shared with `makeLayout` mean the same thing, which is what lets
+`SoftWorld._readState` run unchanged:
+
+| Group | Fields |
+|---|---|
+| Common | `time`, `dspLoad`, `rms`, `lastForce` |
+| Keyboard | `keyX[84]`, `keyV[84]`, `speaker` |
+| Station | `power`, `fanOmega`, `displayTilt`, `displaySwivel`, `knobContrast`, `knobBrightness`, `crtHeat`, `crtHV` |
+| Diskette, per drive | `lever`, `slide`, `clamp`, `diskOmega`, `diskAngle`, `headTrack`, `headLoad`, `motorOmega` |
+| Printer, soft-body names | `carriageX`, `carriageV`, `platenPsi`, `platenOmega`, `shiftY` (0), `vibratorLift` (ribbon lift), `ribbonPawlTravel` (ribbon fed, m), `ribbonSelector` (0), `paperRelease`, `bail` |
+| Printer, own | `printerPower`, `cover`, `wheelTheta`, `wheelOmega`, `hammerX`, `cam`, `panelKeyX[8]`, `leds`, `digits`, `fifo` |
+
+### 4.4 Threads and rates
+
+| What | Thread | Rate |
+|---|---|---|
+| `WordprocSim` mechanisms | AudioWorklet; main thread in `LocalHost` before the first gesture; Node in tests | 384 kHz substeps, each DOF group asleep when at rest |
+| Controllers | Same, called from `step()` | Event-driven: each holds a deadline and runs when `t` passes it (resolution 2.6 us). Keyboard matrix: one position every 52 us, a full scan every 5 ms |
+| `WpAudioEngine` | Same | Audio rate, 3 buses |
+| Snapshot and device events | To main | 250 Hz |
+| `WpSystem` (ROM, Textpack, file system, print spooler) | Main | On each device event and each snapshot: `sys.advance(simTime)` |
+| Screen buffer to GPU | Main | Only when the buffer version changes, at most once a frame |
+| CRT phosphor pass | GPU | Each frame while the picture is changing or blinking; skipped when static |
+| `SoftWorld` | Main | 480 Hz substeps, as now |
+| Diskette store | Main, IndexedDB | After each completed write, coalesced over 1 s |
+
+---
+
+## 5. Keyboard
+
+### 5.1 Keys as mechanisms
+
+84 keys, positions 1 to 84 (HW 2.6). The key table (`src/machine/wp-keys.js`) gives each key its position
+number, row, offset and width in key units (19.05 mm), legends (top and front), force class, and the typematic
+and make/break marks of the service manual.
+
+Each key is two DOFs in one conservative system:
+
+- **Stem** `x` (m, 0 at rest, positive down), mass `m_s`.
+- **Fly plate** `y` (m, 0 seated on the pad card, `Y` lifted), mass `m_p`. It is integrated only while in
+  transit and sleeps on either stop.
+
+```
+U(x, y)  = F0 x + k x^2 / 2  -  Kt (x - xc)(y - Y/2)  -  A (y - Y/2)^2 / 2
+stem:   m_s x'' = F_finger - (F0 + k x) + Kt (y - Y/2) - c x' - stops(x)
+plate:  m_p y'' = Kt (x - xc) + A (y - Y/2) - cp y' - stops(y)
+```
+
+The first two terms are the compression return spring. The third is the flat spring on the stem that toggles
+the plate; the fourth is the plate's own snap. A seated plate leaves when `x > xc + A Y / (2 Kt)` (**make**),
+and a lifted plate returns when `x < xc - A Y / (2 Kt)` (**break**). Hysteresis, the tactile drop of `Kt Y` in
+the stem force at the snap, and the plate's landing speed all come out of the integration.
+
+| Parameter | Value | Basis |
+|---|---|---|
+| Full travel | 3.2 mm | "1.5 to 3 mm" (HW 2.2): actuation near 1.5 mm, bottom near 3 mm |
+| `xc`, `Y` | 1.5 mm, 0.5 mm | Chosen: make 1.75 mm, break 1.25 mm |
+| `Kt`, `A` | 240 N/m, 240 N/m | Tactile drop 0.12 N; hysteresis 0.5 mm |
+| `F0`, `k` | 0.30 N, 103 N/m | Peak 0.54 N (55 g) at make for a typing key |
+| Force class scale | alpha 1.0, wide keys 1.18, space bar 1.36, ENTER 1.18 | Peaks span the documented 40 to 75 g (HW 2.2) |
+| `m_s`, `m_p` | 2.5 g, 0.15 g | Cap and stem; a plate of this size |
+| Stops | felt at bottom (k 9e4 N/m, c 16), hard at top | As `element1971`'s keys |
+| ENTER | Seat 3 mm lower than the space bar | HW 2.1 |
+| LOCK | No return spring; a detent holds it down; either SHIFT releases it through a link force | HW 2.2 |
+
+A key's sense signal is the pad capacitance `C(y) = C0 / (1 + y / y0)` with `y0 = 0.1 mm`.
+
+### 5.2 From a press to a scan event
+
+The scanner (`keyboard-ctl.js`) is the keyboard's own microprocessor (HW 2.4).
+
+1. It visits one matrix position every 52 us (12 x 8 = 96 positions, 5 ms per pass; the period is an assumption).
+2. A position reads **down** when `C / C0 < 0.45` and **up** when `C / C0 > 0.60`.
+3. A change produces one byte: bits 0 to 6 the key position, bit 7 the flag. Make/break keys (both SHIFTs, LOCK,
+   CODE, CONTROL) send on press (flag 0) and on release (flag 1). Every other key sends on press only.
+4. Typematic, for every non-make/break key: after 350 ms down, a byte with flag 1 (repeat) every 71.4 ms
+   (14 per second). It stops on release or when another typematic key goes down.
+5. Bytes go to a 4-entry buffer; an overrun replaces the fourth entry with the error byte `0x7F`.
+6. The serial link sends one byte per 1 ms (assumed) and waits for the system's acknowledge. Each sent byte is a
+   device event `{ type: 'device', dev: 'kbd', ev: 'scan', byte, t }`.
+
+Which repeats act is the software's choice (7.4), as on the real machine.
+
+### 5.3 The real keyboard and the pointer
+
+`src/interact/wp-keyboard.js` maps `KeyboardEvent.code` (physical position, not the character) to a key index
+through `src/interact/wp-keymap.js`. A keydown starts a grab on the key's stem with a spring toward 1.3 x travel
+and `maxF` of the panel's touch force (default 1.2 N); the keyup releases it, no sooner than 40 ms after the
+press. Holding is real, so SHIFT, CODE and typematic need no special code. `e.repeat` is ignored: repeats come
+from the simulated keyboard.
+
+Default map (the owner may change it, see 13.2):
+
+| Real key | Machine key | Real key | Machine key |
+|---|---|---|---|
+| Letters, digits, `-` `=` `;` `'` `,` `.` `/` | Same position (10 to 61) | `AltLeft` | 63 CODE |
+| `Backquote` | 9 degree / plus-minus | `AltRight`, `NumpadEnter` | 65 ENTER |
+| `BracketLeft`, `BracketRight` | 34 quarter / half, 35 brackets | `ControlLeft` | 3 CONTROL |
+| `Backslash`, `IntlBackslash` | 49 superscripts, 51 paragraph / section | `Enter` | 36 RETURN |
+| `Backspace`, `Tab`, `CapsLock`, Shifts, `Space` | 22, 23, 37, 50 and 62, 64 | Arrows | 74, 75, 78, 79 |
+| `F1` `F2` `F3` `F4` | 5 REQST, 6 PRINT, 76 FIND, 80 GO TO | `PageDown`, `PageUp` | 77 SCREEN DOWN; chord CODE+77 |
+| `F5` `F6` `F7` `F8` `F9` `F10` | 67 MOVE, 68 LINE ADJ, 69 SPELL, 70 CHG FMT, 71 GET, 72 PAGE END | `Delete`, `End`, `Insert` | 66 DEL, 7 END, 8 MSG |
+| `Escape` | chord CODE+5 (CANCL) | `Home` | chord CODE+78 (boundary left) |
+
+CODE and ENTER sit either side of the space bar on the machine, as the two Alt keys do on a PC keyboard. A chord
+alias is two simulated fingers (CODE held, the key tapped, CODE released), not an injected event. `preventDefault`
+is called for every mapped key. On layouts that report AltGr as `ControlLeft` + `AltRight`, the `ControlLeft`
+that arrives in the same task as `AltRight` is dropped. Keys with no real counterpart (the math column, KEY
+PLAYBCK, COLUMN, SCREEN RIGHT) are pressed with the pointer. The panel has a "keys" card showing the map.
+
+Pointer presses use the existing `key` drag kind against `keyX`.
+
+### 5.4 Click and beep
+
+The system raises Click after each keystroke it accepts and each repeat it honours (HW 2.3). So the click is a
+software output: `devices.kbd.click()` becomes `sim.command({ dev: 'kbd', op: 'click' })`, and the controller
+drives the speaker with a 0.5 ms pulse. `devices.kbd.tone(ms)` gates a 1 kHz square wave: 60 ms for the short
+beep, 400 ms for the long one (durations are assumptions). The speaker model is in 10.2.
+
+### 5.5 Latency budget
+
+Fly plate leaves the pad to click heard: scan up to 5 ms, link 1 ms, snapshot up to 4 ms, main-thread turnaround
+1 to 3 ms (the handler runs in `port.onmessage`, not in the frame loop), command back and one audio block 3 ms.
+Target: median under 12 ms, 95th percentile under 25 ms at 60 frames per second. If a slow main thread makes the
+jitter audible, the software moves to a Worker behind the same device interface (7.6); nothing else changes.
+
+---
+
+## 6. Printer
+
+### 6.1 What is physics and what is controller
+
+| Physics (`printer-mech.js`) | Controller (`printer-ctl.js`) |
+|---|---|
+| Wheel rotor and wheel under phase torque, friction and the petal drag | Shortest-way step count, which phase is on (from the three pickups), when to brake, when "seated" is true |
+| Carrier stepper rotor, leadscrew, sprung follower, carrier mass on its shafts, end stops | Step schedule: speed, ramps, direction; position from the encoder; margin from the encoder |
+| Index stepper rotor, timing belt as a spring, platen, paper drag | Step schedule for 1/96 in moves |
+| Coil current (R, L), armature force, armature flight, petal pickup, glyph face on ribbon, paper and platen (`faces.js` tables, Hunt-Crossley), rebound, return spring, backstop | Current amplitude and on-time per force group, firing instant, flight-time servo, cancel if selection or escapement is late |
+| Ribbon stepper and take-up, lift cam follower | Feed per character, track sequence |
+| Cam motor, worm, cam, feed-roll rocker and bail (drive `paperRelease` and `bail`) | Cam position requests, reed-switch feedback, error 76 |
+| Cover hinge and its magnetic latch, panel keys, power rocker, fan | Panel logic, LEDs, two-digit display, cover interlock (error 06), 15 s self-test |
+| Paper, ribbon rope, ink and emboss (`SoftWorld`, unchanged) | Nothing |
+
+### 6.2 Geometry and the carrier frame
+
+The platen is fixed and the carrier moves, so the printer uses the `element1971` frame: the snapshot's
+`carriageX` is minus the carrier's x, `SoftWorld` is built with `fixedPlaten`, and the paper and ribbon meshes
+and the Print Point camera are offset by `carrierOffset`. The ribbon cartridge rides the carrier, so `RibbonSim`
+runs between two spool positions on the carrier as it does for the element machine.
+
+The wheel's axis runs front to back, below the print line. The petal at the top is in front of the print point
+and the hammer, clamped above the selection motor, drives it straight back into the platen (PR 4, 5). The print
+point is at axle height on the platen's front (`beta = 0`). A selection error at impact is an angle on the
+wheel, so it moves the character sideways by `r x error`; it is reported in the strike's `lateral`.
+
+Petal order is not documented. Home (index 0) is lowercase `a` (PR 4). The rest are placed by English frequency,
+alternately either side of home, so common letters need short moves; `geometry.printer.wheel.order` holds the
+string. The 96 characters are exactly the 96-character keyboard's (HW 2.6).
+
+### 6.3 Motor models (`stepper.js`)
+
+Both integrate a rotor angle and, per phase, a current with a first-order lag (chopper drive), so torque falls
+off with step rate and a motor asked for too much loses step, as a real one does.
+
+```
+Stepper2Phase (carrier 200 steps/rev, index 180, ribbon, diskette head 200):
+  T = -K (iA sin(N th) - iB cos(N th)) - Td sin(4 N th) - b th' - Tc sgn(th'),   N = steps/rev / 4
+  di/dt = (i_cmd - i) / tauE                       full step, two phases on
+
+StepperVR3 (wheel, 96 steps/rev, 3 phases, 32 rotor teeth):
+  T = sum over k of -(1/2) L1 Nr ik^2 sin(Nr th - 2 pi k / 3) - b th' - Tc sgn(th')
+```
+
+The wheel's controller commutates from the rotor pickups (closed loop): it energises the phase that gives the
+largest torque in the wanted direction for the first part of a move, the opposite for the second part, then
+holds the target phase. The switch point comes from a table indexed by remaining steps, filled by the
+calibration tool (6.6).
+
+### 6.4 Parameters
+
+| Item | Value | Status |
+|---|---|---|
+| Wheel | 96 petals, 3.75 degrees apart, tip radius 38 mm | Count documented; radius assumed (PR 3) |
+| Wheel, hub and rotor inertia | 3.5e-6 kg m^2 (wheel 1.0e-6, hub and rotor 2.5e-6) | Assumed from geometry |
+| Selection peak torque | 0.25 N m | **Tuned**, see 6.6 |
+| Carrier screw | 200 steps/rev, lead 21.16 mm, 1/240 in per step | Documented |
+| Carrier | 1.2 kg; rotor and screw 2.4e-5 kg m^2; follower 2e5 N/m; holding torque 0.45 N m; `tauE` 0.4 ms | Assumed |
+| Print speed limit | 1440 steps/s (152.4 mm/s) | From 60 cps at 10 pitch |
+| Slew limit and ramp | 3000 steps/s, 40 000 steps/s^2 | Assumed; a test proves no lost steps |
+| Minimum character cycle | 14 ms | Assumed; keeps 12 pitch under 72 cps |
+| Platen | Radius 21.223 mm, length 415 mm, 2e-4 kg m^2 | Inferred 40 to 45 mm; this radius makes the belt ratio exactly 2.8 |
+| Index | 180 steps/rev, 1/96 in per step, 400 steps/s | Documented steps; rate from the 66 ms bound |
+| Hammer | Armature 6 g, petal 0.2 g, free travel 0.5 mm, petal travel 1.7 mm less the paper and ribbon calipers, return spring 1.5 N + 300 N/m | Gaps from PR 3; masses assumed |
+| Impact energy, low / medium / high group | 2.5 / 5 / 8 mJ before calibration | **Tuned**, see 6.6 |
+| Ribbon | Film, 11.6 mm x 122 m, three tracks, 0.37 mm advance per character | Size documented; rest inferred (PR 6) |
+| Paper | Letter, as the typewriters (`paper.width`, `paper.height`) | Textpack default (SR 7.3) |
+
+### 6.5 The print cycle
+
+The software sends 16-bit commands in the documented shape (PR 11); the encoding is ours:
+
+| Word | Meaning |
+|---|---|
+| `0x1000 | impression << 8 | petal` | PRINT at the position reached by the pending moves; impression 0 uses the wheel's table |
+| `0x2000 | dir << 11 | n` | ESCAPE n / 240 in, n up to 2047 |
+| `0x3000 | dir << 11 | n` | INDEX n / 96 in |
+| `0x5000 | k` | PAPER: 1 load, 2 release and eject, 3 bail open, 4 bail close |
+| `0x6000 | k` | CONTROL: 1 restore to left margin, 2 end of data, 3 read status |
+
+The attachment holds a 32-command FIFO. The software keeps it topped up against a credit count returned in
+`{ dev: 'printer', ev: 'credit', n }`. The real link allowed one command ahead; the deeper queue is our
+tolerance for a busy main thread and changes no timing.
+
+The planner looks ahead over the queued PRINTs of a line:
+
+```
+for each character i:  impact_i = max( impact_{i-1} + 14 ms,
+                                       arrive(x_i) at <= 1440 steps/s,
+                                       wheelReady_i + flight_g )
+carrier step times follow so that it passes x_i at impact_i without stopping; fire_i = impact_i - flight_g
+```
+
+`wheelReady` and `flight` are the controller's own estimates (the move table and the servoed flight time). The
+carrier slows for a long wheel move and stops only at line ends, for an index, or when the queue runs dry.
+Printing runs in either direction; the software chooses the direction per line (7.7). If the pickups do not
+report "seated" at `fire_i`, the fire is cancelled and retried one cycle later (the documented recoverable
+error 55).
+
+**Flight-time servo.** After each strike the controller has the time from current-on to the impact sensor
+(in the model: first platen contact). Per force group it corrects the on-time:
+`tOn_g += 0.35 (flightTarget_g - flightMeasured) x dTon/dFlight`. On power-on `tOn_g` starts 20 % off, so the
+first six to eight characters of each group print uneven and then settle (PR 5). Paper and ribbon thickness reach
+the mechanism through `setEnv`, change the gap, and the servo follows.
+
+**Strike event.** Emitted at the end of contact with the fields of the existing contract: `bar` = petal index,
+`caseIndex` 0, `carriageX` and `platenPsi` at peak force, `lateral` = tip radius x selection error, `vImpact`,
+`peakForce`, `maxIndent`, `vibratorLift` = ribbon lift, `ribbonInGap`, `trace`. `SoftWorld.applyStrike` does
+the rest.
+
+### 6.6 Choosing the missing numbers
+
+`tools/wp/calibrate_printer.mjs` runs the headless mechanism and writes the tuned constants; a test asserts the
+definition still matches what the tool computes.
+
+1. **Selection torque** against the documented 60 cps. The mean shortest-way move over random petals is 24
+   steps. Tune the peak torque so a 24-step move, its settle and a medium-group flight take 15.0 +/- 0.3 ms,
+   inside the 16.7 ms cycle of the rating. With the inertia above this is about 0.25 N m.
+2. **Hammer energy** against the ink model. For each force group, take its faces from the face tables
+   (`energy[]` is already tabulated per face) and find the energy at which the peak face pressure is 1.6 x
+   `paper.inkHalfPressure` for the group's median face. Check that the smallest face in the group stays under
+   `paper.perforationPressure`. The three energies give the three impact speeds and, with the gap, the three
+   flight-time targets.
+3. **Result to verify**: 60 +/- 1 cps on a 10-pitch line of short wheel moves (carrier limited), 45 to 60 cps
+   on English prose, at least 30 cps on the worst alternation with no cancelled fires, a 16-step line feed
+   within 66 ms.
+
+### 6.7 Paper in, pages out
+
+Feed is friction, with motorised rollers and bail (PR 2). `PaperSim`'s existing roll and bail patches serve;
+`printer.paper` gives their angles for this path, the cam drives `paperRelease` and `bail`, and the index
+stepper turns the platen. The rear slot and its window stand in for the paper table.
+
+- **Load.** The operator (or the scripted hand in `src/interact/wp-hands.js`, on a click of the fresh stack)
+  lays a sheet in the slot: `soft.spawnSheet({ onTable })`. LOAD on the panel, or the software's PAPER load,
+  opens the bail and feeds until the first-writing-line sensor sees the edge. The sensor reads
+  `env.paperEdgeV`, a new field of `SoftWorld.env()` (the sheet's `v` at the print point, or -1).
+- **Eject.** At a page end the software sends PAPER release. The controller feeds forward until the sheet leaves
+  the rollers; `PaperSim.onEjected` fires as it does today, the sheet is parked, `onSheetRetired` archives the
+  page image and `DeskPile` receives it at `deskLayout.pagePile`. No new page path.
+- **Auto-feed hand.** A panel toggle, on by default: when the printer reports Load Paper, the scripted hand
+  feeds the next sheet, so a multi-page document prints unattended. Off gives the manual-feed procedure.
+
+---
+
+## 7. Software
+
+### 7.1 Layout
+
+```
+src/wp/index.js            createSystem({ devices, store, options }) -> WpSystem
+src/wp/sched.js            clock, timers, generator tasks, key queue
+src/wp/screen.js           the 80 x 25 buffer and its regions
+src/wp/charset.js          8-bit character set (Latin-1 positions), symbol font codes, printwheel map
+src/wp/keys.js             key positions -> KeyEvent, modifier state
+src/wp/rom.js              power-on test, program load
+src/wp/font/               8 x 16 font data (9.2)
+src/wp/textpack/menus.js           the menu tree as data
+src/wp/textpack/menu-runner.js     menu and prompt coroutines
+src/wp/textpack/messages.js        every prompt and message string, keyed, with its source
+src/wp/textpack/tasks/             typing.js, paginate.js, print.js, index.js, workdisk.js, request.js, bypass.js, spell.js
+src/wp/textpack/editor/            buffer.js, codes.js, format.js, layout.js, view.js, commands.js
+src/wp/textpack/print/             formatter.js, spooler.js
+src/wp/disk/                       geometry.js, image.js, fs.js, library.js, store.js
+src/wp/devices/virtual.js          analytic devices for Node (and `?wpdevices=virtual`)
+src/wp/devices/timing.js           the timing formulas
+src/wp/testkit.js                  keystroke-script runner and screen matchers
+```
+
+Rule, enforced by a test that greps the tree: nothing under `src/wp/` imports from outside it, and nothing in it
+names `window`, `document`, `performance`, `Date`, `setTimeout` or `Math.random`.
+
+### 7.2 Time and tasks
+
+```js
+const sys = createSystem({ devices, store });
+sys.advance(t)            // set the clock to simulated time t (s); run timers that are due
+sys.deviceEvent(evt)      // a scan byte, a diskette completion, printer credit or status, power
+sys.screen                // 7.5
+sys.idle                  // no task is runnable and no timer is pending
+```
+
+A task is a generator. It yields a request and is resumed with the answer:
+
+```js
+function* createDocument(sys) {
+  const name = yield* promptLine(sys, 'docName', { suggest: sys.lastDocument });      // waits for keys
+  const disk = yield* chooseDiskette(sys);
+  if (yield* sys.fs.exists(disk, name)) return sys.messages.post('exists', { name }); // waits for the drive
+  ...
+}
+```
+
+Requests: `key()` (next key event from the queue), `wait(seconds)`, `io(request)` (a device operation),
+`join(task)`. The scheduler runs every runnable task until it blocks, with no microtasks, so a test drives the
+whole system with synchronous calls. Consequences that come for free:
+
+- **Type-ahead and batch menu access** (SR 3.3): keys queue until the foreground task asks for one.
+- **CANCL levels** (SR 3.2): `promptLine` and `runMenu` implement the four levels once.
+- **Background printing**: the spooler is a second task. Its messages go to the message queue.
+- **Real time without slow tests**: in the browser, `io` completes when the mechanism reports it and the clock
+  is the mechanism's time (so slow motion slows the software too). In Node, `VirtualDevices` answers each
+  request with a completion time from `timing.js`, and `runUntilIdle()` jumps the clock from deadline to
+  deadline.
+
+### 7.3 State
+
+| Object | Contents |
+|---|---|
+| `sys.power`, `sys.rom` | Off, self-test stage, waiting for a program diskette, loading, running |
+| `sys.program` | Which segments are in memory (nucleus, typing, work diskette, spelling). Entering a task family whose segment is not loaded reads it from the program diskette |
+| `sys.settings` | Work station description, format defaults, menu abbreviations (stored on the program diskette image) |
+| `sys.keys` | Modifier state, the key queue, keystroke save (250 keys) |
+| `sys.screen` | 7.5 |
+| `sys.prompt`, `sys.messages` | The prompt line with its input field; the message queue and the blinking indicator |
+| `sys.doc` | The open document: name, diskette, comment, document and alternate formats, page table, flags, the page in memory |
+| `sys.printQueue` | Up to 6 jobs; PRINT-key jobs up to 25 pages |
+| `sys.fs`, `sys.library` | Mounted volumes by drive; the diskette images |
+
+**The page buffer** (`editor/buffer.js`) is a gap buffer of `Uint16` units for the one page in memory:
+
+| Range | Meaning |
+|---|---|
+| `0x0020` to `0x00FF` | A character in the machine's set (Latin-1 positions, so `¢ § ° ± ² ³ ¶ ¼ ½` need no table) |
+| `0x0100` to `0x01FF` | A parameterless control code: carrier return, required carrier return, tab, required tab, required space, required hyphen, syllable hyphen, required backspace, page end, required page end, index, index return, zero index carrier return, half index up and down, centre, begin and end underline, word underline, character underline, stop, switch, substitute, begin and end keep |
+| `0x8000 | n` | A reference to `page.objects[n]`: format change, format return, alternate format, typestyle change, overstrike begin (with its character), include, variable, keyboard change, skip to line, page number, spelling marks |
+
+`editor/codes.js` is the table for every code: its status-line name and symbol (SR 5), whether it takes a
+column with Display Codes off, whether BKSP may delete it, what it does to an indent, what it prints.
+
+**Line endings are stored.** A wrap inserts a regular carrier return code after the spaces at the break; the
+spaces stay. Auto Adjust re-flows from the cursor line to the next required carrier return by removing and
+re-inserting regular returns only, so removing every regular return from a paragraph gives back exactly what was
+typed. This matches the machine's behaviour that moved text is not re-adjusted, that LINE ADJ exists, and that a
+carrier return has a name on the status line. `editor/layout.js` turns a line of codes into columns (tabs by
+kind, indent levels, centring, zero-width codes) and is the single implementation used by the screen, by
+pagination and by the print formatter.
+
+**The menu tree is data** (`menus.js`), with rows and columns taken from the grids in SS 2:
+
+```js
+printDocument: {
+  title: 'PRINT DOCUMENT', titleRow: 4, status: 'Print Document', finishedLine: true,
+  cols: { id: 3, item: 7, choice: 39, possible: 53 },
+  items: [
+    { id: 'a', row: 8,  item: 'Print From Page',    key: 'from',     def: 0, kind: 'page',  possible: ['0 = First Page', ...] },
+    { id: 'c', row: 12, item: 'Print Quantity',     key: 'quantity', def: 1, kind: 'int', min: 1, max: 99, possible: ['1 - 99'] },
+    ...
+  ],
+},
+typingTasks: { title: 'TYPING TASKS', titleRow: 4, items: [ { id: 'a', row: 8, item: 'Create Document', go: 'createDocument' }, ... ] },
+```
+
+`runMenu(sys, def, values)` draws it, runs the long and short forms, highlights changed choices, validates,
+and returns the values or a cancel. Menus outside the core (Program Diskette, Merge, Feature, Key-To-Print) are
+present as data whose items post a "not available" message.
+
+### 7.4 Input
+
+`sys.deviceEvent({ dev: 'kbd', ev: 'scan', byte })` goes to `keys.js`, which tracks SHIFT (either), LOCK, CODE
+and CONTROL from their make and break bytes and produces:
+
+```js
+{ pos, name /* 'RETURN', 'DEL', 'a', ... */, ch /* character with the current shift, or null */,
+  code, control, shift, repeat }
+```
+
+Repeats are honoured for the keys the service manual marks typematic: hyphen, BKSP, INDEX, RETURN, space and the
+four cursor keys, plus LINE ADJ and the column-add keys that the reference guide calls repeat-action. Other
+repeats are dropped, without a click. Every accepted key and honoured repeat calls `devices.kbd.click()`.
+
+### 7.5 Output
+
+```js
+sys.screen = {
+  chars: Uint8Array(2000), attrs: Uint8Array(2000),   // 4 KB, the size of the real display buffer
+  cursor: { row, col, on }, version,                  // version increments on any change
+  text(row?) -> string,                               // for tests and e2e
+}
+// attr bits: 1 underline, 2 reverse, 4 bright, 8 blink, 16 half index up, 32 half index down, 64 symbol font
+```
+
+`screen.js` owns the regions (status lines 1 and 2 with the field columns of SS 0, the scale line, rows 4 to 23,
+prompt, message). `editor/view.js` draws the typing screen; `menu-runner.js` draws menus. Nothing else writes
+cells.
+
+### 7.6 Devices
+
+The software sees one interface. `KitDevices` (in the kit) implements it over `sim.command` and
+`sim.on('device')`; `VirtualDevices` implements it with `timing.js`.
+
+```js
+devices = {
+  kbd:     { click(), tone(ms) },
+  disk:    { transfer({ id, drive, side, track, sector, count, write }), recalibrate({ id, drive }), status(drive) },
+  printer: { send(Uint16Array), credit, status },
+  power:   { on },
+}
+// completions and unsolicited events arrive through sys.deviceEvent:
+{ dev: 'disk', id, ok, error /* 'notReady' | 'seek' | 'crc' */ }      { dev: 'disk', ev: 'ready' | 'notReady', drive, mediaId, type }
+{ dev: 'printer', ev: 'credit', n }   { dev: 'printer', ev: 'status', bits, code }   { dev: 'printer', ev: 'pageOut' }
+{ dev: 'kbd', ev: 'scan', byte }      { dev: 'power', ev: 'on' | 'off' }
+```
+
+Sector bytes never cross to the mechanism. A transfer command carries the address; when it completes, the
+software copies between its buffer and the image in `sys.library`.
+
+### 7.7 From a document to the printer
+
+Compare `src/terminal/driver.js`: that driver works keys and waits on the machine's state; this one sends
+commands and waits on credit. Neither places ink.
+
+1. `print/formatter.js` (pure) turns a page into device-resolution operations: characters with their escapes in
+   1/240 in, indexes in 1/96 in. It applies margins, tabs by kind, centring, justification (spare space
+   distributed alternately from the left and the right, SR 4.20), underline as an overstruck underscore with no
+   escape, half index as a 1/2-line index up or down, headers, footers and page numbers.
+2. `print/spooler.js` (a task) takes jobs from the queue, reads pages from the diskette, orders each line's
+   operations left to right or right to left, whichever start is nearer the carrier, encodes them (6.5) and
+   sends them as credit allows. It posts the operator messages (printer not ready, load paper, change the
+   printwheel, printed) and handles Cancel on Error.
+3. The printer controller does the rest.
+
+### 7.8 Scope
+
+In scope: start-up and program load; TASK SELECTION; Typing Tasks (create, revise, paginate, index, print);
+the typing screen with every function in SR 4.1 to 4.19, 4.22, 4.23, 4.25, 4.27 to 4.29; format menus (SR 7.1
+to 7.7); Work Diskette Tasks a to i; Request Tasks; Menu Bypass; Spelling Tasks (last milestone). Present as
+menus only: Program Diskette Tasks other than Work Station Description, Feature, Key-To-Print, Merge, math,
+column layout, final-form documents, alternate tasks.
+
+---
+
+## 8. Diskettes
+
+### 8.1 Geometry and images
+
+`disk/geometry.js` holds the documented formats (HW 3.6):
+
+| | Diskette 1 | Diskette 2D |
+|---|---|---|
+| Sides, tracks | 1, 77 | 2, 77 |
+| Track 00 | 26 x 128 bytes, the label track | Same |
+| Data tracks 01 to 74 | 15 x 256 bytes | 26 x 256 bytes per side |
+| Tracks 75, 76 | Spare | Spare |
+| Data sectors | 1110 (284 160 bytes) | 3848 (985 088 bytes) |
+
+`disk/image.js`: an image is `{ id, type, bytes: Uint8Array, version }` with every sector at its physical
+address. A blank diskette is all zeros and reads as unformatted (`******` on the status line).
+
+### 8.2 Our file layout
+
+The machine's own format is not documented, so this is ours, inside the real geometry. Logical sector numbers
+(LSN) run over tracks 01 to 74 in track order.
+
+| Structure | Where | Contents |
+|---|---|---|
+| Volume label | Track 00, sector 1 | Signature, format version, name (6), kind (work, program), media type |
+| Free map | LSN 0 onward, 1 bit per sector | Allocation |
+| Index | A chain starting after the free map; 2 entries of 128 bytes per sector | Name (44), comment (44), type, flags (open, needs recovery), first LSN, sector count, length, creation order |
+| Document head | First chain of a document | Formats, flags, and the page table: system page number and first LSN per page |
+| Page | One chain per page | The page's code units and its object table |
+
+Every sector of a chain starts with a 4-byte header (next LSN, bytes used). Chained allocation fragments with
+use, which makes Condense Diskette do real work and makes seeks real. "Available" and "Unusable" on the index
+screen come from the free map. A document is marked open when it is created or revised and closed by END;
+a mount that finds it open shows `*` and Recover Documents rebuilds it from its last stored pages. A page is
+stored when the operator leaves it, on PRINT, and on END. The index is displayed in creation order.
+
+The program diskette's image is procedural: its index lists the program segments with their sizes, and reads
+return zeros. Sizes are set so the documented waits come out of the drive (8.4): nucleus 180 KB, typing 60 KB,
+work diskette tasks 40 KB, spelling 50 KB plus the dictionary. Its settings sector is real and persisted.
+
+### 8.3 The drive as a mechanism
+
+Per drive (`diskette-mech.js`): the lever (0 open, 90 degrees closed, a detent at each end); the diskette's
+slide in the guide; the collet (kinematic from the lever through the actuator rod and flat spring); the AC motor
+(capacitor-start induction model as `element1971`'s, 1800 rpm) and belt to the hub; the diskette's own angle,
+coupled to the hub by clamp friction, so it spins up in a few tenths of a second after the lever closes; the
+head stepper (`Stepper2Phase`, 1.8 degrees per track, band to the carriage, a hard stop behind track 00); the
+head-load solenoid, bail and arm.
+
+The adapter (`diskette-ctl.js`): one step every 5 ms, 35 ms settle after the last, recalibrate as 77 reverse
+steps against the stop, head load (40 ms assumed), then it waits for the wanted sector to arrive under the head
+by the diskette's angle from the index pulse, transfers at the rotation rate, and retries three times. It
+reports not ready when the index period leaves 162.5 to 170.9 ms or the lever opens. Both drives' motors run
+whenever the station is powered.
+
+Closing a lever with a diskette in place therefore gives, unscripted: clamp, spin-up, index pulses in range,
+`ready`, then the software's label read, whose recalibrate at 200 steps per second is the documented buzz.
+
+### 8.4 Timing model for tests
+
+`devices/timing.js`, pure functions of the documented figures:
+
+```
+seek(n)        = 5 ms x n + 35 ms               recalibrate = 77 x 5 ms + 35 ms
+headLoad       = 40 ms (assumed)                rotation    = 166.7 ms
+latency(t, s)  = time from t until sector s reaches the head, from the angle at t
+transfer(n)    = n x rotation / sectorsPerTrack
+```
+
+Targets that fix the free numbers: program load to TASK SELECTION 10 +/- 2 s (SS 1); a one-page document
+stored in under 1.5 s. The mechanism is tested against this model (12.1).
+
+### 8.5 Persistence
+
+`disk/store.js` defines `{ load(id), save(id, bytes), list(), remove(id) }`. `IdbStore` (in the kit, not in
+`src/wp/`) keeps one record per work diskette in IndexedDB database `wordproc1980`, version-stamped;
+`MemoryStore` serves Node. An image is saved after each completed write, coalesced over 1 s, and on `pagehide`.
+Which diskette is in which drive, the lever positions and the settings sector are saved alongside. The panel has
+"Reset diskettes".
+
+First run: the combined program diskette in the left drive; a work diskette named `WORK01` with three short
+sample documents of our own text in the right; two blank diskettes in the holder.
+
+A document that is open when the page is closed is, on the next visit, a document that needs recovery, exactly
+as after a power cut; keystrokes since its page was last stored are lost. A `beforeunload` prompt appears while
+a document is open.
+
+### 8.6 Handling diskettes
+
+Diskettes stand in a holder on the desk (`deskLayout.disketteHolder`). A diskette is in the holder, in the hand,
+or in a slot guide.
+
+- **By hand.** Drag a diskette from the holder; near an open slot it enters the guide and becomes the drive's
+  `disketteSlide` DOF, pushed home against friction and an end stop. The lever is a rotary `dof` part. It cannot
+  close on a half-inserted diskette (contact), and can close on an empty slot.
+- **By click.** Clicking a diskette in the holder, or the lever of a loaded drive, runs a scripted hand
+  (`wp-hands.js`) that does the same thing through the same grabs.
+
+The kit tells the mechanism which diskette entered a guide (`{ dev: 'disk', op: 'media', drive, mediaId, type }`).
+The label shows the diskette's name as handwriting and the media mark.
+
+---
+
+## 9. Display
+
+### 9.1 Pipeline
+
+```
+sys.screen (chars, attrs, cursor)                       CPU, 4 KB
+   -> gridTex   80 x 25 RG8, uploaded when version changes
+fontTex  256 x 256 R8: two fonts of 256 glyphs, 8 x 16 each
+   -> phosphor pass: one full-screen triangle into phosphorRT 1280 x 800 RG16F (2 x 2 samples per dot), mipmapped
+        lit   = glyph dot at this position (attributes, cursor, blink phase, half-index shift) x 3-tap beam profile x video gain
+        fast' = max(fast x exp(-dt / 30 ms), lit)        R
+        slow' = max(slow x exp(-dt / 250 ms), lit)       G
+   -> glass material on a curved mesh (a spherical cap, 24 x 16 segments, radius 0.60 m, in the bezel of wp_display.glb)
+        MeshPhysicalMaterial (dark faceplate, roughness 0.32, so the room HDRI reflects softly) with onBeforeCompile:
+        uv        = raster mapping of the surface point, shifted by view parallax through 8 mm of glass
+        emission  = green x (0.8 fast + 0.2 slow) x row profile + raster level from the brightness knob
+        halation  = textureLod(phosphorRT, uv, 4) x k1 + textureLod(phosphorRT, uv, 6) x k2
+```
+
+- **Raster**: 640 x 400 dots of 0.32 x 0.34 mm, 205 x 136 mm on a 245 x 170 mm glass (HW 1.4).
+- **Attributes** (HW 1.6): underline is row D; the cursor is row E, with its cell brightened; reverse inverts the
+  cell; bright scales gain; blink is 2.5 Hz at 50 % (rate assumed); half index shifts the glyph 3 dots.
+- **Row structure** is analytic in the glass shader and fades to its mean as the row frequency on screen
+  approaches one cycle per two pixels (from `fwidth`), so there is no moire at a distance. Mipmaps and
+  anisotropic filtering handle oblique views.
+- **Persistence**: phosphor type is not documented. The two-component decay gives the brief after-image the
+  manual mentions. Refresh flicker is not modelled.
+- **Bloom** is the in-shader halation from the target's own mips. A post-process bloom pass would cost every
+  machine a millisecond and bloom everything else in the scene.
+- **Knobs**: contrast scales the video gain; brightness raises the raster level, visible fully up (HW 1.4).
+- **Spill**: one shadowless green spot light from the screen toward the keyboard, its intensity from the lit
+  fraction of the buffer (a per-glyph coverage table summed on change). Dropped by the quality governor first.
+- **Warm-up and switch-off**: `crtHeat` and `crtHV` are first-order states in `station-mech.js` (6 s and 0.3 s);
+  the shader multiplies by them, and the persistence does the rest.
+
+### 9.2 Font
+
+Our own drawing, to the metrics of HW 1.5: capitals and digits 9 rows on rows 3 to B, x-height 6 rows,
+descenders to row C, underscore on row D, cursor on row E. Source of truth: `tools/wp/font8x16.txt` (one glyph
+per block of sixteen 8-character lines). `tools/wp/build_font.mjs` writes `src/wp/font/font8x16.js` (8 KB of
+data, committed). Font 1 is text at Latin-1 positions; font 2 holds the code symbols of SR 5, the scale-line
+marks, the status-line bars and the blocks of the start-up pattern. A Node test checks the metrics.
+
+### 9.3 Cost
+
+| Step | Cost |
+|---|---|
+| Grid upload | 4 KB `texSubImage2D`, only on change (a few times a second while typing, never more than once a frame) |
+| Phosphor pass | 1.0 M fragments, two fetches each, plus mip generation: about 0.4 ms on an integrated GPU. Skipped once the picture has been static for 1.5 s with nothing blinking |
+| Glass | About ten fetches per covered pixel |
+| Budget | 0.8 ms GPU and 0.1 ms CPU per frame at 1600 x 1000 on an Intel UHD 620 class GPU |
+
+Fallback when half-float targets cannot be rendered to: RGBA8 with the two components in R and G and a dither.
+
+### 9.4 Reading the screen
+
+The default camera is `operator`, which puts the raster at 640 pixels or more across a 1600-pixel window. A
+"Screen" card in the insets, beside Print Point, shows the phosphor target flat at 640 x 400 CSS pixels; it
+opens by itself when the raster on screen would be under 560 pixels wide.
+
+---
+
+## 10. Audio
+
+### 10.1 Engine
+
+`src/audio/wp-engine.js` exports `WpAudioEngine` with the public surface of `AudioEngine` (`process`, `publish`,
+`onSnapshot`, `setTimeScale`, `setEnabled`, `setPaperSpeed`, `loadSamples`, `dspLoad`). It steps `WordprocSim`
+the same way, reads `WP_PORT` forces and `WAC` events, and renders three buses with constant-power pan (printer
+left, station and keyboard centre, diskette unit right) through the existing `Room` and `Limiter`. The worklet
+writes left and right when the engine reports `stereo`. `Bank` from `modal.js` provides the resonant bodies.
+`loadSamples` is a no-op until `audio.samples` names a sprite; with `samples: false` the client does not fetch
+the typewriter sprite at all.
+
+### 10.2 Voices (`src/audio/wp-synth.js`)
+
+| Sound | Driven by | Synthesis |
+|---|---|---|
+| Key bottoming and return | `WAC.KEY_BOTTOM`, `WAC.KEY_TOP` with speed | Short plastic modes of cap and frame into a keyboard-case bank |
+| Fly plate snap | `WAC.PLATE` with the plate's landing speed | A faint tick; this is the modules' own "audible" feedback |
+| Click | The Click line | A 0.5 ms pulse through a small-speaker model: resonance 450 Hz, Q 2, cone break-up near 2.8 kHz |
+| Beep | The Tone line | 1 kHz square, gated, through the same speaker |
+| Station fan | `fanOmega` | Filtered noise scaled by speed squared, plus blade-pass partials |
+| CRT | Nothing | No whine: the line frequency is not documented and is probably above hearing |
+| Drive motors and belt | `motorOmega`, `diskOmega` | Rotor partials and twice-line hum as `ElementSynth`; jacket rub noise while clamped |
+| Head steps | `WAC.STEP` per step, with rotor speed | Tick into a drive-chassis bank. At 200 steps per second the ticks are the buzz |
+| Head load | Contact force on the bail | Clunk through the same bank |
+| Lever and collet | Detent and clamp contact forces | Click |
+| Hammer | `WP_PORT.HAMMER` force each sample | Commuted through a cover-and-frame bank plus a direct path; the three force groups sound different because the forces are |
+| Selection | Phase torque ripple times speed; `WAC.SEAT` | Whir at the commutation rate into a carrier bank; a tick on seating |
+| Carrier | Step-rate torque ripple; follower and shaft friction | A tone at the step rate (1440 Hz at 60 cps) and screw rumble |
+| Line feed, paper keys | Index rotor and belt force | Short bursts |
+| Ribbon feed, cam motor | Their rotor speeds and stop contacts | Tick; whirr and clunk |
+| Printer fan | Fan speed | Filtered noise |
+| Printer cover | `cover` | A low-pass and 6 dB on the printer bus; opening the cover brightens it |
+| Paper | Soft-body speed, as now | The existing paper loops via `setPaperSpeed` if samples are present; otherwise filtered noise |
+
+---
+
+## 11. Plan
+
+### 11.1 What changes from `plan.md`
+
+| Plan | Now | Why |
+|---|---|---|
+| Printer as `src/sim/printwheel-action.js` behind the `Action` interface | A separate mechanism host, `src/sim/wp/`, with the same client contract and strike event | 4.1 |
+| Keyboard as `src/sim` key DOFs "as now", buckling spring, timed finger press from the real keyboard | Its own stems and fly plates in the host; a real key is a held finger | The research found fly plates; make/break keys and typematic need the hold |
+| Diskette timing model in `src/wp/diskette.js` plus DOFs for door and latch | Data in `src/wp/disk/`, motion in `src/sim/wp/diskette-mech.js`, the timing model only for Node | No doors; the browser's timing must come from the mechanism |
+| `src/render/crt.js` with bloom | `src/render/wp/crt.js`, halation in the glass shader, no bloom pass | 9.1 |
+| `src/audio/wp-synth.js` | Plus `wp-engine.js` | The existing engine is built around typebars and samples |
+| Phases: research, editor, CRT and keyboard, printer, diskette unit, polish | Milestones M0 to M8 below | A scaffolding step first; storage with the editor; the printer proven headless before it is drawn |
+| Under 5 MB added per visit | Under 2 MB, and nothing added to a typewriter visit | 12.3 |
+| Program diskettes Vol. 01 to 03 implied | One combined program diskette | Decision 10 |
+
+The owner's decisions (25 x 80 display, daisywheel printer, Textpack 4, the desk arrangement, ashtray on the
+machine, no lamp, cables out the back) all stand. The desk does not need widening.
+
+### 11.2 Milestones
+
+Each one ends with the listed tests green, all existing tests green, and something that can ship.
+
+| M | Deliverable | Tests | Ships as |
+|---|---|---|---|
+| **M0 Scaffolding** | Kits; `KITS` and `geometryFor`; `desk-layout.js`; multi-rectangle desk shade; `fitShadow`; `flyTo`; `host-factory.js`; the definition with units and layout; grey block-out bodies. The machine is listed only with `?wp` | Existing unit and e2e tests unchanged; `wp_layout.test.js` (no overlap, inside the desk field, cable lengths) | No visible change |
+| **M1 Software kernel** | `sched`, `screen`, `charset`, `keys`, `rom`, `menu-runner`, `messages`, TASK SELECTION and TYPING TASKS, `VirtualDevices`, `testkit` | E1; menu runner (long and short form, the four CANCL levels, type-ahead); key decoding and typematic | Node only |
+| **M2 Storage and typing** | `disk/*`; create and revise; the typing screen; insert and replace; wrap and adjust; returns, tabs, required codes; cursor, scrolling, segmenting; END; index display; work diskette tasks a to d and g | E2, E12; file system (capacity, fragmentation, recovery flag); buffer and layout units | Node only |
+| **M3 Editing** | DEL, MOVE, COPY, OVERSTRIKE, FIND, GLOBAL, GO TO, GET; format menus and format codes; display codes; underline, centre, half index; pagination; Menu Bypass; remaining work diskette tasks | E5 to E9, E11, E13 | Node only |
+| **M4 On the desk** | Font; CRT; station, display and keyboard models and views; key mechanism, scanner, click and beep; station fan; `KitDevices` with virtual diskette and printer devices; IndexedDB; real-keyboard map; "Screen" card. Picker entry on | `wp_keyboard.test.js`; font metrics; `e2e/wp.mjs` (boot warm, type, screen text and pixels, persistence across reload) | **First public version**: a working editor on a CRT with a mechanical keyboard. Printing queues and asks for a printer |
+| **M5 Printer, headless** | `stepper.js`, `printer-mech.js`, `printer-ctl.js`, the calibration tool, `glyphs_wp`, formatter, spooler | `wp_printer.test.js` (6.6 item 3 and 12.1); formatter units; E3, E4 against the virtual printer | Node only |
+| **M6 Printer on the desk** | Printer model and view; `SoftWorld` with `origin`; film ribbon; load, eject, pile; panel keys, LEDs and display; cover; Print Point window; printer sound; auto-feed hand | e2e: print a two-line document, count strikes, ink where expected, one page in the pile, PDF export | Printing |
+| **M7 Diskette unit** | `diskette-mech.js`, `diskette-ctl.js` replacing the virtual disk in the browser; model; levers, insertion, holder; drive sound | `wp_disk.test.js`; e2e: remove and insert the work diskette, open a document | Diskettes are physical |
+| **M8 Finish** | Cold start and self-test; CRT warm-up; errors (no diskette, lever opened mid-write, cover open, out of paper, end of ribbon); Spelling Tasks with the dictionary (E10); `docs/ARCHITECTURE.md` and `docs/assets.md` sections; budget audit | E10; error paths; size and frame-time checks in e2e | Complete |
+
+M5 can run in parallel with M3 and M4; it depends only on M0.
+
+---
+
+## 12. Tests, performance, assets
+
+### 12.1 Tests
+
+All Node tests run under `node --test tests/*.test.js`; browser tests only through `tests/e2e/xrun.sh`.
+
+| File | What it proves |
+|---|---|
+| `wp_editor.test.js` | The 13 scripts of SS 4, written with `testkit`: `run(sys, 'a ENTER a ENTER "First Letter" ENTER "WORK01" ENTER ENTER')`, then `expectRow(sys, 24, ...)`, `expectScreen(sys, fixture)`. Fixtures are 25 x 80 text files in `tests/fixtures/wp-screens/`, transcribed once from the grids in SS (a `~` cell matches anything). The training documents the scripts name are not available, so fixture documents of our own contain the words the scripts act on |
+| `wp_menus.test.js`, `wp_buffer.test.js`, `wp_layout_text.test.js`, `wp_paginate.test.js`, `wp_fs.test.js`, `wp_format.test.js` | The units named in M1 to M3 and the print formatter |
+| `wp_purity.test.js` | `src/wp/` imports nothing outside itself and uses no wall clock or DOM |
+| `wp_keyboard.test.js` | Slow-press force curve per class (peak 40 to 75 g, make 1.5 to 2.2 mm, break at least 0.3 mm above); a 30 g press does not actuate; a 20 ms tap gives one make; hold 1 s gives one make and nine repeats +/- 1; five keys inside 10 ms give four bytes and an overrun; energy of stem and plate is conserved without damping |
+| `wp_printer.test.js` | Full mechanism in Node: cps targets of 6.6; strike x within 0.03 mm of commanded; bidirectional registration within 0.05 mm; no lost carrier steps in 1000 random moves; selection error under a quarter step at every impact; flight time within 5 % of target by the eighth strike of a group; face pressure in the ink window and under perforation; 16-step feed within 66 ms; cover opened while printing stops the carrier and reports 06; export and import mid-line continues identically. Kept under 8 simulated seconds |
+| `wp_disk.test.js` | The formulas of 8.4; program load 10 +/- 2 s; the mechanism within 5 % of the model over 20 random operations; spin-up to ready under 0.6 s; lever opened mid-write gives an error and a document that needs recovery |
+| `tests/e2e/wp.mjs` | `?machine=wordproc1980`: no console errors; `__tw.wp.screen.text()` shows TASK SELECTION; real key events create and type a document; a screenshot of the raster has text where the buffer has it; PRINT produces strikes and ink and a page in the pile; reload finds the document; frame-time and GPU-time thresholds. A second run with `?wpdevices=virtual` covers the software and CRT quickly; one run with `?cold` covers start-up; one switches machines through the picker both ways |
+
+### 12.2 Performance targets
+
+| Measure | Target |
+|---|---|
+| Frame rate | 60 per second at 1600 x 1000 on an Intel UHD 620 class GPU with the existing governor |
+| Triangles and draw calls added | Under 120 k and under 60 (keycaps are instanced per profile; legends from a canvas atlas) |
+| CRT | 9.3 |
+| Main thread per frame, added | Views 0.5 ms; software 0.1 ms; soft world as today (the sheet sleeps unless feeding) |
+| Audio thread | `dspLoad` under 0.05 idle and under 0.35 while printing, on a 2018 laptop |
+| Key to click | 5.5 |
+| Warm start to typing | Under 3 s after assets load |
+
+### 12.3 Asset budget
+
+| Asset | Size | Notes |
+|---|---|---|
+| Kit JavaScript (software, host, views, shaders), gzip | 120 KB | Its own chunk; the typewriter kit likewise |
+| `wp_station.glb`, `wp_display.glb`, `wp_keyboard.glb`, `wp_diskette.glb`, `wp_printer.glb` | 1.1 MB together | Procedural, `tools/blender/build_wp_*.py`, with clearance checks against the moving parts as the existing builders do. No badges, no lettering |
+| `wp_plastic` texture set (pebble normal and roughness, 1024, AVIF) | 250 KB | One set for all pearl-white covers; colour in the material |
+| `glyphs_wp.bin.gz` and `.json` | 80 KB | 96 faces at 12 pitch from the existing font, baked by `tools/bake_glyphs.py --set wp`; unpacked with `DecompressionStream` in the browser and `zlib` in Node |
+| Font, key legends, diskette labels | 0 | In the JavaScript; canvas at run time |
+| Spelling word list, gzip | 150 KB | Fetched when Spelling Tasks first loads, behind the program-load wait |
+| **Total for a first visit** | **under 2 MB** (1.7 MB without spelling) | |
+| Not fetched on a word-processor visit | `frame.glb`, `enclosure.glb`, `element_enclosure.glb`, both sample sprites, every texture set not in `machine.textures` | More is saved than added |
+
+---
+
+## 13. Risks, open questions, gaps
+
+### 13.1 Risks
+
+| Risk | Mitigation |
+|---|---|
+| Moving `main.js` into a kit breaks a typewriter | It is the first commit, a pure move, gated by the whole existing test and e2e suite |
+| Click jitter from a busy main thread | Budget in 5.5, measured in e2e; the Worker fallback needs no interface change |
+| The wheel and carrier models do not reach 60 cps, or ring at impact | M5 is headless and comes before any drawing; one tuned scalar per motor; the planner slows the carrier instead of failing |
+| `PaperSim` assumes a typewriter's paper path | The printer's path is the same topology (table, feed rolls under the platen, bail above the line). If the motorised load cannot be made reliable, the fallback is the existing `Hands.loadPaper` sequence driving the index stepper's target |
+| The film ribbon does not suit `RibbonSim` | It is a rope between two spools on the carrier, as on the element machine; only weave and depletion differ |
+| The scope of Textpack | The core is fixed in 7.8; everything else is a menu with a message. M4 ships without M3 being complete if need be |
+| Stiff contacts at 384 kHz | Same substep and the same stability test as `element.test.js` (omega x dt under 0.6 for every spring) |
+| IndexedDB unavailable or cleared | `MemoryStore` fallback with a message; first-run diskettes are rebuilt |
+| Screen text too small on phones and small windows | The Screen card (9.4) |
+
+### 13.2 Open questions for the owner
+
+Each has the default this design proceeds on.
+
+| # | Question | Default |
+|---|---|---|
+| 1 | Warm start (decision 9), or always the authentic 35 s power-on? | Warm; `?cold` for the full sequence |
+| 2 | The power-on screen shows the maker's initials, and two menu titles contain the program's product name. The ground rule forbids names and marks | Three large blocks in place of the initials; titles `REQUEST TASKS` and `PROGRAM DISKETTE TASKS`; the status code `*11*` stays |
+| 3 | One combined program diskette, or the three volumes with their swaps? | Combined |
+| 4 | Persist diskettes between visits? A document left open needs recovery next time, as after a power cut | Persist; authentic recovery; a leave-page prompt while a document is open |
+| 5 | Manual sheet feed for every page, or help? | An auto-feed hand, on by default, with a toggle |
+| 6 | The real-keyboard map (5.3), in particular the two Alt keys as CODE and ENTER, and Enter as RETURN | As tabled |
+| 7 | Where the ashtray stands "on the machine" | On top of the diskette unit |
+| 8 | Fresh paper and finished pages | Both in front of the printer, left of the keyboard |
+| 9 | Night lighting with the lamp gone | A dim room light with no visible fixture |
+| 10 | Spelling needs an English word list of about 40 000 words | A public-domain list, in M8; Spelling Tasks shows "not available" until then |
+| 11 | Stereo output for this machine | Yes |
+| 12 | Sample documents on the first-run work diskette | Three short pieces of our own text |
+
+### 13.3 Gaps in the research
+
+| Gap | Default | Where it is isolated |
+|---|---|---|
+| Printer size (+/- 10 %) | 0.74 x 0.58 x 0.23 m | `units.printer.size`; placements recompute |
+| Wheel radius, inertia, torque, positioning time | 6.4, tuned by 6.6 | `printer.wheel`, `printer.selection` |
+| Hammer mass, energy, flight time | 6.4, tuned by 6.6 | `printer.hammer` |
+| Petal order | Frequency order from home `a` | `geometry.printer.wheel.order` |
+| Carrier slew and ramp, line-feed rate | 3000 steps/s, 40 000 steps/s^2, 400 steps/s | `printer.carrier`, `printer.index` |
+| Ribbon type and lift | Multi-strike film, three tracks | `printer.ribbon` |
+| Key force curve beyond 40 to 75 g and 1.5 to 3 mm | 5.1 | `keyboard` |
+| Keyboard scan period, link byte time | 5 ms, 1 ms | `keyboard.scan` |
+| Beep lengths; whether invalid keys beep | 60 ms and 400 ms; no beep, no click | `messages.js`, `keys.js` |
+| Phosphor type and persistence; refresh; cursor blink | Two-component decay 30 and 250 ms; no flicker; steady cursor | `display.phosphor` |
+| Blink rate of the message arrow | 2.5 Hz | `display.blinkHz` |
+| Head-load time | 40 ms | `diskettes.headLoadS` |
+| On-disk format, documents per diskette, program sizes | 8.2 | `disk/` |
+| Full prompt and message list | The strings quoted in SR 6 and SS, plus plain wording of our own for the rest, each marked `source: 'ours'` | `messages.js` |
+| Status-line field text for Insert and Replace | `Ins`, `Repl` (SS 3.1) | `editor/view.js` |
+| Default tab grid | Every 5 positions (SS 3.1) | `editor/format.js` |
+| Segment width; step of the SCREEN keys | 60 positions with 20 of overlap (HW 1.7); SR 4.7 as written | `editor/view.js` |
+| Find with no match | Cursor stays; a short beep; message of our own | `editor/commands.js` |
+| Typing past the last typing line | Allowed, with the beep (SS 3.2) | `editor/commands.js` |
+| Case of menu ID letters | Either accepted | `menu-runner.js` |
+| Cursor movement across a page end | Down from the last line shows the next page | `editor/commands.js` |
+| Colours of the covers | Pearl white `#d9d4c4`, pebble grey `#8f8d86`, to be judged against the brochure photos | `wp-materials.js` |
+| Keyboard feet, cable form, the 92-character layout | None; straight cable; not built | Models |

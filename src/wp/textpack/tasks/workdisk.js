@@ -6,7 +6,8 @@ import { runMenu, menuState } from '../menu-runner.js';
 import { drawPrompt, getKey, isEnter, isCancel, promptLine } from '../input.js';
 import { fmt } from '../messages.js';
 import { pageNumberAfter } from '../editor/doc.js';
-import { KIND, FLAG } from '../../disk/fs.js';
+import { KIND, FLAG, DiskError } from '../../disk/fs.js';
+import { C } from '../editor/codes.js';
 import { TASKS, menuKeys, volumeNamed, chooseDocument, guarded } from './common.js';
 
 const menu = (sys, def, st, docName) => runMenu(sys, def, st, { allowEnd: true, docName, ...menuKeys(sys) });
@@ -22,8 +23,8 @@ function* fill(sys, def, st, required) {
 }
 
 /** ENTER to go on, CANCL to stop. */
-export function* confirm(sys, key = 'confirm') {
-  drawPrompt(sys, fmt(key), null);
+export function* confirm(sys, key = 'confirm', args) {
+  drawPrompt(sys, fmt(key, args), null);
   const ev = yield* getKey(sys, (e) => isEnter(e) || isCancel(e) || e.name === 'END');
   return isEnter(ev);
 }
@@ -172,4 +173,89 @@ function* eraseInit(sys) {
   return null;
 }
 
-Object.assign(TASKS, { deleteDocument, duplicateDocument, changeDocName, changeDiskName, eraseInit });
+/** The two diskettes of Duplicate and Condense Diskette, suggested from the drives (ORG p.135, p.118). */
+function* twoDiskettes(sys, def) {
+  const work = sys.workVolumes().map((v) => v.name);
+  const st = menuState({ from: work[0] ?? '', to: work[1] ?? '' });
+  if (!(yield* fill(sys, def, st, ['from', 'to']))) return null;
+  const { from, to } = st.values;
+  if (from === to) { sys.messages.show('sameDiskette'); return null; }
+  const src = yield* volumeNamed(sys, from);
+  if (!src) return null;
+  const dst = yield* volumeNamed(sys, to);
+  if (!dst) return null;
+  if (src.image.type !== dst.image.type) { sys.messages.show('mediaMismatch'); return null; }
+  if (!(yield* confirm(sys, 'eraseConfirm'))) return null;
+  drawPrompt(sys, '', null);
+  return { src, dst };
+}
+
+/** Duplicate Diskette (ORG p.135): every data track copied; the receiving diskette keeps its own label. */
+function* duplicateDiskette(sys) {
+  const d = yield* twoDiskettes(sys, MENUS.duplicateDiskette);
+  if (!d) return null;
+  const { src, dst } = d;
+  const perTrack = src.m.spt * src.m.sides;
+  yield* guarded(sys, dst, function* () {
+    for (let t = 0; t < src.total; t += perTrack) {
+      const lsns = Array.from({ length: perTrack }, (_, i) => t + i);
+      yield* dst.write(lsns, yield* src.read(lsns));
+    }
+    yield* dst.mount();
+  });
+  sys.messages.post('diskDuplicated', { disk: src.name, to: dst.name });
+  return null;
+}
+
+/** Condense Diskette (ORG p.118): the documents copied one after another onto an erased diskette, unfragmented. */
+function* condenseDiskette(sys) {
+  const d = yield* twoDiskettes(sys, MENUS.condenseDiskette);
+  if (!d) return null;
+  const { src, dst } = d;
+  const ok = yield* guarded(sys, dst, function* () {
+    yield* dst.format(dst.name, KIND.WORK);
+    for (const e of src.docs()) yield* copyDocument(src, e, dst, e.name);
+    return true;
+  });
+  if (ok) sys.messages.post('condensed', { disk: src.name, to: dst.name });
+  return null;
+}
+
+/**
+ * Recover Documents (ORG p.218, 219; p.497): each document left open is named, ENTER, and closed again; a page
+ * that cannot be read becomes a Substitute code. The free map is rebuilt from what the index reaches.
+ */
+function* recover(sys) {
+  const st = menuState({ slot: '' });
+  if (!(yield* fill(sys, MENUS.recover, st, ['slot']))) return null;
+  const vol = sys.drives[st.values.slot - 1];
+  if (!vol?.formatted) { sys.messages.show('diskNotFound', { disk: st.values.slot === 1 ? 'Left' : 'Right' }); return null; }
+  if (vol.isProgram) { sys.messages.show('programDiskette'); return null; }
+  const done = yield* guarded(sys, vol, function* () {
+    for (const e of vol.docs().filter((x) => x.flags & FLAG.OPEN)) {
+      if (!(yield* confirm(sys, 'recoverDoc', { name: e.name }))) return false;
+      const { head } = yield* vol.readHead(e);
+      for (const p of head.pages) {
+        try { yield* vol.readPage(p.lsn); } catch (err) {
+          if (!(err instanceof DiskError)) throw err;
+          const lsns = yield* vol.writePage(Uint16Array.of(C.SUB, C.PE), []);
+          Object.assign(p, { lsn: lsns[0], secs: lsns.length, len: 2, fmts: [] });
+        }
+      }
+      const hl = yield* vol.writeJson(head);
+      e.first = hl[0];
+      e.flags &= ~FLAG.OPEN;
+      yield* vol.writeEntry(e);
+      sys.messages.post('recovered', { name: e.name });
+    }
+    yield* vol.rebuildMap();
+    yield* vol.flushMap();
+    return true;
+  });
+  if (done) sys.messages.show('recoverComplete');
+  return null;
+}
+
+Object.assign(TASKS, {
+  deleteDocument, duplicateDocument, changeDocName, changeDiskName, eraseInit, duplicateDiskette, condenseDiskette, recover,
+});

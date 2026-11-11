@@ -6,6 +6,7 @@ import { promptLine, splitName, getKey, isEnter, drawPrompt } from '../input.js'
 import { fmt } from '../messages.js';
 import { waitSignal } from '../../sched.js';
 import { DiskError } from '../../disk/fs.js';
+import { bypassFromMenu } from '../bypass.js';
 
 /** Tasks reached from the task menus, by `go` name. */
 export const TASKS = {};
@@ -13,9 +14,10 @@ export const TASKS = {};
 /** The keys every task menu answers besides its own: REQST opens the request menu over it. */
 export function menuKeys(sys) {
   return {
-    accepts: (e) => e.name === 'REQST' && !e.code,
+    accepts: (e) => e.name === 'REQST' || (e.name === 'GO TO' && e.code),
     onKey: function* (ev) {
-      if (ev.name === 'REQST') yield* requestTasks(sys);
+      if (ev.name === 'REQST' && !ev.code) yield* requestTasks(sys);
+      else if (ev.name === 'GO TO') yield* bypassFromMenu(sys);
       return null;
     },
   };
@@ -55,14 +57,26 @@ function* waitMountedOrKey(sys) {
   if (sys.sched.tasks.some((t) => t.name === 'mount')) yield* waitSignal('mounted');
 }
 
-/** Document name, then diskette name (unless typed after the CODE+M separator). Returns { name, vol } or null. */
-export function* chooseDocument(sys) {
+/**
+ * Document name, then diskette name (unless typed after the CODE+M separator). Returns { name, vol } or null.
+ * `preset` comes from Menu Bypass: a name typed with the abbreviation, and its diskette if one was typed or only
+ * one work diskette is in place (ORG p.446, 447).
+ */
+export function* chooseDocument(sys, preset = null) {
   for (;;) {
-    const s = yield* promptLine(sys, 'docName', { suggest: sys.lastDocument, max: 44, sep: true });
-    if (s === null) return null;
-    let { name, disk } = splitName(s);
+    let name, disk;
+    if (preset?.name) {
+      ({ name, disk } = preset);
+      preset = null;
+      const work = sys.workVolumes();
+      if (disk == null && work.length === 1) disk = work[0].name;
+    } else {
+      const s = yield* promptLine(sys, 'docName', { suggest: sys.lastDocument, max: 44, sep: true });
+      if (s === null) return null;
+      ({ name, disk } = splitName(s));
+    }
     if (!name) continue;
-    if (disk === null) {
+    if (disk == null) {
       disk = yield* promptLine(sys, 'diskName', { suggest: sys.lastDiskette, max: 6 });
       if (disk === null) return null;
     }

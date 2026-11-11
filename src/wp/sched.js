@@ -92,7 +92,6 @@ export class Scheduler {
     const q = r.value;
     switch (q.op) {
       case 'key': task.state = 'key'; task.accept = q.accept ?? null; break;
-      case 'poll': this.resume(task, this.keys.length ? this.keys.shift() : null); break;
       case 'wait': task.state = 'timer'; this.at(this.t + q.s, () => this.resume(task, undefined)); break;
       case 'signal': task.state = 'signal'; task.signal = q.name; break;
       case 'io': {
@@ -136,7 +135,6 @@ export class Scheduler {
 
 // Requests, for `yield*` inside tasks.
 export function* key(accept) { return yield { op: 'key', accept }; }
-export function* pollKey() { return yield { op: 'poll' }; }
 export function* wait(s) { return yield { op: 'wait', s }; }
 export function* io(req) { return yield { op: 'io', req }; }
 export function* join(task) { return yield { op: 'join', task }; }

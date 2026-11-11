@@ -3,6 +3,7 @@
 // stop; 'end' ends a line and takes the column the cursor stands on; 'zero' takes no column unless Display Codes is
 // Yes; 'back' moves one position left (required backspace).
 import { SYM } from '../../charset.js';
+import { changeName } from './format.js';
 
 export const C = {
   CR: 0x100, RCR: 0x101, TAB: 0x102, RTAB: 0x103, RSP: 0x104, RHY: 0x105, SHY: 0x106, RBS: 0x107,
@@ -39,11 +40,10 @@ const INFO = {
 
 // Objects: the codes that carry parameters, kept in the page's object table (architecture 7.3).
 const OBJ_INFO = {
-  fmt: (o) => ({
-    line: 'Line Format Change', margins: 'Line Format Change', page: 'Page Format Change', type: 'Typestyle Chg',
+  fmt: (o) => (o.kind === 'set' ? changeName(o.values) : {
     retAll: 'Page Format Return', retLine: 'Line Format Return', retType: 'Typestyle Return',
     docFmt: 'Start Document Fmt', altFmt: 'Start Alternate Fmt',
-  })[o.kind],
+  }[o.kind]),
   keep: (o) => (o.begin ? 'Begin Keep' : 'End Keep'),
   spell: (o) => (o.begin ? 'Begin Spelling' : 'End Spelling'),
   ovs: (o) => (o.begin ? 'Begin Overstrike' : 'End Overstrike'),

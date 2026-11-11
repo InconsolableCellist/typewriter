@@ -40,11 +40,13 @@ export function drawPrompt(sys, text, answer = '', { cursor = true } = {}) {
 
 /**
  * A prompt with a typed answer. Returns the answer, or null when the operator cancels it (CANCL twice, END, or REPLY).
- * `suggest` pre-fills the answer (TB1 p.12); `sep` lets CODE+M insert the document/diskette separator.
+ * `suggest` pre-fills the answer (TB1 p.12): ENTER takes it, BKSP edits it, typing replaces it (the scripts of SS 4
+ * type names over suggestions); `sep` lets CODE+M insert the document/diskette separator.
  */
 export function* promptLine(sys, textKey, { suggest = '', max = 60, args, sep = false, digits = false } = {}) {
   const text = fmt(textKey, args);
   let answer = suggest;
+  let suggested = !!suggest;         // a suggestion is replaced by the first character typed, edited by BKSP
   for (;;) {
     drawPrompt(sys, text, answer);
     const ev = yield* getKey(sys, (e) => isChar(e) || isEnter(e) || isCancel(e) || e.name === 'BKSP' || e.name === 'END'
@@ -52,9 +54,11 @@ export function* promptLine(sys, textKey, { suggest = '', max = 60, args, sep = 
     if (isEnter(ev)) return answer;
     if (ev.name === 'END' || (ev.code && ev.name === 'MSG')) return null;
     if (isCancel(ev)) { sys.messages.clear(); if (answer) answer = ''; else return null; continue; }
+    suggested &&= ev.name !== 'BKSP';
     if (ev.name === 'BKSP') { answer = answer.slice(0, -1); continue; }
-    if (ev.code && ev.name === 'm') { if (!answer.includes(SEP)) answer += SEP; continue; }
+    if (ev.code && ev.name === 'm') { suggested = false; if (!answer.includes(SEP)) answer += SEP; continue; }
     if (digits && !/[0-9.]/.test(ev.ch)) continue;
+    if (suggested) { answer = ''; suggested = false; }
     if (answer.length < max + (answer.includes(SEP) ? 7 : 0)) answer += ev.ch;
   }
 }

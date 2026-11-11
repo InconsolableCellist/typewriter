@@ -5,10 +5,13 @@ import { runMenu, menuState } from '../menu-runner.js';
 import { Document } from '../editor/doc.js';
 import { typingArea } from '../editor/commands.js';
 import { TASKS, menuKeys, chooseDocument, guarded } from './common.js';
+import { paginateDocument } from '../editor/paginate.js';
+import { fmt } from '../messages.js';
 
-function* create(sys) {
+function* create(sys, { preset } = {}) {
   for (;;) {
-    const ch = yield* chooseDocument(sys);
+    const ch = yield* chooseDocument(sys, preset);
+    preset = null;
     if (!ch) return null;
     if (ch.vol.find(ch.name)) { sys.messages.show('exists', { name: ch.name }); continue; }
     sys.messages.clear();
@@ -18,9 +21,10 @@ function* create(sys) {
 }
 
 /** A document to work on: it must be on the diskette, and not in use by the print queue. */
-export function* chooseExisting(sys) {
+export function* chooseExisting(sys, preset = null) {
   for (;;) {
-    const ch = yield* chooseDocument(sys);
+    const ch = yield* chooseDocument(sys, preset);
+    preset = null;
     if (!ch) return null;
     const e = ch.vol.find(ch.name);
     if (!e) { sys.messages.show('notFound', { name: ch.name, disk: ch.vol.name }); continue; }
@@ -30,8 +34,8 @@ export function* chooseExisting(sys) {
   }
 }
 
-function* revise(sys) {
-  const ch = yield* chooseExisting(sys);
+function* revise(sys, { preset } = {}) {
+  const ch = yield* chooseExisting(sys, preset);
   if (!ch) return null;
   const doc = yield* guarded(sys, ch.vol, () => Document.open(ch.vol, ch.entry));
   return doc ? yield* createRevise(sys, doc) : null;
@@ -63,4 +67,23 @@ export function* createRevise(sys, doc) {
   });
 }
 
-Object.assign(TASKS, { create, revise });
+/** Paginate Document (SS 2.5, SR 7.5): runs unattended and comes back to TYPING TASKS with a message (TB2 p.62). */
+function* paginate(sys, { preset } = {}) {
+  const ch = yield* chooseExisting(sys, preset);
+  if (!ch) return null;
+  return yield* guarded(sys, ch.vol, function* () {
+    const doc = yield* Document.open(ch.vol, ch.entry);
+    if (doc.head.preserve === 1) { yield* doc.close(); sys.messages.show('preserved'); return null; }
+    const st = menuState({ from: 1, exact: 2, adjust: 1, pageEnds: 1 });
+    const r = yield* runMenu(sys, MENUS.paginate, st, { vars: { pages: doc.pages.length }, docName: doc.name.slice(0, 20), allowEnd: true, ...menuKeys(sys) });
+    if (!r.done) { yield* doc.close(); return null; }
+    const v = st.values;
+    sys.drawStatus({ A: fmt('paginating'), B: doc.name.slice(0, 20) });
+    yield* paginateDocument(doc, v.from - 1, { exact: v.exact === 1, adjust: v.adjust === 1, pageEnds: v.pageEnds === 1 });
+    yield* doc.close();
+    sys.messages.post('paginated', { name: doc.name });
+    return null;
+  });
+}
+
+Object.assign(TASKS, { create, revise, paginate });

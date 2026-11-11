@@ -76,6 +76,7 @@ export function drawTyping(sys, ed) {
         if (typeof inf.shows === 'number') s.sym(row, col, inf.shows, attr); else s.cell(row, col, inf.shows.charCodeAt(0), attr);
       } else if (u === C.PE || symbol) s.sym(row, col, inf.sym, attr);
       else if (selected || L.attrs[j]) s.cell(row, col, 0x20, attr);
+      if (selected && L.w[j] > 1) s.attr(row, col, L.w[j], ATTR.REVERSE);
     }
     if (ed.nta != null && ed.top + r === cl) cursorCell = { row, col: ed.nta - ed.segLeft + 1 };
   }

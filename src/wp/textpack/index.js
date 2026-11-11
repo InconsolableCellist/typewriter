@@ -12,6 +12,8 @@ import { TASKS, menuKeys } from './tasks/common.js';
 import './tasks/typing.js';
 import './tasks/index.js';
 import './tasks/workdisk.js';
+import './formats.js';
+import './editor/functions.js';
 import { waitSignal } from '../sched.js';
 
 export const DEFAULT_SETTINGS = {
@@ -78,9 +80,10 @@ function flash(sys, id) {
   drawPrompt(sys, '', null);
 }
 
-function* menuScreen(sys, def, { highlight } = {}) {
+/** A task family's menu. REQST and Menu Bypass work over every one but the program diskette tasks (ORG p.446, 501). */
+function* menuScreen(sys, def, { highlight } = {}, keys = true) {
   for (;;) {
-    const r = yield* runMenu(sys, def, null, { highlight, ...menuKeys(sys) });
+    const r = yield* runMenu(sys, def, null, { highlight, ...(keys ? menuKeys(sys) : {}) });
     if (r.cancel || r.go === 'taskSelection') return { to: 'taskSelection' };
     const task = TASKS[r.go];
     if (!task) { sys.messages.show('notAvailable', { what: def.items.find((i) => i.go === r.go).item }); continue; }
@@ -90,10 +93,18 @@ function* menuScreen(sys, def, { highlight } = {}) {
   }
 }
 
+/** A Menu Bypass target: its family's program segment, then the task, then the family's menu (ORG p.445). */
+function* bypass(sys, { family, task, preset }) {
+  yield* loadSegment(sys, SEGMENT[family]);
+  const next = yield* TASKS[task](sys, { preset });
+  return next?.to ? next : { to: family };
+}
+
 const SCREENS = {
+  bypass,
   taskSelection,
   typingTasks: (sys, a) => menuScreen(sys, MENUS.typingTasks, a),
   workDiskTasks: (sys, a) => menuScreen(sys, MENUS.workDiskTasks, a),
-  programTasks: (sys, a) => menuScreen(sys, MENUS.programTasks, a),
+  programTasks: (sys, a) => menuScreen(sys, MENUS.programTasks, a, false),
   spellingTasks: (sys, a) => menuScreen(sys, MENUS.spellingTasks, a),
 };

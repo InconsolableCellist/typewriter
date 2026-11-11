@@ -4,7 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { boot, run, expectRow, expectScreen, row } from '../src/wp/testkit.js';
+import { boot, run, expectRow, expectScreen, row, findOnScreen } from '../src/wp/testkit.js';
+import { ATTR } from '../src/wp/screen.js';
 import { C } from '../src/wp/textpack/editor/codes.js';
 import { FLAG, Volume, runSync } from '../src/wp/disk/fs.js';
 
@@ -86,4 +87,241 @@ test('E12: initialise and name a new work diskette', () => {
   run(sys, 'f ENTER b ENTER g ENTER "a 2" ENTER ENTER ENTER');
   assert.ok(row(sys, 2).startsWith('CMBDSK|WORK01|'));
   assert.equal(sys.volume('WORK01').docs().length, 0);
+});
+
+// ---- M3: the editing scripts -------------------------------------------------------------------------------------
+
+const SMITH = 'Dear Mr. Smith:\n\n\tThank you for your regular order of office supplies. Your account has been credited with the payment you sent last week.\n\n\tOur new catalog will reach you shortly. It lists several items that your staff asked about during our last visit.\n\nIf you have any questions about the catalog or your account, please call me. I will be glad to help in any way that is necessary.\n\nSincerely,\n\nTom Baker\n';
+const PROMOTIONS = 'Promotions\n\n\tFirst, the spring sale starts on Monday and runs for two weeks, with every shoe in the store at a third off.\n\n\tSecond, members of the club get a free pair of socks with every pair of shoes they buy during the sale.\n\n\tThird, the store stays open until nine on Thursdays and Fridays while the sale lasts.\n';
+const TRAINING = { TRAIN: [
+  { name: 'Smith Letter', text: SMITH, comment: 'Thanks for the order' },
+  { name: 'Promotions', text: PROMOTIONS },
+  { name: 'Family', text: 'My mother told the story again at dinner, and then the others told theirs.\n' },
+  { name: 'First Letter', text: `${LETTER}\n` },
+] };
+
+const E = (sys) => row(sys, 1).slice(52, 71).trim();
+const reverseAt = (sys, r, c) => (sys.screen.attrAt(r, c) & ATTR.REVERSE) !== 0;
+
+/** Revise a training document (SS E5 step 1). */
+function revise(name, opts = {}) {
+  const b = boot({ docs: TRAINING, ...opts });
+  run(b.sys, `a ENTER b ENTER "${name}" ENTER "TRAIN" ENTER ENTER`);
+  return b;
+}
+
+/** Put the cursor under the k-th character of the first occurrence of `text` on the screen, with cursor keys only. */
+function cursorTo(sys, text, k = 0) {
+  run(sys, 'CODE+UP');
+  const at = findOnScreen(sys, text);
+  assert.ok(at, `"${text}" on the screen`);
+  if (at.row > 4) run(sys, `DOWN*${at.row - 4}`);
+  run(sys, 'CODE+LEFT');
+  for (let n = 0; sys.screen.cursor.col < at.col + k && n < 80; n++) run(sys, 'RIGHT');
+  assert.deepEqual([sys.screen.cursor.row, sys.screen.cursor.col], [at.row, at.col + k]);
+}
+
+test('E5: revise: delete a word, insert a word, replace a letter', () => {
+  const { sys } = revise('Smith Letter');
+  expectRow(sys, 6, '      Thank you for your regular order of office supplies. Your account');
+  cursorTo(sys, 'regular');
+  assert.ok(sys.screen.attrAt(6, 26) & ATTR.BRIGHT, 'the character over the cursor is highlighted');
+  assert.ok(reverseAt(sys, 3, 26), 'the scale line shows the cursor position');
+  run(sys, 'DEL');
+  expectRow(sys, 24, 'Delete what?');
+  run(sys, 'RIGHT*7');
+  for (let c = 26; c <= 33; c++) assert.ok(reverseAt(sys, 6, c), `column ${c} highlighted`);
+  assert.ok(!reverseAt(sys, 6, 34));
+  run(sys, 'ENTER');
+  expectRow(sys, 24, '');
+  expectRow(sys, 6, '      Thank you for your order of office supplies. Your account has been');
+  run(sys, '"large "');
+  expectRow(sys, 6, '      Thank you for your large order of office supplies. Your account has');
+  cursorTo(sys, 'Tom');
+  run(sys, 'CODE+INSERT/REPLACE');
+  assert.equal(row(sys, 1).slice(42, 46), 'Repl');
+  run(sys, '"R"');
+  assert.ok(findOnScreen(sys, 'Rom Baker'));
+  run(sys, 'CODE+INSERT/REPLACE');
+  assert.equal(row(sys, 1).slice(42, 46), 'Ins ');
+  run(sys, 'END');
+  expectRow(sys, 4, '                       TYPING TASKS');
+  assert.match(storedText(sys, 'TRAIN', 'Smith Letter'), /your large order of office/);
+  assert.match(storedText(sys, 'TRAIN', 'Smith Letter'), /Rom Baker/);
+});
+
+test('E5: CANCL at "Delete what?" clears the highlighting and the prompt', () => {
+  const { sys } = revise('Smith Letter');
+  cursorTo(sys, 'regular');
+  run(sys, 'DEL RIGHT*7 CANCL');
+  expectRow(sys, 24, '');
+  assert.ok(!reverseAt(sys, 6, 27));
+  expectRow(sys, 6, '      Thank you for your regular order of office supplies. Your account');
+});
+
+test('E6: delete a whole paragraph by a target string; delete a blank line', () => {
+  const { sys } = revise('Smith Letter');
+  cursorTo(sys, 'If');
+  const r = sys.screen.cursor.row;
+  run(sys, 'DEL "necessary."');
+  assert.ok(reverseAt(sys, r, 2) && reverseAt(sys, r + 1, 2), 'the paragraph is highlighted');
+  const end = findOnScreen(sys, 'necessary.');
+  assert.ok(reverseAt(sys, end.row, end.col + 9) && !reverseAt(sys, end.row, end.col + 10), 'through the first "necessary."');
+  run(sys, 'ENTER');
+  assert.equal(findOnScreen(sys, 'If you have'), null);
+  assert.equal(row(sys, r).trim(), '↲', 'the cursor is on the blank line the paragraph left');
+  // The blank line left behind: its return shows highlighted, and DEL ENTER removes it.
+  cursorTo(sys, 'Sincerely');
+  run(sys, 'UP');
+  assert.equal(E(sys), "Req'd Carrier Ret");
+  assert.equal(row(sys, sys.screen.cursor.row)[1], '↲');
+  const before = findOnScreen(sys, 'Sincerely').row;
+  run(sys, 'DEL ENTER');
+  assert.equal(findOnScreen(sys, 'Sincerely').row, before - 1);
+});
+
+test('E7: move a paragraph', () => {
+  const { sys } = revise('Promotions');
+  cursorTo(sys, 'First');
+  run(sys, 'CODE+LEFT');
+  assert.equal(E(sys), 'Tab');
+  assert.equal(row(sys, 6)[1], '⇥', 'the tab glyph under the cursor');
+  run(sys, 'MOVE');
+  expectRow(sys, 24, 'Move what?');
+  run(sys, 'RETURN RETURN');
+  assert.ok(reverseAt(sys, 6, 10) && reverseAt(sys, 7, 2) && reverseAt(sys, 8, 2), 'the paragraph and its blank line');
+  run(sys, 'ENTER');
+  expectRow(sys, 24, 'To where?');
+  cursorTo(sys, 'Third');
+  run(sys, 'CODE+LEFT ENTER');
+  expectRow(sys, 24, '');
+  const at = (w) => findOnScreen(sys, w).row;
+  assert.ok(at('Second,') < at('First,') && at('First,') < at('Third,'), 'second, first, third');
+  assert.equal(E(sys), 'Tab', 'the cursor is on the first unit of the moved text');
+  assert.equal(sys.screen.cursor.row, at('First,'));
+});
+
+test('E7: copy within the page; move to another page with GO TO at "To where?"', () => {
+  const { sys } = boot({ docs: { TRAIN: [{ name: 'Two', text: 'Alpha paragraph.\n\nBeta paragraph.\n\fGamma paragraph.\n' }] } });
+  run(sys, 'a ENTER b ENTER "Two" ENTER "TRAIN" ENTER ENTER');
+  cursorTo(sys, 'Beta');
+  run(sys, 'COPY RETURN ENTER CODE+DOWN ENTER');
+  expectRow(sys, 6, ' Beta paragraph.');
+  expectRow(sys, 7, ' Beta paragraph.');
+  cursorTo(sys, 'Alpha');
+  run(sys, 'MOVE RETURN ENTER');
+  expectRow(sys, 24, 'To where?');
+  run(sys, 'GO TO ENTER');
+  assert.equal(row(sys, 2).slice(35, 48).trim(), 'Pg. 2');
+  run(sys, 'ENTER');
+  expectRow(sys, 4, ' Alpha paragraph.');
+  expectRow(sys, 5, ' Gamma paragraph.');
+  run(sys, 'GO TO "1" ENTER');
+  assert.equal(row(sys, 2).slice(35, 48).trim(), 'Pg. 1');
+  assert.equal(findOnScreen(sys, 'Alpha'), null, 'gone from page 1');
+  run(sys, 'GO TO "7" ENTER');
+  assert.equal(row(sys, 2).slice(35, 48).trim(), 'Pg. 2', 'past the end: the last page');
+  assert.equal(E(sys), '');
+  assert.equal(row(sys, sys.screen.cursor.row)[sys.screen.cursor.col - 1], '▲', 'on its last Page End');
+});
+
+test('E8: FIND goes forward, inside words too; FIND ENTER repeats', () => {
+  const { sys } = revise('Family');
+  run(sys, 'FIND');
+  expectRow(sys, 24, 'Find what?');
+  run(sys, '"the" ENTER');
+  const mother = findOnScreen(sys, 'mother');
+  assert.deepEqual([sys.screen.cursor.row, sys.screen.cursor.col], [4, mother.col + 2]);
+  run(sys, 'FIND ENTER');
+  assert.equal(sys.screen.cursor.col, findOnScreen(sys, 'the story').col);
+  run(sys, 'FIND ENTER');
+  assert.equal(sys.screen.cursor.col, findOnScreen(sys, 'then').col);
+  run(sys, 'FIND ENTER FIND ENTER FIND ENTER');           // the others, others, theirs
+  assert.deepEqual([sys.screen.cursor.row, sys.screen.cursor.col], [5, findOnScreen(sys, 'theirs').col]);
+  const col = sys.screen.cursor.col;
+  run(sys, 'FIND ENTER');
+  assert.equal(sys.screen.cursor.col, col, 'not found: the cursor stays');
+  assert.match(row(sys, 25), /Not found/);
+  run(sys, 'FIND "x" CANCL');
+  expectRow(sys, 24, 'Find what?');
+  run(sys, 'CANCL');
+  expectRow(sys, 24, '');
+});
+
+test('E9: paginate a long document', () => {
+  const { sys, devices } = boot();
+  run(sys, 'a ENTER a ENTER "Change" ENTER "TRAIN" ENTER b ENTER a ENTER "a 2" ENTER ENTER ENTER ENTER');
+  assert.equal(row(sys, 2).slice(49, 58).trim(), 'Ln. 7');
+  const tones = devices.log.tones.length;
+  for (let k = 1; k <= 56; k++) {
+    run(sys, `"Line ${k} of the notice." RET`, { gap: 0.05 });
+    if (k === 26) assert.equal(devices.log.tones.length, tones, 'no beep up to the last typing line');
+    if (k === 27) assert.equal(row(sys, 2).slice(49, 58).trim(), 'Ln. 61');
+  }
+  assert.ok(devices.log.tones.slice(tones).some((t) => t.ms === 60), 'a beep after typing Ln. 60');
+  assert.equal(row(sys, 2).slice(35, 48).trim(), 'Pg. 1', 'typing goes on, all on one page');
+  run(sys, 'END');
+  run(sys, 'c ENTER "Change" ENTER "TRAIN" ENTER');
+  const grid = fixture('paginate').split('\n');
+  for (let r = 3; r <= 24; r++) expectRow(sys, r, r === 9 ? '  a   Paginate From Page               1        1 - 1' : grid[r - 1]);
+  run(sys, 'ENTER');
+  expectRow(sys, 4, '                       TYPING TASKS');
+  run(sys, 'MSG');
+  assert.match(row(sys, 25), /\(Change\) paginated/);
+  run(sys, 'b ENTER ENTER ENTER ENTER');
+  assert.equal(row(sys, 2).slice(35, 48).trim(), 'Pg. 1');
+  run(sys, 'CODE+DOWN');
+  assert.equal(row(sys, 2).slice(49, 58).trim(), 'Ln. 61', 'page 1 ends after the last typing line: 27 double-spaced lines');
+  run(sys, 'DOWN');
+  assert.equal(row(sys, 2).slice(35, 48).trim(), 'Pg. 2');
+  expectRow(sys, 4, ' Line 28 of the notice.');
+  run(sys, 'GO TO "3" ENTER');
+  assert.equal(row(sys, 2).slice(35, 48).trim(), 'Pg. 3');
+  expectRow(sys, 4, ' Line 55 of the notice.');
+});
+
+test('E11: duplicate a document onto another diskette', () => {
+  const { sys, devices } = boot({ work: ['TRAIN', 'DISK02'], docs: TRAINING });
+  run(sys, 'b ENTER');
+  devices.remove(0);
+  devices.insert(0, 'DISK02');
+  sys.runUntilIdle();
+  run(sys, 'b ENTER');
+  expectScreen(sys, fixture('duplicate-document'));
+  run(sys, '"a First Letter" ENTER "b TRAIN" ENTER "c First Letter" ENTER "d DISK02" ENTER');
+  for (const r of [9, 10, 12, 13]) assert.ok(reverseAt(sys, r, 38), `choice on row ${r} highlighted`);
+  expectRow(sys, 13, '  d   Diskette Name                  DISK02');
+  run(sys, 'ENTER');
+  run(sys, 'MSG');
+  assert.match(row(sys, 25), /\(First Letter\) duplicated\./);
+  assert.equal(storedText(sys, 'DISK02', 'First Letter'), storedText(sys, 'TRAIN', 'First Letter'));
+  // END before the final ENTER stops it.
+  run(sys, 'b ENTER "a Promotions" ENTER "b TRAIN" ENTER "c Promotions" ENTER "d DISK02" ENTER END');
+  assert.equal(sys.volume('DISK02').find('Promotions'), null);
+});
+
+test('E13: show codes; find the format change and open it', () => {
+  const { sys } = revise('Promotions');
+  cursorTo(sys, 'Second');
+  run(sys, 'CODE+LEFT CHG FMT');
+  expectRow(sys, 4, '                          FORMAT SELECTION');
+  assert.equal(row(sys, 1).slice(0, 13), 'Format Change');
+  run(sys, 'a ENTER "a 2" ENTER ENTER ENTER');
+  assert.equal(row(sys, 2).slice(49, 58).trim(), 'Ln. 12', 'the cursor is back where it was');
+  run(sys, 'DOWN');
+  assert.equal(row(sys, 2).slice(49, 58).trim(), 'Ln. 14', 'double spacing from the change on');
+  run(sys, 'CODE+SCREEN FORMAT');
+  expectRow(sys, 4, '                             SCREEN FORMAT');
+  run(sys, '"a 1" ENTER ENTER');
+  assert.equal(row(sys, 4).slice(0, 12), ' Promotions↲', 'every code shows');
+  assert.equal(row(sys, 6)[1], '⇥');
+  run(sys, 'CODE+UP FIND CHG FMT');
+  expectRow(sys, 24, 'Find what? ⒡');
+  run(sys, 'ENTER');
+  assert.equal(E(sys), 'Line Format Change');
+  assert.equal(row(sys, sys.screen.cursor.row)[sys.screen.cursor.col - 1], '⒡');
+  run(sys, 'ENTER');
+  expectRow(sys, 4, '                          FORMAT SELECTION');
+  run(sys, 'ENTER');
+  assert.equal(E(sys), 'Line Format Change', 'back in the text, on the code');
 });

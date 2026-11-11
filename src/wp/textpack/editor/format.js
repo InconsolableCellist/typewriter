@@ -55,7 +55,7 @@ function take(dst, src, keys) {
 export function applyChange(f, obj, doc, alt) {
   const out = copyFormat(f);
   switch (obj.kind) {
-    case 'line': case 'margins': case 'page': case 'type': Object.assign(out, copyFormat({ ...out, ...obj.values })); break;
+    case 'set': return copyFormat({ ...out, ...obj.values });
     case 'retAll': return copyFormat(doc);
     case 'retLine': take(out, doc, [...GROUP.line, ...GROUP.margins]); break;
     case 'retType': out.typestyle = doc.typestyle; break;
@@ -67,4 +67,24 @@ export function applyChange(f, obj, doc, alt) {
 }
 
 /** Whether a change ends an indent level (SR 4.5): any page or line format change and every return code. */
-export function cancelsIndent(obj) { return obj.type === 'fmt' && obj.kind !== 'type'; }
+export function cancelsIndent(obj) {
+  return obj.type === 'fmt' && !(obj.kind === 'set' && Object.keys(obj.values).every((k) => k === 'typestyle'));
+}
+
+/** The values of `f` that differ from `base`: what a format change made with CHG FMT records. */
+export function diffFormat(f, base) {
+  const out = {};
+  for (const k of Object.keys(f)) {
+    const same = k === 'tabs' ? JSON.stringify(f.tabs) === JSON.stringify(base.tabs) : f[k] === base[k];
+    if (!same) out[k] = k === 'tabs' ? f.tabs.map((t) => ({ ...t })) : f[k];
+  }
+  return out;
+}
+
+/** Status-line name of a format change by what it changes (ORG p.559): page, typestyle only, or line. */
+export function changeName(values) {
+  const keys = Object.keys(values);
+  if (keys.some((k) => GROUP.page.includes(k) || GROUP.hf.includes(k))) return 'Page Format Change';
+  if (keys.length && keys.every((k) => k === 'typestyle')) return 'Typestyle Chg';
+  return 'Line Format Change';
+}

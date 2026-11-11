@@ -781,6 +781,24 @@ Choices the research and this document left open, made while building M1 to M3, 
 | Erase or Initialize | A blank diskette is initialized: every data track written (about 37 s on 2D), then `Type new diskette name; press ENTER.` (ours). A named one is erased (label, map, index) and keeps its name. The second ENTER of E12 answers `Contents of diskette will be erased. Press ENTER to continue or press CANCL.` (ours) | TP4 p.2, 3; SS E12 |
 | Index display | 15 documents a screen; the arrow keys page a screen at a time; names cut to 18 characters as the grid's columns allow | SS 2.8; ORG p.132 |
 | Completion messages | Work diskette completions are posted to the message queue (indicator and long beep), like the other completion messages | TB1 p.13 |
+| Suggested names | The first character typed replaces a suggestion; BKSP edits it; CANCL clears it. The scripts type names over suggestions | SS E3, E9; TB1 p.12, 13 |
+| Selecting by typing | Typed characters build a string, and the highlight runs through its first occurrence after where typing began; when the string does not occur, the last character alone moves to its next occurrence, so each SPACE takes one more word | TB1 p.23; ORG p.352, 355 |
+| Selecting by RET | RET extends to the next required line end, CODE+RET to the next line end of any kind | ORG p.354 |
+| Selection and pages | A DEL, MOVE, COPY or OVERSTRIKE highlight stays on its page; at "To where?" the cursor may go to another page, by GO TO too | ORG p.355; TB2 p.117 |
+| Page End in a deletion | Deleting the Page End that closes a page joins the next page onto it; the document's last Page End stays | ORG p.489 |
+| E6 blank line | The blank line's code reads `Req'd Carrier Ret`: with the default Non-Coded setting RET gives a required return. SS writes `Carrier Return` | ORG p.246, 505; SS E6 |
+| FIND | From the unit after the cursor through the following pages. The argument is what the keys give; CHG FMT matches any format change, INSTR any keep, OVERSTRIKE any overstrike code. No match: the cursor stays, a short beep, `Not found.` (ours) | ORG p.380 to 382; 13.3 |
+| GLOBAL | From the cursor to the end of the document. Automatic reports "phrases found", Prompted "phrases changed", as ORG has it (TB2 p.135 differs). A word is letters, digits and apostrophes. A replacement re-adjusts its paragraph | ORG p.388 to 393 |
+| GO TO | ENTER alone on the last page stays there; a page that does not exist goes to the last Page End | ORG p.393, 394 |
+| Format change codes | One code per CHG FMT, holding every value changed; its name follows what it changes (page, typestyle only, line). ENTER on it reviews and rewrites it. A change re-adjusts the rest of its page | ORG p.303, 384, 385, 559 |
+| CHG FMT within a line | A FORMAT SELECTION with Typestyle Number (same pitch only) and Return Typestyle; its layout is ours | SR 4.13 |
+| Menus with no choices | ENTER on an empty prompt leaves a menu that shows "When finished with this menu, press ENTER." (FORMAT SELECTION) | SS 2.4 |
+| Overstrike | The highlighted characters show as the overstrike character | ORG p.484 ("sometimes only the overstriking character shows") |
+| Pagination | The document from the chosen page is one stream: adjusted, then cut so each page fits between the First and Last Typing Lines; a Required Page End ends a page; a keep moves whole to the next page. With Exact Line Count No, a paragraph's last line is kept on its page (one line past the Last Typing Line) and its first line is not left alone at a page foot. Adjust Page Endings No keeps the pages and adjusts within them. All pages are renumbered with whole numbers | ORG p.210, 211, 490, 491; ORG p.175 |
+| Menu Bypass | `create` and `revise` go to CREATE OR REVISE DOCUMENT (ORG), not straight to the typing area (TB1 p.42). The diskette is taken without asking when one work diskette is in place. Format items act only where allowed: margins, line format and return line format at a line start; page format, header and footer, return all, begin using document or alternate format at the page start. Not over TASK SELECTION or the program diskette tasks | ORG p.445 to 448 |
+| Duplicate and Condense Diskette | The receiving diskette must be named and keeps its name. Condense erases it, then writes the documents in creation order, so they lie unfragmented | ORG p.118, 135; SR 9 |
+| Recover Documents | Each document left open is named, ENTER recovers it; a page that cannot be read becomes a Substitute code; the free map is rebuilt from what the index reaches | ORG p.218, 219, 497 |
+| REQST | Not over the program diskette tasks | ORG p.501 |
 
 ---
 
@@ -1035,6 +1053,13 @@ menu runner, messages, virtual devices, the diskette layout the program load nee
 M2 done (2026-11-11): diskette layout and file system, create and revise, the typing screen with insert and
 replace, adjust, returns, tabs and required codes, cursor, scrolling, segmenting, page ends, END, the index display
 and Work Diskette Tasks a to d and g. Tests: `wp_editor` (E2, E12), `wp_typing`, `wp_fs`, `wp_buffer`, `wp_workdisk`.
+
+M3 done (2026-11-11): DEL, MOVE, COPY, OVERSTRIKE, FIND, GLOBAL, GO TO, GET; the format menus (FORMAT SELECTION and
+its variants, LINE FORMAT, MARGINS AND TABS, PAGE FORMAT, HEADER AND FOOTER values) and format change codes;
+SCREEN FORMAT; INSTR keeps; pagination; Menu Bypass; Work Diskette Tasks e, f and h. Tests: `wp_editor` (E5 to E9,
+E11, E13), `wp_functions`. Not done in M3: header and footer text (its two menu items answer "not available"),
+the LINE ADJ hyphenation prompt (it comes with dictionary hyphenation in M8), END cancelling a pagination under
+way, KYB CHG (one keyboard only). Print and Spell answer "not available" until M5 and M8.
 
 ---
 

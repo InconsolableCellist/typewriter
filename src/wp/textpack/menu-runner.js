@@ -114,7 +114,7 @@ export function* runMenu(sys, def, st = null, opts = {}) {
     const typed = answer;
     answer = '';
     if (typed.trim() === '') {
-      if (hasChoices) { sys.messages.clear(); return { done: true }; }
+      if (hasChoices || def.finished) { sys.messages.clear(); return { done: true }; }
       const e = opts.onEmpty?.();
       if (e) return e;
       if (opts.highlight) return { go: def.items.find((it) => it.id === opts.highlight).go, item: opts.highlight };

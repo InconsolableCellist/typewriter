@@ -201,7 +201,7 @@ function screenHorizontal(ed, right) {
 const ARROW = { UP: -1, DOWN: 1 };
 
 /** The code a key gives, by the WORK STATION DESCRIPTION (SR 4.2, 4.3). */
-function codeFor(sys, ev) {
+export function codeFor(sys, ev) {
   const s = sys.settings;
   if (ev.control) return { RETURN: C.ZICR, z: C.SUB }[ev.name] ?? null;
   if (ev.code) {
@@ -216,17 +216,25 @@ function codeFor(sys, ev) {
   return { RETURN: s.reqCR === 2 ? C.RCR : C.CR, TAB: C.TAB, INDEX: C.IDX }[ev.name] ?? null;
 }
 
+/** The cursor and screen keys; true if `ev` was one. Shared by the typing area and the editing functions. */
+export function* moveKey(ed, ev) {
+  if (ARROW[ev.name] && ev.code) boundary(ed, ev.name);
+  else if ((ev.name === 'LEFT' || ev.name === 'RIGHT') && ev.code) boundary(ed, ev.name);
+  else if (ARROW[ev.name]) yield* vertical(ed, ARROW[ev.name]);
+  else if (ev.name === 'LEFT' || ev.name === 'RIGHT') horizontal(ed, ev.name === 'RIGHT' ? 1 : -1);
+  else if (ev.name === 'SCREEN DOWN') yield* screenVertical(ed, !ev.code);
+  else if (ev.name === 'SCREEN RIGHT') screenHorizontal(ed, !ev.code);
+  else return false;
+  relayout(ed);
+  return true;
+}
+
 export function* handle(sys, ed, ev) {
   for (const f of FUNCTIONS) {
     if (f.match(ev, ed)) { const r = yield* f.run(sys, ed, ev); return r; }
   }
   if (ev.code && ev.name === '8') { ed.insert = !ed.insert; return; }
-  if (ARROW[ev.name] && ev.code) { boundary(ed, ev.name); return; }
-  if ((ev.name === 'LEFT' || ev.name === 'RIGHT') && ev.code) { boundary(ed, ev.name); return; }
-  if (ARROW[ev.name]) { yield* vertical(ed, ARROW[ev.name]); return; }
-  if (ev.name === 'LEFT' || ev.name === 'RIGHT') { horizontal(ed, ev.name === 'RIGHT' ? 1 : -1); return; }
-  if (ev.name === 'SCREEN DOWN') { yield* screenVertical(ed, !ev.code); return; }
-  if (ev.name === 'SCREEN RIGHT') { screenHorizontal(ed, !ev.code); return; }
+  if (yield* moveKey(ed, ev)) return;
   if (isCancel(ev)) { ed.sel = null; ed.prompt = null; ed.fn = ''; sys.messages.clear(); return; }
   if (ev.name === 'BKSP' && !ev.code) { backspace(ed); return; }
   if (ev.name === 'END' && !ev.code) { yield* ed.doc.close(); return 'end'; }

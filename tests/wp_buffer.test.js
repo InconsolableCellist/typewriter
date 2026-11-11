@@ -78,7 +78,7 @@ test('layout: begin/end underline, character underline, half index', () => {
 });
 
 test('layout: the line count follows the spacing; a format change applies from its line', () => {
-  const objects = [{ type: 'fmt', kind: 'line', values: { spacing: 2 } }];
+  const objects = [{ type: 'fmt', kind: 'set', values: { spacing: 2 } }];
   const units = [...u('one\ntwo\n'), OBJ | 0, ...u('three\nfour\n'), C.PE];
   const L = layoutPage(units, objects, ctx());
   assert.deepEqual(L.lines.map((l) => l.ln), [7, 8, 9, 11, 13]);
@@ -118,14 +118,14 @@ test('adjust maps unit indices across the returns it moves', () => {
 
 test('format changes: return codes and the two stored formats', () => {
   const doc = copyFormat(DEFAULT_FORMAT), alt = { ...copyFormat(DEFAULT_FORMAT), lm: 10 };
-  let f = applyChange(doc, { type: 'fmt', kind: 'margins', values: { lm: 25, rm: 70 } }, doc, alt);
+  let f = applyChange(doc, { type: 'fmt', kind: 'set', values: { lm: 25, rm: 70 } }, doc, alt);
   assert.equal(f.lm, 25);
   f = applyChange(f, { type: 'fmt', kind: 'retLine' }, doc, alt);
   assert.equal(f.lm, 18);
   f = applyChange(f, { type: 'fmt', kind: 'altFmt' }, doc, alt);
   assert.equal(f.lm, 10);
   const st = { fmt: doc, indent: null, doc, alt };
-  walkLine([OBJ | 0, 0x41, C.RCR], [{ type: 'fmt', kind: 'margins', values: { lm: 30 } }], 0, st);
+  walkLine([OBJ | 0, 0x41, C.RCR], [{ type: 'fmt', kind: 'set', values: { lm: 30 } }], 0, st);
   assert.equal(st.fmt.lm, 30);
 });
 

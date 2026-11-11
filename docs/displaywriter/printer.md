@@ -2,8 +2,7 @@
 
 Scope: the daisywheel "printwheel" printer of the 1981 word processor (models A01 at 40 cps and A02 at 60 cps; the
 1983 A03/A04 redesign is noted where it adds facts). Every value has a citation. **Inferred** marks a value derived
-by us, with the method stated. Repository ground rule: none of the names or marks below go into the product. They
-are here only to identify the sources.
+by us, with the method stated. Names and marks are allowed for this machine (owner's decision, `plan.md`).
 
 ## Sources and citation keys
 

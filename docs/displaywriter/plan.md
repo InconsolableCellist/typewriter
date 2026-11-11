@@ -29,9 +29,9 @@ Corrections to the assumptions below, from the research:
   S544-2122, is not on Bitsavers).
 
 ## Ground rules
-- **No names or marks.** As with `element1971` and `docs/assets.md`, nothing shows a manufacturer name, logo or
-  model number. The menu name is something like "Dedicated word processor, c. 1980", and the definition id
-  is `wordproc1980`.
+- **Names and marks: allowed for this machine** (owner, 2026-11-11). Unlike `element1971`, the power-on screen
+  shows the initials and the menu titles keep the product names, as documented. The definition id is
+  `wordproc1980`.
 - **No original code, ROMs or font art.** Behaviour, layouts, prompts, timings and dimensions come from the
   documentation. The CRT character set is our own bitmap font, drawn to match the look (cell size, stroke weight,
   descenders), not traced from a dump. Message wording that has to match for authenticity is short functional UI
@@ -175,14 +175,17 @@ Phase 1 (research) is done. The build follows the milestones of `architecture.md
 - **Printer: the daisywheel printwheel printer (5218)** (decided).
 - **Software release: Textpack 4** (decided).
 
-## Decisions proposed by the architecture (owner to confirm)
-Defaults the build proceeds on; details and the full list are in `architecture.md` section 13.2.
-- **Warm start.** The machine is found switched on at TASK SELECTION with a sheet in the printer. `?cold` gives the
-  full power-on and program load.
-- **No names or marks on screen either.** Blocks in place of the maker's initials on the power-on screen, and the two
-  menu titles that contain the program's product name are shortened.
-- **One combined program diskette** in the left drive (a documented configuration), so there is no volume swapping.
-- **Diskettes persist** between visits. A document left open needs recovery, as after a power cut.
-- **An auto-feed hand** lays the next sheet in the printer when it asks, with a toggle for manual feed.
+## Owner's decisions on the architecture's questions (2026-11-11)
+Full table in `architecture.md` section 13.2.
+- **Warm start** at TASK SELECTION. `?cold` is fully physical: switch on each unit at its own power switch, then the
+  real self-test and program load.
+- **Names and marks are allowed** on this machine (initials on the power-on screen, product names in menu titles).
+- **One combined program diskette** (a documented configuration), no volume swapping.
+- **Diskettes persist** between visits; a document left open needs recovery, as after a power cut.
+- **Sheet feeder, no hand model:** the printer's sheet feeder feeds each sheet automatically, with a toggle for
+  manual feed.
 - **Real keyboard:** the two Alt keys are CODE and ENTER, Enter is RETURN, function keys reach the function clusters.
 - **Ashtray** on top of the diskette unit; fresh paper and finished pages in front of the printer.
+- **Night:** just dim, lit mainly by the green glow of the screen.
+- **Spelling:** a shipped public-domain word list (browsers have no script API for spell checking), in M8.
+- **Stereo** output; **three sample documents** of our own text on the first work diskette.

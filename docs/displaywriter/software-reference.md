@@ -1,7 +1,7 @@
 # Textpack 4 editor: reimplementation reference
 
 Behavioural specification of the Textpack 4 (1982) word-processing program for the `wordproc1980` machine,
-written to implement `src/wp/` from. Behaviour only: no code, no ROM, no names or marks in the UI
+written to implement `src/wp/` from. Behaviour only: no code, no ROM (names and marks in the UI are allowed for this machine)
 (see `docs/displaywriter/plan.md`, *Ground rules*). The operator-visible wording of prompts and messages is
 quoted exactly; everything else is summarised.
 

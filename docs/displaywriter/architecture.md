@@ -551,15 +551,17 @@ Feed is friction, with motorised rollers and bail (PR 2). `PaperSim`'s existing 
 `printer.paper` gives their angles for this path, the cam drives `paperRelease` and `bail`, and the index
 stepper turns the platen. The rear slot and its window stand in for the paper table.
 
-- **Load.** The operator (or the scripted hand in `src/interact/wp-hands.js`, on a click of the fresh stack)
-  lays a sheet in the slot: `soft.spawnSheet({ onTable })`. LOAD on the panel, or the software's PAPER load,
+- **Load.** The operator (or, on a click of the fresh stack, an invisible scripted grab in `src/interact/wp-hands.js`,
+  like the typewriter's `Hands`; there is no hand model) lays a sheet in the slot: `soft.spawnSheet({ onTable })`. LOAD on the panel, or the software's PAPER load,
   opens the bail and feeds until the first-writing-line sensor sees the edge. The sensor reads
   `env.paperEdgeV`, a new field of `SoftWorld.env()` (the sheet's `v` at the print point, or -1).
 - **Eject.** At a page end the software sends PAPER release. The controller feeds forward until the sheet leaves
   the rollers; `PaperSim.onEjected` fires as it does today, the sheet is parked, `onSheetRetired` archives the
   page image and `DeskPile` receives it at `deskLayout.pagePile`. No new page path.
-- **Auto-feed hand.** A panel toggle, on by default: when the printer reports Load Paper, the scripted hand
-  feeds the next sheet, so a multi-page document prints unattended. Off gives the manual-feed procedure.
+- **Sheet feeder.** The 5218's optional sheet feeder, modelled as part of the printer: a hopper on top of the
+  rear slot holding a stack, and a pick roller driven by the feed cam that pushes the top sheet into the slot when
+  the printer reports Load Paper, so a multi-page document prints unattended. A toggle (on by default) switches it
+  off for manual feed: the hopper empties onto the fresh stack and the operator lays each sheet. No hand model.
 
 ---
 
@@ -845,8 +847,8 @@ or in a slot guide.
 - **By hand.** Drag a diskette from the holder; near an open slot it enters the guide and becomes the drive's
   `disketteSlide` DOF, pushed home against friction and an end stop. The lever is a rotary `dof` part. It cannot
   close on a half-inserted diskette (contact), and can close on an empty slot.
-- **By click.** Clicking a diskette in the holder, or the lever of a loaded drive, runs a scripted hand
-  (`wp-hands.js`) that does the same thing through the same grabs.
+- **By click.** Clicking a diskette in the holder, or the lever of a loaded drive, runs an invisible scripted grab
+  (`wp-hands.js`, no hand model) that does the same thing through the same contacts.
 
 The kit tells the mechanism which diskette entered a guide (`{ dev: 'disk', op: 'media', drive, mediaId, type }`).
 The label shows the diskette's name as handwriting and the media mark.
@@ -894,7 +896,7 @@ Our own drawing, to the metrics of HW 1.5: capitals and digits 9 rows on rows 3 
 descenders to row C, underscore on row D, cursor on row E. Source of truth: `tools/wp/font8x16.txt` (one glyph
 per block of sixteen 8-character lines). `tools/wp/build_font.mjs` writes `src/wp/font/font8x16.js` (8 KB of
 data, committed). Font 1 is text at Latin-1 positions; font 2 holds the code symbols of SR 5, the scale-line
-marks, the status-line bars and the blocks of the start-up pattern. A Node test checks the metrics.
+marks, the status-line bars and the large initials of the start-up screen, drawn as block glyphs. A Node test checks the metrics.
 
 ### 9.3 Cost
 
@@ -982,7 +984,7 @@ Each one ends with the listed tests green, all existing tests green, and somethi
 | **M3 Editing** | DEL, MOVE, COPY, OVERSTRIKE, FIND, GLOBAL, GO TO, GET; format menus and format codes; display codes; underline, centre, half index; pagination; Menu Bypass; remaining work diskette tasks | E5 to E9, E11, E13 | Node only |
 | **M4 On the desk** | Font; CRT; station, display and keyboard models and views; key mechanism, scanner, click and beep; station fan; `KitDevices` with virtual diskette and printer devices; IndexedDB; real-keyboard map; "Screen" card. Picker entry on | `wp_keyboard.test.js`; font metrics; `e2e/wp.mjs` (boot warm, type, screen text and pixels, persistence across reload) | **First public version**: a working editor on a CRT with a mechanical keyboard. Printing queues and asks for a printer |
 | **M5 Printer, headless** | `stepper.js`, `printer-mech.js`, `printer-ctl.js`, the calibration tool, `glyphs_wp`, formatter, spooler | `wp_printer.test.js` (6.6 item 3 and 12.1); formatter units; E3, E4 against the virtual printer | Node only |
-| **M6 Printer on the desk** | Printer model and view; `SoftWorld` with `origin`; film ribbon; load, eject, pile; panel keys, LEDs and display; cover; Print Point window; printer sound; auto-feed hand | e2e: print a two-line document, count strikes, ink where expected, one page in the pile, PDF export | Printing |
+| **M6 Printer on the desk** | Printer model and view; `SoftWorld` with `origin`; film ribbon; load, eject, pile; panel keys, LEDs and display; cover; Print Point window; printer sound; sheet feeder | e2e: print a two-line document, count strikes, ink where expected, one page in the pile, PDF export | Printing |
 | **M7 Diskette unit** | `diskette-mech.js`, `diskette-ctl.js` replacing the virtual disk in the browser; model; levers, insertion, holder; drive sound | `wp_disk.test.js`; e2e: remove and insert the work diskette, open a document | Diskettes are physical |
 | **M8 Finish** | Cold start and self-test; CRT warm-up; errors (no diskette, lever opened mid-write, cover open, out of paper, end of ribbon); Spelling Tasks with the dictionary (E10); `docs/ARCHITECTURE.md` and `docs/assets.md` sections; budget audit | E10; error paths; size and frame-time checks in e2e | Complete |
 
@@ -1049,24 +1051,24 @@ All Node tests run under `node --test tests/*.test.js`; browser tests only throu
 | IndexedDB unavailable or cleared | `MemoryStore` fallback with a message; first-run diskettes are rebuilt |
 | Screen text too small on phones and small windows | The Screen card (9.4) |
 
-### 13.2 Open questions for the owner
+### 13.2 Owner's answers (2026-11-11)
 
-Each has the default this design proceeds on.
+These replace the defaults that were proposed here.
 
-| # | Question | Default |
+| # | Question | Decision |
 |---|---|---|
-| 1 | Warm start (decision 9), or always the authentic 35 s power-on? | Warm; `?cold` for the full sequence |
-| 2 | The power-on screen shows the maker's initials, and two menu titles contain the program's product name. The ground rule forbids names and marks | Three large blocks in place of the initials; titles `REQUEST TASKS` and `PROGRAM DISKETTE TASKS`; the status code `*11*` stays |
-| 3 | One combined program diskette, or the three volumes with their swaps? | Combined |
-| 4 | Persist diskettes between visits? A document left open needs recovery next time, as after a power cut | Persist; authentic recovery; a leave-page prompt while a document is open |
-| 5 | Manual sheet feed for every page, or help? | An auto-feed hand, on by default, with a toggle |
-| 6 | The real-keyboard map (5.3), in particular the two Alt keys as CODE and ENTER, and Enter as RETURN | As tabled |
-| 7 | Where the ashtray stands "on the machine" | On top of the diskette unit |
-| 8 | Fresh paper and finished pages | Both in front of the printer, left of the keyboard |
-| 9 | Night lighting with the lamp gone | A dim room light with no visible fixture |
-| 10 | Spelling needs an English word list of about 40 000 words | A public-domain list, in M8; Spelling Tasks shows "not available" until then |
-| 11 | Stereo output for this machine | Yes |
-| 12 | Sample documents on the first-run work diskette | Three short pieces of our own text |
+| 1 | Start-up | Warm start at TASK SELECTION by default. The cold start (`?cold`) is fully physical: the user switches on each unit at its own power switch (electronics module, printer), then the real self-test and loading sequence runs |
+| 2 | Names and marks | **The no-marks rule is lifted for this machine.** The power-on screen shows the initials and the menu titles keep the product names, as documented. Everything is still drawn by us: our own font and artwork, no ROM or code |
+| 3 | Program diskettes | One combined program diskette (a real configuration) |
+| 4 | Persistence | Diskettes persist between visits; authentic recovery of a document left open; a leave-page prompt while one is open |
+| 5 | Paper feed | **No hand model.** The printer's sheet feeder (a real 5218 option) feeds each sheet automatically, on by default, with a toggle for feeding by hand |
+| 6 | Real-keyboard map | As tabled in 5.3 |
+| 7 | Ashtray | On top of the diskette unit |
+| 8 | Paper | Fresh stack and finished pile in front of the printer, left of the keyboard |
+| 9 | Night lighting | Just dim, with the green glow of the screen as the main light; no fixture |
+| 10 | Spelling | A public-domain word list in M8. Browsers have no API that checks a word list from script (the `spellcheck` attribute only underlines editable fields), so the list ships with the machine |
+| 11 | Stereo | Yes |
+| 12 | Sample documents | Three short pieces of our own text |
 
 ### 13.3 Gaps in the research
 

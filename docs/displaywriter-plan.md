@@ -147,11 +147,6 @@ Pages typed and printed go to the existing finished-page pile and PDF export, as
 - **Desk layout** (decided). The machine dominates the desk: the printer on the left, the dual 8-inch diskette
   unit on the right, and the display station in the middle at the front with the keyboard in front of it. The
   ashtray sits on the machine. The desk lamp is removed for lack of space, and the cables run out at the back.
-  Check the measured footprints against the 2.0 x 1.2 m desk (`desk.glb`); if they do not fit, widen the desk or
-  put one unit on its own stand beside it.
-- **Printer: open, daisywheel recommended.** Options: the printwheel printer (5218), which is a new mechanism and the
-  one most associated with the machine; the element printer (5215), which reuses the `element1971` action but
-  repeats it; or the ink-jet (5258), which is quiet and least interesting to simulate.
-- **Software release: open, Textpack 4 recommended**, because its manual is confirmed on Bitsavers. Options:
-  Textpack 1 or 2 (original, fewer features), 4 (mid-life), or 6 (late, most to build). Choose whichever has
-  complete operator guides on Bitsavers.
+  If the measured footprints do not fit the 2.0 x 1.2 m desk (`desk.glb`), widen the desk (decided).
+- **Printer: the daisywheel printwheel printer (5218)** (decided).
+- **Software release: Textpack 4** (decided).

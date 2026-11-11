@@ -97,6 +97,7 @@ export class WpSystem {
           if (this.program.loaded) this.sched.spawn(this.mountDrive(evt.drive), 'mount');
           this.sched.signal('diskReady', evt.drive);
         } else if (evt.ev === 'notReady') {
+          if (this.drives[evt.drive]) this.drives[evt.drive].detached = true;
           this.drives[evt.drive] = null;
           this.refreshDiskNames();
           this.sched.signal('diskGone', evt.drive);

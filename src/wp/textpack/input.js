@@ -51,7 +51,7 @@ export function* promptLine(sys, textKey, { suggest = '', max = 60, args, sep = 
       || (sep && e.code && e.name === 'm') || (e.code && e.name === 'MSG'));
     if (isEnter(ev)) return answer;
     if (ev.name === 'END' || (ev.code && ev.name === 'MSG')) return null;
-    if (isCancel(ev)) { if (answer) answer = ''; else return null; continue; }
+    if (isCancel(ev)) { sys.messages.clear(); if (answer) answer = ''; else return null; continue; }
     if (ev.name === 'BKSP') { answer = answer.slice(0, -1); continue; }
     if (ev.code && ev.name === 'm') { if (!answer.includes(SEP)) answer += SEP; continue; }
     if (digits && !/[0-9.]/.test(ev.ch)) continue;

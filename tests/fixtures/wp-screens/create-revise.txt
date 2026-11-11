@@ -1,4 +1,4 @@
-                    |Letter              |    |    |                   |
+                    |~~~~~~~~~~~~~~~~~~~~|    |    |                   |
 ~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
 
                      CREATE OR REVISE DOCUMENT
@@ -22,4 +22,3 @@
 When finished with this menu, press ENTER.
 
 Type ID letter to choose ITEM; press ENTER:
-

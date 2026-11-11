@@ -9,6 +9,7 @@ import { VirtualDevices } from './devices/virtual.js';
 import { Library, programDiskette, workDiskette, blankDiskette, PROGRAM_NAME } from './disk/library.js';
 import { MemoryStore } from './disk/store.js';
 import { POS, strokeBytes, keyForChar, TYPEMATIC } from './keys.js';
+import { writeDocument } from './textpack/samples.js';
 
 const ALIAS = {
   RET: 'RETURN', '↓': 'DOWN', '↑': 'UP', '←': 'LEFT', '→': 'RIGHT', SPACE: 'SPACE',
@@ -21,11 +22,15 @@ const TWO_WORD = ['GO TO', 'PAGE END', 'CHG FMT', 'LINE ADJ', 'SCREEN DOWN', 'SC
   'COLUMN ADD', 'MENU BYPASS', 'SCREEN FORMAT', 'SCREEN UP', 'SCREEN LEFT', 'KYB CHG', 'KEY SAVE', 'WORD UND', 'BEGIN UND',
   'END UND'];
 
-/** A system with virtual devices: program diskette left, work diskettes as given (first one right). */
-export function boot({ work = ['TRAIN'], blank = [], cold = false, type = '2D', setup, settle = !cold } = {}) {
+/**
+ * A system with virtual devices: the program diskette left, the first work (or blank) diskette right. `docs` puts
+ * documents on work diskettes: { TRAIN: [{ name, text, comment }] }, text as samples.js types it.
+ */
+export function boot({ work = ['TRAIN'], blank = [], docs = {}, cold = false, type = '2D', setup, settle = !cold } = {}) {
   const library = new Library();
   library.add(programDiskette());
   for (const name of work) library.add(workDiskette(name, name, type));
+  for (const [disk, list] of Object.entries(docs)) for (const d of list) writeDocument(library.get(disk), d.name, d.text, d);
   for (const id of blank) library.add(blankDiskette(id, type));
   setup?.(library);
   const right = work[0] ?? blank[0];

@@ -46,6 +46,7 @@ export class Volume {
     this.total = dataSectors(this.m);
     this.mapSectors = Math.ceil(this.total / 8 / SECTOR);
     this.formatted = false;
+    this.detached = false;       // the diskette was taken out after this volume was mounted
     this.label = null;
     this.map = new Uint8Array(this.mapSectors * SECTOR);
     this.entries = [];          // by slot; null for a free slot
@@ -58,6 +59,7 @@ export class Volume {
   // ---- transfers -------------------------------------------------------------------------------------------------
 
   *xfer(track, side, sector, count, write) {
+    if (this.detached) throw new DiskError('notReady', this.drive);
     if (this.drive === null) return;
     const r = yield* io({ dev: 'disk', op: 'transfer', drive: this.drive, track, side, sector, count, write });
     if (!r.ok) throw new DiskError(r.error, this.drive);
@@ -126,7 +128,11 @@ export class Volume {
     for (let lsn = this.mapSectors; lsn !== END;) {
       const [s] = yield* this.read([lsn]);
       this.indexLsns.push(lsn);
-      for (let k = 0; k < 2; k++) this.entries.push(decodeEntry(s.subarray(4 + k * ENTRY, 4 + (k + 1) * ENTRY)));
+      for (let k = 0; k < 2; k++) {
+        const e = decodeEntry(s.subarray(4 + k * ENTRY, 4 + (k + 1) * ENTRY));
+        if (e) e.slot = this.entries.length;
+        this.entries.push(e);
+      }
       lsn = s[0] | (s[1] << 8);
     }
   }
@@ -278,18 +284,22 @@ export class Volume {
 
   // ---- documents -------------------------------------------------------------------------------------------------
 
-  *readHead(e) { return decodeJson((yield* this.readChain(e.first)).bytes); }
+  *readHead(e) {
+    const { bytes, lsns } = yield* this.readChain(e.first);
+    return { head: decodeJson(bytes), lsns };
+  }
 
   *readPage(lsn) {
-    const { bytes } = yield* this.readChain(lsn);
+    const { bytes, lsns } = yield* this.readChain(lsn);
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const n = dv.getUint32(0, true);
     const units = new Uint16Array(n);
     for (let i = 0; i < n; i++) units[i] = dv.getUint16(4 + 2 * i, true);
     const objects = decodeJson(bytes.subarray(4 + 2 * n));
-    return { units, objects };
+    return { units, objects, lsns };
   }
 
+  /** A page as a new chain; returns its sectors. */
   *writePage(units, objects) {
     const json = encodeJson(objects);
     const b = new Uint8Array(4 + 2 * units.length + json.length);
@@ -297,26 +307,17 @@ export class Volume {
     dv.setUint32(0, units.length, true);
     for (let i = 0; i < units.length; i++) dv.setUint16(4 + 2 * i, units[i], true);
     b.set(json, 4 + 2 * units.length);
-    return (yield* this.writeChain(b))[0];
+    return yield* this.writeChain(b);
   }
 
-  /** Replace a document's head; the old head chain is freed after the new one is written. */
-  *writeHead(e, head) {
-    const old = e.first != null ? yield* this.chainLsns(e.first) : [];
-    e.first = (yield* this.writeChain(encodeJson(head)))[0];
-    this.release(old);
-  }
+  *writeJson(v) { return yield* this.writeChain(encodeJson(v)); }
 
   /** Every sector a document occupies: its head and its pages. */
   *docLsns(e) {
-    const head = yield* this.readHead(e);
-    const out = yield* this.chainLsns(e.first);
+    const { head, lsns } = yield* this.readHead(e);
+    const out = [...lsns];
     for (const p of head.pages) out.push(...(yield* this.chainLsns(p.lsn)));
     return out;
-  }
-
-  *updateCount(e) {
-    e.count = (yield* this.docLsns(e)).length;
   }
 
   *deleteDoc(e) {

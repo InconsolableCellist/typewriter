@@ -768,6 +768,19 @@ Choices the research and this document left open, made while building M1 to M3, 
 | Index entries | 124 bytes, two per sector: a chain sector's 4-byte header leaves 252 bytes, so 8.2's 128-byte entries do not fit two to a sector | 8.2 |
 | Logical sectors | Both sides of a track before the next track, so one seek serves 52 sectors of a 2D diskette. The program load then takes 8.8 s from the lever closing | 8.1; SS 1 (about 10 s) |
 | Drive | The head unloads after 2 s with no command; spin-up to ready 0.5 s | 8.4 (head load assumed); 12.1 (ready under 0.6 s) |
+| Right margin | A word moves down when its last character would stand past the right margin (90). The E2 grid's third line has 74 characters, one past it, so the E2 fixture differs from the grid in rows 6 to 8 | SR 4.1 ("would pass the right margin"); SS E2 |
+| Name prompts | The diskette-name prompt always follows the document-name prompt, suggesting the last diskette used (blank at first), even with one work diskette in place; the last document is suggested on every document-name prompt, Create included | SS E2, E3; TB1 p.12 |
+| End of page | The Page End that closes a page always shows `▲` and is not named in field E | SS 3.1 (E blank on entry); TB1 p.10 |
+| Regular return | CODE+RET gives a regular carrier return, which adjusting moves like a wrap return: with Adjust Line Endings Yes it is adjusted away; it stands where adjusting is off | SR 4.2 |
+| BKSP | Does nothing at the start of a line, so it never joins lines | ORG p.258 ("ignored at the left margin") |
+| Non-Typing Area | Up and down keep the cursor's column, past a short line's end if need be; characters typed there are dropped with no click | ORG p.560 |
+| Pages and the cursor | Down from the last line shows the next page, up from the first line the previous page's last line | 13.3; SR 4.7 (SCREEN UP to the previous page) |
+| Page numbers | A page made by PAGE END at the end of a document is the next whole number; one made inside it is n.1, then n.1.1 | ORG p.489, 490 |
+| Storing | Page and head chains are written and marked in the free map before the index entry is rewritten; the entry write is the commit | 8.2 |
+| Diskette out | A volume whose diskette is taken out is detached; END then reports `Error on Diskette` and leaves the typing area with the document still marked open | TB1 p.11; ORG p.132, p.497 |
+| Erase or Initialize | A blank diskette is initialized: every data track written (about 37 s on 2D), then `Type new diskette name; press ENTER.` (ours). A named one is erased (label, map, index) and keeps its name. The second ENTER of E12 answers `Contents of diskette will be erased. Press ENTER to continue or press CANCL.` (ours) | TP4 p.2, 3; SS E12 |
+| Index display | 15 documents a screen; the arrow keys page a screen at a time; names cut to 18 characters as the grid's columns allow | SS 2.8; ORG p.132 |
+| Completion messages | Work diskette completions are posted to the message queue (indicator and long beep), like the other completion messages | TB1 p.13 |
 
 ---
 
@@ -1018,6 +1031,10 @@ word-processor host yet and throws for it; the kit does not create a mechanism u
 M1 done (2026-11-11): the software kernel in `src/wp/` (scheduler, screen, keys, start-up, menus as data and the
 menu runner, messages, virtual devices, the diskette layout the program load needs, testkit), tested by
 `tests/wp_kernel.test.js`. Decisions taken while building are listed in 7.9.
+
+M2 done (2026-11-11): diskette layout and file system, create and revise, the typing screen with insert and
+replace, adjust, returns, tabs and required codes, cursor, scrolling, segmenting, page ends, END, the index display
+and Work Diskette Tasks a to d and g. Tests: `wp_editor` (E2, E12), `wp_typing`, `wp_fs`, `wp_buffer`, `wp_workdisk`.
 
 ---
 

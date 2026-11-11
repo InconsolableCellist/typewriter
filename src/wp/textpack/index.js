@@ -8,6 +8,10 @@ import { Navigate, getKey, isEnter, drawPrompt } from './input.js';
 import { fmt } from './messages.js';
 import { DEFAULT_FORMAT, copyFormat } from './editor/format.js';
 import { reIpl } from '../rom.js';
+import { TASKS, menuKeys } from './tasks/common.js';
+import './tasks/typing.js';
+import './tasks/index.js';
+import './tasks/workdisk.js';
 import { waitSignal } from '../sched.js';
 
 export const DEFAULT_SETTINGS = {
@@ -17,9 +21,6 @@ export const DEFAULT_SETTINGS = {
 };
 
 const SEGMENT = { typingTasks: 'typing', workDiskTasks: 'workdisk', spellingTasks: 'spelling' };
-
-/** Tasks reached from the task menus, by `go` name; filled in by the task modules. */
-export const TASKS = {};
 
 export function* shell(sys) {
   let next = { to: 'taskSelection' };
@@ -51,29 +52,6 @@ export function* loadSegment(sys, name) {
 function* waitMounted(sys) {
   for (let k = 0; k < 2 && !sys.programVolume(); k++) yield* waitSignal('mounted');
   return sys.programVolume();
-}
-
-/** The keys every task menu answers besides its own: REQST opens the request menu over it. */
-export function menuKeys(sys) {
-  return {
-    accepts: (e) => e.name === 'REQST' && !e.code,
-    onKey: function* (ev) {
-      if (ev.name === 'REQST') yield* requestTasks(sys);
-      return null;
-    },
-  };
-}
-
-/** TEXTPACK REQUEST TASKS (REQST, ORG p.238): returns to where the operator was. */
-export function* requestTasks(sys) {
-  for (;;) {
-    const r = yield* runMenu(sys, MENUS.requestTasks, null, {});
-    if (!r.go) return;
-    const task = TASKS[r.go];
-    if (!task) { sys.messages.show('notAvailable', { what: MENUS.requestTasks.items.find((i) => i.go === r.go).item }); continue; }
-    yield* task(sys, { from: 'request' });
-    return;
-  }
 }
 
 function* taskSelection(sys, { highlight } = {}) {

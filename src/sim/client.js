@@ -234,7 +234,7 @@ class SimClient {
     this.replayHandover();
     this.unlocking = false;
     // Recorded samples arrive asynchronously; until then the modal body is the only voice.
-    loadSamples(audioContext, (pcm, manifest) => host.loadSamples(pcm, manifest), this.machine.audio?.samples ?? null);
+    loadSamples(audioContext, (pcm, manifest) => host.loadSamples(pcm, manifest), this.machine.audio?.samples ?? null, !!this.machine.audio?.alone);
     return this;
   }
 

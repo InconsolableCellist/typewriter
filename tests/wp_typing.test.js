@@ -197,7 +197,7 @@ test('the short beep at the Last Typing Line; typing goes on past it', () => {
   assert.equal(devices.log.tones.length, before, 'no beep on the last typing line itself');
   run(sys, 'RET');
   assert.equal(Ln(sys), 'Ln. 61');
-  assert.deepEqual(devices.log.tones.slice(before).map((t) => t.ms), [60]);
+  assert.deepEqual(devices.log.tones.slice(before).map((t) => t.ms), [200]);
   run(sys, '"more"');
   assert.equal(text(sys, 23), 'more▲');
 });

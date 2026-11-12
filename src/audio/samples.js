@@ -9,9 +9,15 @@ async function fetchSprite(audioContext, dir) {
   return { manifest, pcm: audio.getChannelData(0).slice(), rate: audio.sampleRate };
 }
 
-/** `extraDir` names a second sprite for this machine, appended to the shared one so both sets are available. */
-export async function loadSamples(audioContext, install, extraDir = null) {
+/**
+ * `extraDir` names a second sprite for this machine, appended to the shared one so both sets are available; with `alone`
+ * it is the machine's only sprite (the word processor's) and the typewriters' is not fetched. A machine whose
+ * `audio.samples` is false loads none.
+ */
+export async function loadSamples(audioContext, install, extraDir = null, alone = false) {
+  if (extraDir === false) return;
   try {
+    if (alone && extraDir) { const own = await fetchSprite(audioContext, extraDir); install(own.pcm, own.manifest); return; }
     const main = await fetchSprite(audioContext, 'samples');
     if (!extraDir) { install(main.pcm, main.manifest); return; }
     const extra = await fetchSprite(audioContext, extraDir);

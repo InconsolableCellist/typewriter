@@ -405,8 +405,9 @@ Pointer presses use the existing `key` drag kind against `keyX`.
 
 The system raises Click after each keystroke it accepts and each repeat it honours (HW 2.3). So the click is a
 software output: `devices.kbd.click()` becomes `sim.command({ dev: 'kbd', op: 'click' })`, and the controller
-drives the speaker with a 0.5 ms pulse. `devices.kbd.tone(ms)` gates a 1 kHz square wave: 60 ms for the short
-beep, 400 ms for the long one (durations are assumptions). The speaker model is in 10.2.
+drives the speaker with a 0.5 ms pulse. `devices.kbd.tone(ms)` gates a 1 kHz square wave: 200 ms for the short
+beep, 400 ms for the long one (the short beep as measured in the owner's recording, 10.4; the long one assumed). The
+speaker model is in 10.2 and 10.4.
 
 ### 5.5 Latency budget
 
@@ -1157,8 +1158,8 @@ opens by itself when the raster on screen would be under 560 pixels wide.
 the same way, reads `WP_PORT` forces and `WAC` events, and renders three buses with constant-power pan (printer
 left, station and keyboard centre, diskette unit right) through the existing `Room` and `Limiter`. The worklet
 writes left and right when the engine reports `stereo`. `Bank` from `modal.js` provides the resonant bodies.
-`loadSamples` is a no-op until `audio.samples` names a sprite; with `samples: false` the client does not fetch
-the typewriter sprite at all.
+`loadSamples` installs the recorded sprite `audio.samples` names (`samples_wp`, 10.4); with `alone` the client fetches
+only that sprite, not the typewriters', and with `samples: false` none.
 
 ### 10.2 Voices (`src/audio/wp-synth.js`)
 
@@ -1229,14 +1230,90 @@ recording and no dB figure (PR 10, HW 1.9).
     start computes its running speed, and the printer fan's. `{ dev: 'station', op: 'power', on }` (or
     `setStationPower`) switches it, and the diskette motors with it; the rocker DOF arrives with the station's view.
 11. **No CRT whine by default** (10.2): `machine.audio.crtWhine`, a level factor, enables a faint 15.72 kHz line
-    whistle while the station is powered.
+    whistle while the station is powered. Revised in 10.4: on, at 15.03 kHz, as measured.
 12. **Rendering is skipped** while the output is null or audio is disabled (`LocalHost` before the first gesture); the
     mechanism runs as before, and the voices start again from the present state, without a jump.
 13. **Budget**: the voices may take 1 microsecond a sample (5 % of a 48 kHz sample period; 12.2 allows a load of 0.35
     while printing and the mechanism alone takes about 0.2 in Node). Measured in Node with a line printing, a line feed
     and a transfer at once: 0.45 to 0.6 microseconds (rendering, plus 0.03 for reading the mechanism); idle about 0.2.
-14. **Not voiced here**: the keyboard (its speaker stays on the main thread, `wp-speaker.js`), paper sliding
-    (`setPaperSpeed` is a no-op), the power rockers and the ribbon knob.
+14. **Not voiced here**: the keyboard (its speaker stays on the main thread, `wp-speaker.js`; its keys are voiced
+    there too, 10.4), paper sliding (`setPaperSpeed` is a no-op), the power rockers and the ribbon knob.
+
+### 10.4 Decisions made with the owner's recordings (sound)
+
+The owner supplied two recordings (`public/assets/audio/SOURCES.md`): a running Displaywriter, from a video of the
+machine with its printer, and typing on an IBM beam spring keyboard. `tools/audio/cut_wp_samples.py` finds and classifies
+the events in both (its docstring lists them with their times), cuts them, takes the noise of the room and the running
+machine out of the cuts by static spectral subtraction, and writes two sprites with manifests; the level ratios it
+measures are in `tools/audio/wp_levels.json`. Each manifest item carries `scale`, the source amplitude of one unit of
+the sprite, so a cut played at its `scale` keeps its recorded level.
+
+1. **What the recordings hold.** The Displaywriter recording (197 s): the machine off until 52 s (handling, speech;
+   unused); power on at 52.0 (100 Hz hum: a 50 Hz line); a 15.03 kHz line from 60.7 s (the display's deflection);
+   murmured speech to 93 s; from 93.9 s the machine alone: program load (a first long access at 93.9, single steps
+   0.3 to 0.7 s apart from 96.4 to 105.9, sharp head-load clacks at 99.5, 104.6 and 106.4, seeks of 100 to 480 ms to
+   117.2), idle, keystrokes from 128.5 with the speaker's beep at 160.1 (960 Hz, 0.2 s), eleven seeks of about 250 ms
+   from 172.4 to 178.6, idle 184 to 190.5. No printing anywhere (no train of strikes), and no lever, insertion or
+   recalibrate against the stop that could be told apart. The beam spring recording (240 s): six finger snaps to
+   3.8 s (unused), then fast typing, about 17 key sounds a second, in a reverberant room.
+2. **The sprites.** `samples_wp` (117 KB, 14.4 s, Opus 64 kbps mono): 16 single steps, 3 head loads, 19 seek bodies
+   (the run of each buzz, within 10 dB of its loudest), and two 4 s loops of the idle machine (118.6 s) split at
+   450 Hz: `bed_motor` (the twice-line hum and the drive motors' tones) and `bed_fan` (the air). `samples_wpkeys`
+   (74 KB, 6.5 s): 16 presses and 16 releases of the alphanumeric keys, 8 and 8 of the wide keys and of the space bar.
+   A press is a key sound louder than the median of its neighbours within 1.5 s, a release one quieter; the space bar
+   and wide keys are the presses (and releases) with the most low-frequency body (the top 15 % and the next 15 %).
+   This is a classification by sound, not an identification of keys.
+3. **Triggers, all from the mechanism** (`src/audio/wp-sampler.js` in the worklet). A head stepper's rotor crossing a
+   track: a step with none in the 20 ms before it plays a single step's ring; a later one plays a 12 ms Hann grain from
+   anywhere in a recorded seek body, so at the drive's 5 ms step time the grains overlap into the recorded buzz, and a
+   seek of any length sounds like the recorded ones. The level follows the rotor's speed at the crossing. The pad
+   landing (`WAC.HEAD_LAND`, the arm's speed) plays a head-load clack; the pad lifting the same at 0.35. So 10.3 item 2
+   no longer holds for the recordings: the sampler reads the `WAC` queue before the engine clears it.
+4. **The hums run while powered**: `bed_motor` at the mean of the two drive motors' (speed / running speed)^2, a
+   quarter of that with the power off (the hum stops with the line; the rotors' tones run down); `bed_fan` at
+   (station fan speed / running speed)^2.5. The recorded line was 50 Hz and this machine's is `station.mainsHz` (60), so
+   `bed_motor` plays at 1.2 times its rate: the hum at 120 Hz, the motors' tones up with their speed. While the sprite
+   is loaded the synthesised station fan, drive motors, drive air and head load are off and the step and stop-pin
+   couplings scaled (`REPLACED`, `SCALED`); the printer, its fan, the levers, collet, diskette slide and the jacket's rub
+   stay synthesised. The recorded sounds join after the synthetic room and radiation filter, since they carry their own.
+5. **The keyboard on the main thread.** Its mechanism and scanner already run there (`KeyboardHost`), driven by the
+   real keyboard's events; moving them to the audio thread would route every finger and scan byte through the worklet
+   and back. So the keyboard's mechanism queues its own acoustic events (`KeyboardMech.sound`: a stem meeting its felt,
+   with its speed, and coming home on its top stop), the host hands them out with their mechanism time, and
+   `src/audio/wp-keys.js` plays the cuts through Web Audio on the worklet's `AudioContext`, each scheduled a fixed 10 ms
+   after the frame plus its offset into the frame, so presses and releases keep their spacing. A felt rebound within 30 ms
+   is part of the press. Each key keeps three cuts of its set, in turn, with 10 % level and 1.5 % rate variation; level
+   goes with (speed / 1.29 m/s)^0.8 for a press, (speed / 1 m/s)^0.6 for a release.
+6. **Levels.** One gain for each sprite. The worklet sets the idle machine's mid at -50 dBFS (the synthesis's assumed
+   idle), and every cut plays at its recorded scale times that gain, so the recording's balance holds. Targets, in dB
+   over the idle machine's RMS, as measured in the recording and in `tests/wp_audio.test.js` (tolerance):
+
+   | Sound | Recorded | Measured in Node | Test |
+   |---|---|---|---|
+   | Seek, RMS | +12.4 | +13.1 | 3 dB |
+   | Single step, peak | +17.2 | +15.9 | 4 dB |
+   | Head load, peak | +17.3 | +19.3 | 4 dB |
+   | Recalibrate, RMS (from the first access at 93.9 s) | +15 | +14.5 | |
+   | Key press, peak (median) | +26.3 | +26.3 | 2 dB |
+   | Key release, peak | +15.3 | +21 (the beam spring recording's own 5 dB under a press) | |
+   | Beep, RMS | +17.5 | set by `WpSpeaker` (out 0.072) | |
+   | Display line whistle, RMS | -18.0 | `audio.crtWhine` 14 | |
+   | Printer strike, peak | none recorded | +31.5 (assumed level kept) | 28 to 38 dB |
+
+   A strike stands about 19 dB over a seek, and a key press about 14 dB over a seek.
+7. **The speaker** (`wp-speaker.js`): the beep is a 960 Hz square wave, as measured (the manual's 1 kHz is nominal);
+   the cone's resonance moves to 2.9 kHz (+4 dB) with a dip at 4.8 kHz (-20 dB), fitted to the recorded beep's third
+   and fifth harmonics; its output is set for the beep's recorded level; the short beep lasts 200 ms, as the one beep
+   in the recording does (`TONE_MS` in `src/wp/index.js`; the long beep's 400 ms stays assumed).
+8. **The display's line whistle** is on (decision 11 above revised): 15.03 kHz, 18 dB under the idle machine.
+9. **Cost**: with the sprite loaded, printing, a line feed and a transfer at once, the voices take about 0.6 to 0.7
+   microseconds a sample in Node (the sampler adds about 0.05); within 13's budget.
+10. **Left open.** The printer has no recording: strikes, carrier, selection, line feed, paper handling, the cover and
+   the printer fan stay synthesised, at the levels assumed in 10.3. A recording of the 5218 printing would replace them
+   the same way. The lever, the diskette's insertion and a recalibrate against the stop pin are not in the recording.
+   The press and release split, and the key classes, are by level and spectrum; a recording of single keys, the space
+   bar and the wide keys pressed slowly would make them exact. The power rocker's clack (52.0 s) is recorded but the
+   rocker is not yet a mechanism, so it is not played.
 
 ---
 
@@ -1446,7 +1523,7 @@ These replace the defaults that were proposed here.
 | Ribbon type and lift | Multi-strike film, three tracks | `printer.ribbon` |
 | Key force curve beyond 40 to 75 g and 1.5 to 3 mm | 5.1 | `keyboard` |
 | Keyboard scan period, link byte time | 5 ms, 1 ms | `keyboard.scan` |
-| Beep lengths; whether invalid keys beep | 60 ms and 400 ms; no beep, no click | `messages.js`, `keys.js` |
+| Beep lengths; whether invalid keys beep | 200 ms (measured, 10.4) and 400 ms; no beep, no click | `messages.js`, `keys.js` |
 | Phosphor type and persistence; refresh; cursor blink | Two-component decay 30 and 250 ms; no flicker; steady cursor | `display.phosphor` |
 | Blink rate of the message arrow | 2.5 Hz | `display.blinkHz` |
 | Head-load time | 40 ms | `diskettes.headLoadS` |

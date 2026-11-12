@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                     HYPHENATE AND PAGINATE DOCUMENT
+
+                                       YOUR     POSSIBLE
+  ID  ITEM                             CHOICE   CHOICES
+
+  a   Dictionary Hyphenation             1      1 = Prompted 2 = Automatic
+                                                3 = None
+  b   Paginate, Hyphenate, Spell
+      Check from Page                    1      1 - 2
+  c   Paginate On Exact Line Count       2      1 = Yes      2 = No
+  d   Print Paginated Pages              1      1 = Yes      2 = No
+  e   Paper Handling                     1      1 = Cut Paper,Manual Feed
+                                                2 = Cut Paper,Automatic Feed
+                                                3 = Continuous Paper
+
+
+
+
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:
+

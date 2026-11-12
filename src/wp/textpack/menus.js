@@ -324,12 +324,44 @@ export const MENUS = {
   },
 
   spellingTasks: {
-    title: 'SPELLING TASKS', at: [4, 26], head: [[6, 15, 'ID'], [6, 21, 'ITEM']], cols: { id: 15, item: 21 },
+    title: 'SPELLING TASKS', at: [4, 26], head: [[6, 13, 'ID'], [6, 19, 'ITEM']], cols: { id: 13, item: 19 },
     items: [
-      ...['Check Document', 'Load Supplement', 'Clear Supplement', 'Store Supplement On Program Diskette',
-        'Choose Spelling Language Dictionary', 'Create Document Of Supplemental Words']
-        .map((item, i) => ({ id: 'abcdef'[i], row: 8 + i, item, na: true })),
+      { id: 'a', row: 8, item: 'Check Document', go: 'checkDocument' },
+      { id: 'b', row: 9, item: 'Load Supplement', go: 'loadSupplement' },
+      { id: 'c', row: 10, item: 'Clear Supplement', go: 'clearSupplement' },
+      { id: 'd', row: 11, item: 'Store Supplement On Program Diskette', go: 'storeSupplement' },
+      { id: 'e', row: 12, item: 'Choose Spelling Language Dictionary', na: true },
+      { id: 'f', row: 13, item: 'Create Document Of Supplemental Words', go: 'supplementDocument' },
       { id: 'g', row: 14, item: 'Go To Task Selection', go: 'taskSelection' },
+    ],
+  },
+
+  // CHECK DOCUMENT (ORG p.108, SS 2.9). The YOUR CHOICE values stand two columns right of the heading, as in the grid.
+  checkDocument: {
+    title: 'CHECK DOCUMENT', at: [4, 27], cols: { id: 2, item: 5, choice: 36, possible: 43 }, finished: true,
+    head: [[6, 34, 'YOUR'], [6, 43, 'POSSIBLE'], [7, 2, 'ID'], [7, 5, 'ITEM'], [7, 34, 'CHOICE'], [7, 43, 'CHOICES']],
+    text: [[13, 5, 'For Spelling Check']],
+    items: [
+      { id: 'a', row: 9, item: 'Kind Of Spelling Check', key: 'kind', kind: 'enum', values: [1, 2, 3],
+        possible: ['1 = Prompted  2 = Automatic', '3 = None'] },
+      { id: 'b', row: 12, item: 'System Page Number(s)', key: 'pages', kind: 'pages', max: 10 },
+      { id: 'c', row: 15, item: 'Hyphenation/Pagination', key: 'hyphenate', kind: 'enum', values: [1, 2], possible: ['1 = Yes       2 = No'] },
+    ],
+  },
+
+  // HYPHENATE AND PAGINATE DOCUMENT (ORG p.167, SS 2.9).
+  hyphenatePaginate: {
+    title: 'HYPHENATE AND PAGINATE DOCUMENT', at: [4, 22], cols: { id: 3, item: 7, choice: 42, possible: 49 }, finished: true,
+    head: [[6, 40, 'YOUR'], [6, 49, 'POSSIBLE'], [7, 3, 'ID'], [7, 7, 'ITEM'], [7, 40, 'CHOICE'], [7, 49, 'CHOICES']],
+    text: [[12, 7, 'Check from Page']],
+    items: [
+      { id: 'a', row: 9, item: 'Dictionary Hyphenation', key: 'hyphenation', kind: 'enum', values: [1, 2, 3],
+        possible: ['1 = Prompted 2 = Automatic', '3 = None'] },
+      { id: 'b', row: 11, choiceRow: 12, item: 'Paginate, Hyphenate, Spell', key: 'from', kind: 'int', min: 1, max: 1, possible: ['1 - {pages}'] },
+      { id: 'c', row: 13, item: 'Paginate On Exact Line Count', key: 'exact', kind: 'enum', values: [1, 2], possible: ['1 = Yes      2 = No'] },
+      { id: 'd', row: 14, item: 'Print Paginated Pages', key: 'print', kind: 'enum', values: [1, 2], possible: ['1 = Yes      2 = No'] },
+      { id: 'e', row: 15, item: 'Paper Handling', key: 'paper', kind: 'enum', values: [1, 2, 3],
+        possible: ['1 = Cut Paper,Manual Feed', '2 = Cut Paper,Automatic Feed', '3 = Continuous Paper'] },
     ],
   },
 };

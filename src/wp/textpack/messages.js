@@ -32,6 +32,19 @@ export const TEXT = {
   cancelJob: ['Type ID letter to cancel print job; press ENTER:', 'ORG p.134'],
   printNext: ['Type ID letter of document to be printed next; press ENTER:', 'TB2 p.159'],
   printingNow: ['# This document is printing now.', 'ORG p.134'],
+  retypeWord: ['Retype word; Press ENTER.', 'ORG p.110'],
+  hyphenateWhere: ['Hyphenate where?', 'TB2 p.579'],
+
+  // The CHECK SPELLING OF WORD panel (ORG p.110)
+  checkBanner: ['<===================== CHECK SPELLING OF WORD =====================>', 'ORG p.110'],
+  checkLeave: ['To leave highlighting and continue:', 'ORG p.110'],
+  checkRemove: ['To remove highlighting and continue:', 'ORG p.110'],
+  checkRetype: ['To retype and revise word:', 'ORG p.110'],
+  pressSpell: ['Press SPELL', 'ORG p.110'],
+  pressEnter: ['Press ENTER', 'ORG p.110'],
+  retypeThe: ['Retype the word.', 'ORG p.110'],
+  pressEnterDot: ['Press ENTER.', 'ORG p.110'],
+  checkWord: ['Check spelling of word:', 'ORG p.110'],
 
   // Status line 1, field A
   loadingProgram: ['Loading Program', 'ORG p.59'],
@@ -49,6 +62,7 @@ export const TEXT = {
   goToText: ['Go To', 'ours'],
   getText: ['Get', 'ours'],
   menuBypass: ['Menu Bypass', 'ours'],
+  spellCheck: ['Spell Check', 'ORG p.110'],
 
   // Messages (message line)
   exists: ['({name}) already exists.', 'TB2 p.648'],
@@ -86,6 +100,16 @@ export const TEXT = {
   firstLast: ['First typing line must not be after last typing line.', 'ours'],
   preserved: ['Preserve Page Numbers is Yes. Document not paginated.', 'ours, after ORG p.211'],
   abbrInvalid: ['({abbr}) not a valid abbreviation.', 'ours'],
+
+  // Spelling
+  spellComplete: ['Spelling Check complete. Words marked: {n}', 'TB2 p.72'],
+  supLoaded: ['Supplement loaded. {n} words now in supplement.', 'ORG p.425'],
+  supCleared: ['Supplement Cleared.', 'ORG p.305'],
+  supStored: ['Supplement stored.', 'ORG p.527'],
+  supWritten: ['Supplement words written to ({name})', 'ORG p.345'],
+  supFull: ['Supplement full. {n} words now in supplement.', 'ours, after ORG p.425, p.521'],
+  supEmpty: ['Supplement is empty.', 'ours'],
+  noDictionary: ['Spelling dictionary not available.', 'ours'],
 
   // Printing (the printer's needs and errors go to the message line, SS 0)
   printerOn: ['Turn printer on.', 'ours, after SS E3 step 5'],

@@ -65,7 +65,7 @@ export function walkLine(units, objects, start, st, { displayCodes = false, limi
         break;
       }
       case 'zero':
-        w = displayCodes ? 1 : 0;
+        w = displayCodes || (u === C.SHY && endsHere(units, objects, i + 1, limit)) ? 1 : 0;
         if (inf.obj?.type === 'fmt') {
           st.fmt = applyChange(st.fmt, inf.obj, st.doc, st.alt);
           if (cancelsIndent(inf.obj)) { st.indent = null; st.levels = 0; }
@@ -92,6 +92,16 @@ export function walkLine(units, objects, start, st, { displayCodes = false, limi
   if (ctr >= 0) centre(units, objects, start, ctr, i, P, W, base());
   if (term !== null && term !== C.CR) { st.indent = null; st.levels = 0; }
   return { start, end: i, term, P, W, overflow, brk, fmt: fmtStart, fmtEnd: st.fmt };
+}
+
+/** Whether a line ends at unit i, past zero-width codes: a syllable hyphen there shows and prints (ORG p.562). */
+function endsHere(units, objects, i, limit) {
+  for (let j = i; j < limit; j++) {
+    const u = units[j];
+    if (u === C.CR) return true;
+    if (info(u, objects).width !== 'zero') return false;
+  }
+  return false;
 }
 
 /** Centre the text after a CTR code on the position the code stands at (SR 4.16, ORG p.260). */
@@ -139,11 +149,16 @@ export function layoutPage(units, objects, ctx) {
 const PRINTING = (u) => u < 0x100 || u === C.RSP || u === C.RHY || u === C.SUB;
 const WORD_STOPS = new Set([0x20, C.CR, C.RCR, C.RTAB, C.IDX, C.PE, C.RPE, C.RBS]);
 
-/** Underlining (character, word, begin/end), half index and overstrike, as the screen shows them (SR 4.17, 4.18). */
+/**
+ * Underlining (character, word, begin/end), half index and overstrike, as the screen shows them (SR 4.17, 4.18), and
+ * the reverse video of a word between spelling marks.
+ */
 function decorate(units, objects, attrs, ovs) {
-  let und = false, half = 0, over = null;
+  let und = false, half = 0, over = null, marked = false;
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
+    if (isObj(u) && objects[objIndex(u)].type === 'smark') marked = objects[objIndex(u)].begin;
+    else if (marked && PRINTING(u)) attrs[i] |= ATTR.REVERSE;     // an unrecognised word is shown in reverse (HW 1.6)
     if (u === C.BUND) und = true;
     else if (u === C.EUND) und = false;
     else if (u === C.HUP) half = Math.min(1, half + 1);
@@ -174,24 +189,81 @@ export function paragraphAt(units, at) {
   return { ps, pe };
 }
 
+/** Run a reflow generator that asks nothing (no `decide`): the plain, synchronous adjust. */
+export function runPlain(gen) {
+  const r = gen.next();
+  if (!r.done) throw new Error('a plain reflow asked for a decision');
+  return r.value;
+}
+
 /**
  * Adjust line endings in the paragraph around `at` (Auto Adjust, LINE ADJ): take out the regular carrier returns
  * and put them back where the margins break the lines. Returns the new units and a map from old unit indices to new
  * ones (a removed return maps to the unit that followed it).
  */
-export function reflowParagraph(units, objects, at, ctx) {
+export function reflowParagraph(units, objects, at, ctx) { return runPlain(reflowWith(units, objects, at, ctx)); }
+
+/** Where a word ends for a hyphenation decision: a blank, or a code that takes a tab, ends a line or backspaces. */
+const isWordEnd = (u, objects) => u === 0x20 || (info(u, objects).width !== 'char' && info(u, objects).width !== 'zero');
+
+/**
+ * The adjust as a generator, with hyphenation decisions (SR 4.19, ORG p.395). `from`: the unit, at the start of a
+ * line of the paragraph, where adjusting begins; the lines before it keep their endings. `decide` (a generator
+ * function) is asked about each word that crosses the right margin when moving it down would end the line before the
+ * zone (Zone Width positions up to the right margin): it gets { units, wordStart, wordEnd, fits(j), lineStart } with
+ * indices into `units` as they stand, `fits(j)` telling whether a hyphen before unit j stays inside the margin, and
+ * answers null or 'down' (the word goes to the next line), 'keep' (it stays on this line, past the margin) or
+ * { at: j } (a syllable hyphen before unit j, and the line ends after it). `onlyFirst` asks about the first line only.
+ */
+export function* reflowWith(units, objects, at, ctx, { decide = null, from = null, onlyFirst = false } = {}) {
   const { ps, pe } = paragraphAt(units, at);
+  const start = from == null ? ps : Math.max(ps, Math.min(from, pe));
   const seg = [];
-  for (let j = ps; j <= pe; j++) if (units[j] !== C.CR) seg.push({ u: units[j], old: j });
+  for (let j = ps; j <= pe; j++) if (j < start || units[j] !== C.CR) seg.push({ u: units[j], old: j });
   const arr = () => seg.map((s) => s.u);
   const st0 = newState({ ...ctx, fmt: formatAt(units, objects, ps, ctx) });
   let lineStart = 0;
+  while (lineStart < start - ps) {
+    const r = walkLine(arr(), objects, lineStart, st0, { limit: start - ps });
+    if (r.end <= lineStart) break;
+    lineStart = r.end;
+  }
+  const first = lineStart;
   for (let guard = 0; guard < seg.length + 2; guard++) {
     const a = arr();
     const st = { ...st0 };
     const r = walkLine(a, objects, lineStart, st);
     if (r.overflow < 0 || r.end <= lineStart) break;
-    const b = r.brk > lineStart ? r.brk : Math.max(lineStart + 1, r.overflow);
+    let b = r.brk > lineStart ? r.brk : Math.max(lineStart + 1, r.overflow);
+    if (decide && r.brk > lineStart && !(onlyFirst && lineStart !== first)) {
+      const f = r.fmtEnd;
+      let lastPrinted = -1;
+      for (let j = r.brk - 1; j >= lineStart; j--) if (info(a[j], objects).width === 'char' && a[j] !== 0x20) { lastPrinted = r.P[j - lineStart]; break; }
+      let we = r.brk;
+      while (we < a.length && !isWordEnd(a[we], objects)) we++;
+      if (lastPrinted < f.rm - f.zone + 1 && we > r.brk) {
+        const full = [...units.slice(0, ps), ...a, ...units.slice(pe + 1)];
+        const fits = (abs) => {
+          const j = abs - ps;
+          if (j <= r.brk || j >= we) return false;
+          const hy = a[j - 1] === C.RHY || a[j - 1] === 0x2d || a[j - 1] === C.SHY;
+          let k = j - 1;
+          while (k > r.brk && info(a[k], objects).width !== 'char') k--;
+          return r.P[k - lineStart] + (hy ? 0 : 1) <= f.rm;
+        };
+        const d = yield* decide({ units: full, wordStart: ps + r.brk, wordEnd: ps + we, fits, lineStart: ps + lineStart, objects });
+        if (d === 'keep') {
+          let k = we;
+          while (k < a.length && a[k] === 0x20) k++;
+          if (k >= a.length || HARD_ENDS.has(a[k])) break;
+          b = k;
+        } else if (d && d.at != null && fits(d.at)) {
+          const j = d.at - ps;
+          if (a[j - 1] === C.RHY || a[j - 1] === 0x2d || a[j - 1] === C.SHY) b = j;
+          else { seg.splice(j, 0, { u: C.SHY, old: -1 }); b = j + 1; }
+        }
+      }
+    }
     seg.splice(b, 0, { u: C.CR, old: -1 });
     const after = { ...st0 };
     walkLine(arr(), objects, lineStart, after, { limit: b + 1 });
@@ -211,3 +283,20 @@ export function reflowParagraph(units, objects, at, ctx) {
   return { units: out, map, changed: out.length !== units.length || out.some((u, k) => u !== units[k]) };
 }
 
+/**
+ * Adjust every paragraph of a stream of units, as pagination does; `decide` as for reflowWith, given also `origin`,
+ * the index the paragraph's first unit had in the units passed in.
+ */
+export function* adjustAllWith(units, objects, ctx, { decide = null } = {}) {
+  let u = [...units];
+  let delta = 0;
+  for (let i = 0; i < u.length;) {
+    const origin = i - delta;
+    const d = decide && ((q) => decide({ ...q, origin }));
+    const before = u.length;
+    u = (yield* reflowWith(u, objects, i, ctx, { decide: d })).units;
+    delta += u.length - before;
+    i = paragraphAt(u, i).pe + 1;
+  }
+  return u;
+}

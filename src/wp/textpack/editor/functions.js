@@ -207,11 +207,12 @@ function argFor(sys, ev) {
   if (ev.name === 'CHG FMT') return { obj: ev.code ? 'keep' : 'fmt' };
   if (ev.name === 'DEL' && ev.code) return { obj: 'ovs' };
   if (ev.name === 'PAGE END') return ev.code ? C.RPE : C.PE;
+  if (ev.name === 'SPELL' && !ev.code) return { obj: 'smark', begin: true };     // a highlighted word (SR 4.26)
   return codeFor(sys, ev);
 }
 
 function argText(arg) {
-  return arg.map((x) => (typeof x === 'object' ? SYMBOL_TEXT[x.obj === 'fmt' ? SYM.FMT_CHANGE : x.obj === 'ovs' ? SYM.OVS_BEGIN : SYM.KEEP]
+  return arg.map((x) => (typeof x === 'object' ? SYMBOL_TEXT[x.obj === 'fmt' ? SYM.FMT_CHANGE : x.obj === 'ovs' ? SYM.OVS_BEGIN : x.obj === 'smark' ? SYM.SQUARE : SYM.KEEP]
     : isChar(x) ? String.fromCharCode(x) : SYMBOL_TEXT[info(x, []).sym])).join('');
 }
 
@@ -219,7 +220,9 @@ function matchAt(units, objs, i, arg) {
   for (let k = 0; k < arg.length; k++) {
     const u = units[i + k], a = arg[k];
     if (u === undefined) return false;
-    if (typeof a === 'object') { if (!isObj(u) || objs[objIndex(u)].type !== a.obj) return false; }
+    if (typeof a === 'object') {
+      if (!isObj(u) || objs[objIndex(u)].type !== a.obj || (a.begin != null && objs[objIndex(u)].begin !== a.begin)) return false;
+    }
     else if (u !== a && !(a === C.RHY && (u === 0x2d || u === C.SHY))) return false;
   }
   return true;
@@ -248,12 +251,14 @@ function* findArgument(sys, ed) {
 /** Search forward from the cursor through the rest of the document; true if found (cursor on the match). */
 export function* findNext(ed, arg) {
   const d = ed.doc;
-  let j = matchFrom(unitsArr(ed), objects(ed), arg, ed.cur + 1);
-  if (j >= 0) { moveTo(ed, j); return true; }
+  // FIND SPELL puts the cursor on the highlighted word's first character, after its mark.
+  const on = arg.length === 1 && arg[0].obj === 'smark' ? 1 : 0;
+  let j = matchFrom(unitsArr(ed), objects(ed), arg, ed.cur + 1 - on);
+  if (j >= 0) { moveTo(ed, j + on); return true; }
   for (let k = d.page.k + 1; k < d.pages.length; k++) {
     const p = yield* d.vol.readPage(d.pages[k].lsn);
     j = matchFrom(Array.from(p.units), p.objects, arg, 0);
-    if (j >= 0) { yield* gotoPage(ed, k); moveTo(ed, j); return true; }
+    if (j >= 0) { yield* gotoPage(ed, k); moveTo(ed, j + on); return true; }
   }
   return false;
 }

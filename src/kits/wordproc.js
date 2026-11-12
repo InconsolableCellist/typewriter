@@ -20,6 +20,7 @@ import { installPrinter } from './wp/printer.js';
 import { installDiskettes } from './wp/diskettes.js';
 import { createSimClient } from '../sim/client.js';
 import { loadGlyphs } from '../machine/glyphs.js';
+import { loadWordList } from './wp/wordlist.js';
 import { installPages } from '../pages/index.js';
 import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
 
@@ -76,7 +77,9 @@ export async function mount(ctx) {
   const diskettes = installDiskettes({ stage, machine, geometry, sim, unit: units.diskette, parts: parts.diskette, library, pickables });
   diskettes.onEvent((e) => sys?.deviceEvent(e));
   devices.disk = diskettes.device;
-  sys = createSystem({ devices, store, library, options: { cold: params.has('cold') } });
+  // The spelling word list is fetched only when Spelling Tasks first loads (architecture 12.3).
+  const wordList = () => loadWordList().then((b) => sys.provideWordList(b), (e) => { console.info('word list', e); sys.provideWordList(null); });
+  sys = createSystem({ devices, store, library, options: { cold: params.has('cold'), wordList } });
   loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre'] }).catch((e) => console.info('textures', e));
   const pages = installPages({ stage, soft: printer.soft, paper: printer.paper, machine: { ...printer.softMachine, deskLayout: machine.deskLayout }, interaction: { picker: { add: (e) => pickables.push(e) } }, hands: { loadPaper: () => printer.loadSheet() } });
   const t0 = performance.now();

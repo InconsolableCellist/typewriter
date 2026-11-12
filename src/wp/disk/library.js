@@ -11,7 +11,9 @@ export class Library {
 
 // Program segments, in 256-byte sectors: nucleus 180 KB, typing 60 KB, work diskette tasks 40 KB, spelling 50 KB
 // (architecture 8.2). Their sizes are what make the documented waits come out of the drive; their bytes are zeros.
-export const SEGMENTS = { nucleus: 720, typing: 240, workdisk: 160, spelling: 200 };
+// The spelling dictionary takes 128 KB beside them, about the size of our packed word list; a check reads the
+// sectors that hold its words (textpack/tasks/spell.js).
+export const SEGMENTS = { nucleus: 720, typing: 240, workdisk: 160, spelling: 200, dictionary: 512 };
 export const PROGRAM_NAME = 'CMBDSK';     // a combined program diskette (SS 0, ORG p.235)
 
 export function blankDiskette(id, type = '2D') { return createImage(id, type); }

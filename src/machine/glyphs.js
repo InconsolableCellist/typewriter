@@ -5,7 +5,8 @@
 
 const SITE_BASE = '/assets/';
 
-async function readAsset(name) {
+/** An asset's bytes: fetched in the browser, read from public/assets/ in Node. */
+export async function readAsset(name) {
   if (typeof process !== 'undefined' && process.versions?.node) {
     // Specifiers held in variables so browser bundlers never try to resolve these Node modules.
     const fsMod = 'node:fs/promises', urlMod = 'node:url';
@@ -15,11 +16,12 @@ async function readAsset(name) {
     return new Uint8Array(await readFile(path));
   }
   const r = await fetch(`${SITE_BASE}${name}`);
-  if (!r.ok) throw new Error(`glyph asset ${name}: HTTP ${r.status}`);
+  if (!r.ok) throw new Error(`asset ${name}: HTTP ${r.status}`);
   return new Uint8Array(await r.arrayBuffer());
 }
 
-async function gunzip(bytes) {
+/** Gunzip bytes (zlib in Node, DecompressionStream in the browser); bytes that are not gzip are returned as they are. */
+export async function gunzip(bytes) {
   if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return bytes;   // already unpacked on the way in
   if (typeof process !== 'undefined' && process.versions?.node) {
     const zlibMod = 'node:zlib';

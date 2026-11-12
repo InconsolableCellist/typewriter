@@ -23,10 +23,11 @@ export function drawMenu(sys, def, st, opts = {}) {
     s.put(it.row, c.item, it.item);
     (it.sub ?? []).forEach((t, k) => s.put(it.row + 1 + k, c.item + 1, t));
     if (opts.highlight === it.id) s.attr(it.row, c.item, it.item.length, ATTR.REVERSE);
-    (it.possible ?? []).forEach((t, k) => s.put(it.row + k, c.possible, t.replace(/\{(\w+)\}/g, (_, n) => show(opts.vars?.[n]))));
+    const vr = it.choiceRow ?? it.row;          // an item named on two rows has its choice on the second
+    (it.possible ?? []).forEach((t, k) => s.put(vr + k, c.possible, t.replace(/\{(\w+)\}/g, (_, n) => show(opts.vars?.[n]))));
     if (it.key && st) {
       const v = show(st.values[it.key]);
-      s.put(it.row, c.choice, v, st.values[it.key] !== st.initial[it.key] ? ATTR.REVERSE : 0);
+      s.put(vr, c.choice, v, st.values[it.key] !== st.initial[it.key] ? ATTR.REVERSE : 0);
     }
   }
   if (def.finished) s.put(22, 1, fmt('finished'));
@@ -46,7 +47,10 @@ export function validate(it, text, opts = {}) {
     case 'text': return { ok: text.length <= it.max, value: text };
     case 'name': return { ok: /^[A-Za-z0-9]{1,6}$/.test(t), value: t };
     case 'page': return { ok: t === '0' || /^\d{1,4}(\.\d){0,2}$/.test(t), value: t };
-    case 'pages': return { ok: t === '' || t.split(/\s+/).every((p) => /^\d{1,4}(\.\d){0,2}$/.test(p)), value: t };
+    case 'pages': {
+      const list = t === '' ? [] : t.split(/\s+/);
+      return { ok: list.length <= (it.max ?? 99) && list.every((p) => /^\d{1,4}(\.\d){0,2}$/.test(p)), value: t };
+    }
     default: return { ok: false };
   }
 }

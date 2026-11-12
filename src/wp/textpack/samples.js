@@ -3,7 +3,7 @@
 // would with the default WORK STATION DESCRIPTION: a newline is RET (a required carrier return), a tab TAB, a
 // hyphen a required hyphen and a form feed PAGE END. Line endings are then adjusted as Auto Adjust would.
 import { C } from './editor/codes.js';
-import { reflowParagraph, paragraphAt } from './editor/layout.js';
+import { adjustAllWith, runPlain } from './editor/layout.js';
 import { copyFormat, DEFAULT_FORMAT } from './editor/format.js';
 import { Volume, runSync } from '../disk/fs.js';
 import { Library, programDiskette, workDiskette, blankDiskette } from '../disk/library.js';
@@ -13,14 +13,7 @@ const KEY_UNIT = { '\n': C.RCR, '\t': C.TAB, '-': C.RHY, '\f': C.PE };
 export function textUnits(text) { return Array.from(text, (ch) => KEY_UNIT[ch] ?? ch.charCodeAt(0)); }
 
 /** Adjust every paragraph of a page's units. */
-export function adjustAll(units, objects, ctx) {
-  let u = [...units];
-  for (let i = 0; i < u.length;) {
-    u = reflowParagraph(u, objects, i, ctx).units;
-    i = paragraphAt(u, i).pe + 1;
-  }
-  return u;
-}
+export function adjustAll(units, objects, ctx) { return runPlain(adjustAllWith(units, objects, ctx)); }
 
 /** Write a document onto an image. `text` may hold form feeds for page ends. */
 export function writeDocument(img, name, text, { comment = '', format = DEFAULT_FORMAT, adjust = true } = {}) {

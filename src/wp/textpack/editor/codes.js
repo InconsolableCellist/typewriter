@@ -47,10 +47,11 @@ const OBJ_INFO = {
   keep: (o) => (o.begin ? 'Begin Keep' : 'End Keep'),
   spell: (o) => (o.begin ? 'Begin Spelling' : 'End Spelling'),
   ovs: (o) => (o.begin ? 'Begin Overstrike' : 'End Overstrike'),
+  smark: (o) => (o.begin ? 'Spelling Mark Begin' : 'Spelling Mark End'),
 };
 const OBJ_SYM = {
   fmt: (o) => (o.kind.startsWith('ret') ? SYM.FMT_RETURN : o.kind === 'altFmt' ? SYM.ALT_FMT : SYM.FMT_CHANGE),
-  keep: () => SYM.KEEP, spell: () => SYM.INSTR, ovs: (o) => (o.begin ? SYM.OVS_BEGIN : SYM.OVS_END),
+  keep: () => SYM.KEEP, spell: () => SYM.INSTR, ovs: (o) => (o.begin ? SYM.OVS_BEGIN : SYM.OVS_END), smark: () => SYM.SQUARE,
 };
 
 export const isChar = (u) => u < 0x100;

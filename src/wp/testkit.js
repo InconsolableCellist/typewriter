@@ -24,9 +24,10 @@ const TWO_WORD = ['GO TO', 'PAGE END', 'CHG FMT', 'LINE ADJ', 'SCREEN DOWN', 'SC
 
 /**
  * A system with virtual devices: the program diskette left, the first work (or blank) diskette right. `docs` puts
- * documents on work diskettes: { TRAIN: [{ name, text, comment }] }, text as samples.js types it.
+ * documents on work diskettes: { TRAIN: [{ name, text, comment }] }, text as samples.js types it. `wordList`: the
+ * spelling dictionary's unpacked bytes (the tests read public/assets/wordlist_en.gz.bin).
  */
-export function boot({ work = ['TRAIN'], blank = [], docs = {}, cold = false, type = '2D', setup, settle = !cold } = {}) {
+export function boot({ work = ['TRAIN'], blank = [], docs = {}, cold = false, type = '2D', setup, settle = !cold, wordList } = {}) {
   const library = new Library();
   library.add(programDiskette());
   for (const name of work) library.add(workDiskette(name, name, type));
@@ -38,7 +39,7 @@ export function boot({ work = ['TRAIN'], blank = [], docs = {}, cold = false, ty
     drives: [{ mediaId: PROGRAM_NAME, type: '2D' }, right ? { mediaId: right, type: library.get(right).type } : null],
   });
   if (cold) devices.drives.forEach((d) => { d.media = null; });
-  const sys = createSystem({ devices, store: new MemoryStore(), library, options: { cold } });
+  const sys = createSystem({ devices, store: new MemoryStore(), library, options: { cold, wordList } });
   if (settle) sys.runUntilIdle();
   return { sys, devices, library };
 }

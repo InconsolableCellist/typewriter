@@ -126,3 +126,70 @@ puts each beside its reference (`tools/blender/previews/wp_diskette_cmp_*.png`).
   closed, touches a panel.
 - **Budget.** 264 KB, over a fifth of the 1.1 MB for five units, because it also carries the diskette, envelope and
   file; the drives and levers are one mesh each, placed twice.
+
+## Display station
+The electronics module (`build_wp_station.py`, `wp_station.glb`) and the 25-line display (`build_wp_display.py`,
+`wp_display.glb`), loaded by `src/render/wp/station-view.js` (`buildStation`, `buildDisplay`, async). Shared
+helpers for the word processor's builders are in `tools/blender/wp_mould.py`; `tools/blender/render_wp_review.py`
+makes the review renders (`-- VIEW ... [--tilt DEG] [--swivel DEG] [--off]`).
+
+Module, 483 x 356 x 178 mm:
+- Two mouldings meeting at a parting line 95 mm above the desk (BRO p.1 and p.18, where the base shows as a band
+  below the cover): a Pearl White top cover with a 26 mm bullnose along its front edge and a Pebble Gray base set in
+  1.2 mm, on four rubber feet 6 mm high. Pebble Gray is a light grey (PH inside.JPG shows the bare base), so
+  `createUnitMaterials().pebble` is now 0xb3b0a7.
+- On top, the turntable (PSM p.46, ST p.28): a 257 mm dish 3 mm deep with a sloped wall and a 130 mm well 9 mm
+  deeper with the interlock keyhole, centred where the display stands (`units.display.at`).
+- The power switch is the part photographed on the power supply (PH inside.JPG): a red rocker paddle in a black
+  housing, seen through a scoop cut into the bullnose at the front left (centre x = -157 mm, 66 mm wide, CSG p.37 and
+  p.40, ST p.28, BRO p.1). It rocks left and right about an axle running front to back: the CSG p.40 close-up and
+  front view draw the paddle as a wedge across the scoop with the I side on the right. It is a thick block with a
+  flat top and chamfered ends, as photographed, and the whole paddle rocks 0.16 rad either way; the I bar and O ring
+  are moulded on. `parts.setRocker(on)` sets `rocker.rotation.z` (on: -0.16, the right side down).
+  The old primitive put a grey slab at the front right.
+- A recessed vent panel on each side of both mouldings (CSG p.23 and p.37 draw the four panels), with vertical
+  slots in their rear two thirds (PSM p.46). A dark box inside shows through the slots and the keyhole.
+- The square badge at the front right (BRO p.18; CSG p.37 and p.40) is a plain dark plate: nothing on it is legible
+  in any source (hardware.md open question 12).
+- At the back, panel 1 (+x, left as seen from behind) and panel 2, positions from CSG p.27 and the sockets measured
+  on PH Displaywriter_back.JPG (a DE-9 flange as the scale): LEDs A-H, D-subs 0, 1, 2, 5, 7, the Memory Record
+  button 3, covers 4, 6A, 6B; on panel 2 the AC outlet 8, inlet 9, fuse, 10 and 11. The display cable runs from its
+  plug on socket 2 over the rear edge to the display's underside (CSG p.23, p.27). A groove under the base carries
+  the keyboard cable to the back (CSG p.27).
+
+Display, 381 x 348 x 292 mm with the foot:
+- Front elevation measured on PSM p.7 (0.90 mm a pixel at 200 dpi), which agrees with the documented width and
+  with ST p.28's 245 x 170 mm visible screen: the frame's outline (top corners 16 mm, bottom 26 mm), the bezel panel
+  (x -157..160 mm), the tube opening (244 x 170 mm, centre 25 mm left of the cabinet's centre), the groove at
+  x = 111 mm, the strip with the badge (y = 224 mm) and the contrast (124 mm) and brightness (96 mm) knobs.
+- The bezel panel sits 32 mm back in the frame, a hood: BRO p.18 shows the frame's inner walls and its lower lip
+  from above. The panel (`wp_bezel`, a view material) is a charcoal grey: BRO p.18 shows it clearly darker than the
+  module's Pebble Gray base, though lighter than the tube.
+- The cabinet behind the frame keeps the outline and rounds its rear edges with 40 mm radii (ST p.28 fig. 1,
+  CSG p.23). The badge's artwork (the initials in striped letters) and the small label under it (CSG p.40) are
+  drawn on canvases in the view (architecture.md 13.2 lifted the no-marks rule); the GLB gives their faces uv 0..1.
+- Knobs: 17.6 mm, knurled, the contrast and brightness symbols moulded on their faces as CSG p.40 draws them; each
+  is its own node turning about z on its shaft.
+- Foot (ST p.28 fig. 2, CSG p.23): a 196 mm turntable disc in the module's dish, an oval swivel plate on it with a
+  pocket either side and the interlock tab at the front, and a cradle under the cabinet resting in the plate's seat.
+  Nodes: `display_swivel` (y, origin), under it `display_tilt` (x, at the cradle's axis, 93 mm up and 35 mm behind
+  the turntable centre). The documented 20 degree tilt needs room under the rear, so the underside rises at 20
+  degrees behind the cradle and lies level when tilted fully back (inferred; no source shows the underside's
+  profile). The builder exits 1 if the cabinet comes within 1.5 mm of the plate anywhere in the tilt range.
+  `parts.setTilt(rad)` (0 to 20 degrees, positive leans back) and `parts.setSwivel(rad)` clamp to the definition.
+- `face` is in the tilt node's frame, carried in the GLB as the tilt node's extras (`userData.face`), with
+  `parent`: the kit puts the glass and the screen's spill light in that node, so they tilt and turn with it. The
+  glass is `makeTubeFace(0.252, 0.178, 0.6)`, a little larger than the opening, its corners 3.5 mm plus its sag
+  behind the bezel so the edge stays hidden behind the opening's stepped surround; a dark mask behind the panel
+  hides the gap at the corners.
+
+Size: `tools/blender/quantize_glb.py` (run by `wp_mould.export`) stores positions as 16-bit integers in 0.05 mm steps
+and normals as 8 bits (KHR_mesh_quantization, read natively by GLTFLoader and Blender); the dequantizing scale is on
+a child node, so named nodes keep their transforms. UVs stay float. Small parts get one UV and smooth shading
+(`finish_small`) so the export splits fewer vertices; the shells' unseen inner surfaces use chords for arcs.
+`wp_station.glb` is 375 KB and `wp_display.glb` 211 KB: 0.59 MB of the 1.1 MB for five units, more than a fair
+share. The rear panels' sockets (about 4000 vertices) are the first place to cut if the budget needs it.
+
+Not yet: the white numbering and the part number printed on the rear panels, and the LED letters; the cable
+clips under the display that ST p.28 draws at its lower front corners; the display cable is in the module's GLB and
+does not follow the display when it turns.

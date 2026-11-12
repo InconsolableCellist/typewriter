@@ -16,7 +16,7 @@ export function createUnitMaterials({ aniso = 8 } = {}) {
   const plastic = (color, { clearcoat = 0.06, sheen = 0.2 } = {}) => new THREE.MeshPhysicalMaterial({ color, roughness: 0.6, metalness: 0, ior: 1.49, clearcoat, clearcoatRoughness: 0.45, sheen, sheenRoughness: 0.6, sheenColor: new THREE.Color(0.85, 0.85, 0.82) });
   const mats = {
     pearl: plastic(0xe4dfd0),                         // Pearl White covers (HW 1.8)
-    pebble: plastic(0x8e8b84),                        // Pebble Gray bases and trim
+    pebble: plastic(0xb3b0a7),                        // Pebble Gray bases and trim: a light grey (PH inside.JPG, BRO p.18)
     dark: plastic(0x232220, { sheen: 0.1 }),          // bezels, panels, slots
     keycap: plastic(0xe9e5d8, { clearcoat: 0.12, sheen: 0.05 }),
     rubber: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }),
@@ -37,53 +37,18 @@ export function createUnitMaterials({ aniso = 8 } = {}) {
   return mats;
 }
 
+/** The materials the units' GLBs name (docs/displaywriter/models.md): the same textured materials, by name. */
+export function glbUnitMaterials(mats) {
+  if (!mats.glb) mats.glb = { ...mats.byName, wp_led: new THREE.MeshPhysicalMaterial({ color: 0x3a0604, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.1 }), ready: mats.ready };
+  return mats.glb;
+}
+
 const box = (w, h, d, r, mat, segs = 3) => {
   const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, segs, Math.min(r, w / 2, h / 2, d / 2) * 0.999), mat);
   m.castShadow = m.receiveShadow = true;
   return m;
 };
 const at = (mesh, x, y, z) => { mesh.position.set(x, y, z); return mesh; };
-const cyl = (r, h, mat, segs = 32) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, segs), mat); m.castShadow = m.receiveShadow = true; return m; };
-
-/** Electronics module: a flat slab with a plinth, the display's turntable recess on top, the power rocker at front right. */
-export function buildStation(size, mats) {
-  const [w, h, d] = size, g = new THREE.Group();
-  const plinth = 0.014;
-  g.add(at(box(w - 0.016, plinth, d - 0.016, 0.004, mats.pebble), 0, plinth / 2, 0));
-  g.add(at(box(w, h - plinth, d, 0.014, mats.pearl), 0, plinth + (h - plinth) / 2, 0));
-  g.add(at(cyl(0.118, 0.004, mats.pebble, 48), 0, h + 0.001, -0.004));
-  // Power switch in its recess at the front right (CSG p.23).
-  const recess = at(box(0.034, 0.03, 0.006, 0.003, mats.dark), w / 2 - 0.05, h * 0.55, d / 2 - 0.001);
-  const rocker = at(box(0.018, 0.022, 0.008, 0.002, mats.pebble), w / 2 - 0.05, h * 0.55, d / 2 + 0.002);
-  rocker.name = 'powerRocker';
-  g.add(recess, rocker);
-  return { group: g, parts: { rocker } };
-}
-
-/**
- * Display: a deep moulded cabinet narrowing to the rear, a dark bezel round the tube, contrast and brightness knobs at
- * the front right (PSM p.7). `face` is where the CRT's tube face goes, in the group's frame.
- */
-export function buildDisplay(size, mats) {
-  const [w, h, d] = size, g = new THREE.Group();
-  const foot = 0.018;
-  g.add(at(cyl(0.1, foot, mats.pebble, 48), 0, foot / 2, 0));
-  const front = 0.14;
-  g.add(at(box(w, h - foot, front, 0.02, mats.pearl), 0, foot + (h - foot) / 2, d / 2 - front / 2));
-  g.add(at(box(w * 0.86, (h - foot) * 0.86, d - front + 0.02, 0.03, mats.pearl), 0, foot + (h - foot) * 0.47, -front / 2 + 0.01));
-  const faceY = foot + (h - foot) * 0.53, faceX = -0.022;
-  g.add(at(box(0.29, 0.21, 0.012, 0.008, mats.dark), faceX, faceY, d / 2 - 0.004));
-  const knobs = [];
-  for (const [i, y] of [[0, faceY - 0.02], [1, faceY - 0.055]]) {
-    const knob = cyl(0.009, 0.012, mats.dark, 24);
-    knob.rotation.x = Math.PI / 2;
-    knob.position.set(w / 2 - 0.035, y, d / 2 + 0.004);
-    knob.name = i === 0 ? 'contrast' : 'brightness';
-    g.add(knob); knobs.push(knob);
-  }
-  g.add(at(box(0.026, 0.012, 0.004, 0.001, mats.dark), w / 2 - 0.035, faceY + 0.06, d / 2 + 0.001));   // badge
-  return { group: g, parts: { knobs }, face: { x: faceX, y: faceY, z: d / 2 + 0.002 } };
-}
 
 /**
  * Printwheel printer: a wide low cabinet on a plinth, the paper slot and access cover on top toward the rear, the

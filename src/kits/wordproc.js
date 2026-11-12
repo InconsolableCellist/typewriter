@@ -23,7 +23,8 @@ import { KEYS } from '../machine/wp-keys.js';
 import { loadGlyphs } from '../machine/glyphs.js';
 import { loadWordList } from './wp/wordlist.js';
 import { installPages } from '../pages/index.js';
-import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
+import { createUnitMaterials, unitTextureJobs, buildStation, buildDisplay, buildKeyboard, buildPrinter } from '../render/wp/units.js';
+import { buildDiskette } from '../render/wp/diskette-view.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -50,7 +51,7 @@ export async function mount(ctx) {
   const units = {}, parts = {}, footprints = [];
   let displayFace = null;
   for (const [name, u] of Object.entries(geometry.units)) {
-    const built = builders[name](u);
+    const built = await builders[name](u);
     built.group.name = `unit-${name}`;
     built.group.position.fromArray(u.origin);
     stage.scene.add(built.group);
@@ -95,7 +96,7 @@ export async function mount(ctx) {
   // The spelling word list is fetched only when Spelling Tasks first loads (architecture 12.3).
   const wordList = () => loadWordList().then((b) => sys.provideWordList(b), (e) => { console.info('word list', e); sys.provideWordList(null); });
   sys = createSystem({ devices, store, library, options: { cold, wordList } });
-  loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre'] }).catch((e) => console.info('textures', e));
+  loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre', 'wp_pebble'], extra: unitTextureJobs(umats) }).catch((e) => console.info('textures', e));
   const pages = installPages({ stage, soft: printer.soft, paper: printer.paper, machine: { ...printer.softMachine, deskLayout: machine.deskLayout }, interaction: { picker: { add: (e) => pickables.push(e) } }, hands: { loadPaper: () => printer.loadSheet() } });
   const t0 = performance.now();
   const unlockAudio = () => { speaker.unlock(); if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done && !params.has('localsim')) {   // ?localsim keeps the mechanism on the main thread (machines with no audio device, tests)

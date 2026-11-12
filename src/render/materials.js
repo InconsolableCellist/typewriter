@@ -169,7 +169,8 @@ async function roughnessChain(name, aniso) {
 const PHYSICAL_KEYS = ['clearcoat', 'clearcoatRoughness', 'ior', 'envMapIntensity', 'sheen', 'sheenRoughness', 'specularIntensity', 'anisotropy', 'anisotropyRotation'];
 
 /** `only` limits loading to the named sets (a machine that uses few of them downloads only those). */
-export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTier = false, only = null } = {}) {
+/** `extra` adds jobs ({ name, mat, keepColor }) at the set's GLB repeat, for a machine's own materials. */
+export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTier = false, only = null, extra = [] } = {}) {
   let table = {};
   try { table = await (await fetch(`${BASE}materials.json`)).json(); } catch { /* defaults below */ }
   const tile = (n, d) => table[n]?.tile ?? d;
@@ -207,6 +208,7 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
   // The desk is the one set without a mip-chain roughness (one tile covers it, so it never shrinks far); low tier halves its detail maps.
   jobs.push({ name: 'walnut_desk', mat: mats.desk, repeat: [0.2 / tile('walnut_desk', 2.2), 0.2 / tile('walnut_desk', 2.2)], sizes: lowTier ? { detail: 1024 } : {} });
   if (paperMaterial) jobs.push({ name: 'paper_fibre', mat: paperMaterial, repeat: [1, 1.29], keepColor: true, noAlbedo: true });
+  for (const j of extra) jobs.push({ repeat: glb(j.name, 0.05), ...j });
   for (const j of jobs) {
     if (only && !only.includes(j.name)) continue;
     try {

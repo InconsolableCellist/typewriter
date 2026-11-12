@@ -8,14 +8,23 @@ import { KEYS, KEY_UNIT, KEY_FIELD } from '../../machine/wp-keys.js';
 
 export function createUnitMaterials() {
   const plastic = (color, roughness = 0.62) => new THREE.MeshPhysicalMaterial({ color, roughness, metalness: 0, clearcoat: 0.08, clearcoatRoughness: 0.5, sheen: 0.15, sheenRoughness: 0.8, sheenColor: new THREE.Color(0.9, 0.9, 0.85) });
-  return {
+  const m = {
     pearl: plastic(0xe2dccb),                         // "Pearl White" covers
     pebble: plastic(0x8f8c84, 0.7),                   // "Pebble Gray" bases and trim
     dark: plastic(0x1f1e1c, 0.55),                    // bezels, panels, slots
     keycap: plastic(0xe8e3d4, 0.45),
     rubber: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }),
     led: new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0x000000, roughness: 0.4 }),
+    metal: new THREE.MeshPhysicalMaterial({ color: 0xa8a8a3, roughness: 0.32, metalness: 1 }),
   };
+  // The same plastics for the GLB models (UVs at 0.2 m per unit), which take the pebble grain (unitTextureJobs).
+  m.pearlGlb = m.pearl.clone(); m.pebbleGlb = m.pebble.clone(); m.darkGlb = m.dark.clone();
+  return m;
+}
+
+/** Jobs for loadStudioTextures: the wp_pebble grain on the GLB plastics, each keeping its own colour. */
+export function unitTextureJobs(mats) {
+  return [mats.pearlGlb, mats.pebbleGlb, mats.darkGlb].map((mat) => ({ name: 'wp_pebble', mat, keepColor: true }));
 }
 
 const box = (w, h, d, r, mat, segs = 3) => {
@@ -105,27 +114,6 @@ export function buildKeyboard(size, slope, mats) {
   }
   const pressDir = new THREE.Vector3(0, -1, 0);   // in the deck's frame: keys travel normal to the slope
   return { group: g, parts: { keys, deck, pressDir } };
-}
-
-/** Diskette unit: an upright cabinet on a plinth, two vertical drive slots each with its lever (ORG p.54, BRO p.18). */
-export function buildDiskette(size, mats) {
-  const [w, h, d] = size, g = new THREE.Group();
-  const plinth = 0.016;
-  g.add(at(box(w - 0.012, plinth, d - 0.012, 0.004, mats.pebble), 0, plinth / 2, 0));
-  g.add(at(box(w, h - plinth, d, 0.012, mats.pearl), 0, plinth + (h - plinth) / 2, 0));
-  const levers = [], slots = [];
-  for (const [i, x] of [[0, -0.05], [1, 0.05]]) {
-    const slot = at(box(0.008, 0.215, 0.01, 0.002, mats.dark), x, plinth + 0.035 + 0.1075, d / 2 - 0.002);
-    // The lever pivots at its top, beside the slot's lower half: hanging straight down is open, turned a quarter to
-    // lie across the slot is closed (CSG p.42).
-    const lever = new THREE.Group();
-    lever.position.set(x, plinth + 0.13, d / 2 + 0.006);
-    lever.add(at(box(0.011, 0.075, 0.008, 0.003, mats.dark), 0, -0.0375, 0));
-    lever.add(at(box(0.03, 0.014, 0.012, 0.003, mats.dark), 0, -0.07, 0.004));
-    lever.name = `lever${i}`;
-    g.add(slot, lever); levers.push(lever); slots.push(slot);
-  }
-  return { group: g, parts: { levers, slots } };
 }
 
 /**

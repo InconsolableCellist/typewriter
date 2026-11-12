@@ -44,7 +44,9 @@ export default {
   units: {
     station: { size: SIZE.station, mass: 14, place: station, color: 0xd9d4c7 },
     display: { size: SIZE.display, mass: 6.6, on: 'station', at: [0, SIZE.station[1], -0.004], tilt: [0, 20 * deg], swivel: [-12 * deg, 12 * deg], color: 0xd9d4c7 },
-    keyboard: { size: SIZE.keyboard, mass: 5, place: keyboard, slope: 12 * deg, color: 0xd9d4c7 },
+    // The case's top falls 10 degrees (the owner's side photograph); the caps' row sculpt adds about 2, the documented
+    // 12 degrees of the key surface (GIM p.104; models.md, Keyboard).
+    keyboard: { size: SIZE.keyboard, mass: 5, place: keyboard, slope: 10 * deg, color: 0xd9d4c7 },
     diskette: { size: SIZE.diskette, mass: 16, place: diskette, color: 0xd9d4c7 },
     printer: { size: SIZE.printer, mass: 29, place: printer, color: 0xd9d4c7 },
   },

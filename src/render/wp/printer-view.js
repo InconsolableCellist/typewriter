@@ -36,7 +36,10 @@ function canvasTexture(c, srgb = true) {
   return t;
 }
 
-/** The black panel with its printed legends: LED names in two rows of five, the divider and the blank right section. */
+/**
+ * The black panel with its printed legends: LED names in two rows of five over their lights, the divider, and on the
+ * right section the operator's white card with the model written on it (the owner's photograph; PH 5218_1 has none).
+ */
 function panelTexture() {
   const W = 2048, H = Math.round(W * (PANEL.y1 - PANEL.y0) / (PANEL.x1 - PANEL.x0));
   const c = canvas(W, H), g = c.getContext('2d');
@@ -50,6 +53,13 @@ function panelTexture() {
     const lines = label.split('\n');
     lines.forEach((ln, k) => g.fillText(ln, x, y - (lines.length - 1 - k) * size * 1.05));
   });
+  const cx0 = px(0.1185), cx1 = px(0.2085), cy0 = py(0.1190), cy1 = py(0.0815);
+  g.fillStyle = '#f1efe8'; g.fillRect(cx0, cy0, cx1 - cx0, cy1 - cy0);
+  g.fillStyle = '#26262c'; g.textAlign = 'center';
+  const hand = (cy1 - cy0) * 0.36;
+  g.font = `${hand.toFixed(0)}px "Comic Sans MS", "Segoe Print", "Bradley Hand", cursive`;
+  g.fillText('IBM', (cx0 + cx1) / 2 - hand * 0.9, cy0 + hand * 1.05);
+  g.fillText('5218  A02', (cx0 + cx1) / 2, cy0 + hand * 2.15);
   return canvasTexture(c);
 }
 
@@ -190,7 +200,9 @@ export async function buildPrinter(size, mats, opts = {}) {
   const gltf = await new GLTFLoader().loadAsync(opts.url ?? PRINTER_URL);
   const P = opts.printer;
   const pearl = texturedUnitMaterial(mats.pearl), gray = texturedUnitMaterial(mats.pebble), dark = texturedUnitMaterial(mats.dark);
-  const trim = texturedUnitMaterial(plastic(0xc8b48e, 0.6));
+  // The panel's frame, the strip under it and the power switch's bezel: a pale pearl a shade greyer than the covers
+  // (the owner's photograph and BRO p.18; PH 5218_1's are yellowed to tan).
+  const trim = texturedUnitMaterial(plastic(0xd2cdc0, 0.55));
   const panelMat = new THREE.MeshStandardMaterial({ map: panelTexture(), roughness: 0.45, metalness: 0 });
   const digits = canvas(128, 104), dg = digits.getContext('2d');
   drawDigits(dg, digits.width, digits.height, '');
@@ -203,7 +215,8 @@ export async function buildPrinter(size, mats, opts = {}) {
   const byName = {
     wp_pearl: pearl, wp_gray: gray, wp_dark: dark, wp_trim: trim, wp_panel: panelMat, wp_display: displayMat,
     wp_rubber: mats.rubber, wp_metal: metal(0x9c9c9a, 0.42), wp_chrome: metal(0xc9cacc, 0.16), wp_screw: screw,
-    wp_glass: new THREE.MeshPhysicalMaterial({ color: 0x3a2c22, roughness: 0.06, metalness: 0, transparent: true, opacity: 0.5, clearcoat: 1, depthWrite: false }),
+    // Smoked glass over the print line: tinted, reflective, the platen and paper seen through it.
+    wp_glass: new THREE.MeshPhysicalMaterial({ color: 0x2b231d, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.62, clearcoat: 1, clearcoatRoughness: 0.03, specularIntensity: 1, envMapIntensity: 1.4, depthWrite: false }),
     wp_red: plastic(0xc8261a, 0.42), wp_filter: filter, wp_wheel: wheelPlastic, wp_petal: petal,
     wp_cartridge: plastic(0x1d5a43, 0.45), wp_white: plastic(0xe6e2d6, 0.5), wp_motor: new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.4 }),
     wp_paper: new THREE.MeshStandardMaterial({ color: 0xf4f2ec, roughness: 0.9 }), wp_cable: plastic(0x8fa3a3, 0.6), wp_foam: new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 0.97 }),

@@ -293,7 +293,7 @@ MATS = {}
 def make_materials():
     spec = {
         "wp_pearl": ((0.74, 0.71, 0.64), 0.6, 0), "wp_gray": ((0.52, 0.51, 0.48), 0.6, 0), "wp_dark": ((0.035, 0.034, 0.033), 0.55, 0),
-        "wp_trim": ((0.62, 0.50, 0.33), 0.55, 0), "wp_panel": ((0.02, 0.02, 0.022), 0.45, 0), "wp_rubber": ((0.02, 0.02, 0.02), 0.85, 0),
+        "wp_trim": ((0.66, 0.64, 0.58), 0.55, 0), "wp_panel": ((0.02, 0.02, 0.022), 0.45, 0), "wp_rubber": ((0.02, 0.02, 0.02), 0.85, 0),
         "wp_metal": ((0.55, 0.55, 0.56), 0.35, 1), "wp_chrome": ((0.8, 0.8, 0.82), 0.15, 1), "wp_glass": ((0.06, 0.045, 0.04), 0.05, 0), "wp_foam": ((0.09, 0.08, 0.07), 0.95, 0),
         "wp_key_green": ((0.05, 0.42, 0.12), 0.4, 0), "wp_key_yellow": ((0.85, 0.55, 0.03), 0.4, 0), "wp_key_blue": ((0.22, 0.52, 0.80), 0.4, 0),
         "wp_led_red": ((0.25, 0.02, 0.02), 0.2, 0), "wp_led_green": ((0.03, 0.2, 0.05), 0.2, 0), "wp_led_amber": ((0.3, 0.17, 0.02), 0.2, 0),
@@ -310,8 +310,8 @@ def make_materials():
         b.inputs["Base Color"].default_value = (*col, 1)
         b.inputs["Roughness"].default_value = rough
         b.inputs["Metallic"].default_value = met
-        if name == "wp_glass":
-            b.inputs["Transmission Weight"].default_value = 0.25
+        if name == "wp_glass":                     # smoked glass: dark, glossy, partly see-through
+            b.inputs["Alpha"].default_value = 0.62
         MATS[name] = mat
 
 
@@ -432,7 +432,7 @@ def build_bezel():
     pb = prism_ob(rrect(Q["x0"], Q["y0"], Q["x1"], Q["y1"], 0.003), "z", FACE - 0.002, FACE + 0.004, "pb")
     boolean(pb, prism_ob(rrect(Q["rx"] - Q["rw"] / 2 - 0.0012, Q["ry"] - Q["rh"] / 2 - 0.0012, Q["rx"] + Q["rw"] / 2 + 0.0012, Q["ry"] + Q["rh"] / 2 + 0.0012, 0.0015), "z", FACE - 0.001, FACE + 0.01))
     ob = join([fr, div, strip, pb], "bezel")
-    bevel_finish(ob, 0.0007, 2)
+    bevel_finish(ob, 0.0012, 2)
     return ob
 
 

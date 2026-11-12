@@ -4,7 +4,8 @@ side-by-side review of docs/displaywriter/models.md.
   /root/bpyenv/bin/python tools/blender/render_wp_printer.py [--views front,open,...] [--samples N] [--size N]
 
 Views: front (PH 5218_1), open (PH 5218_2, cover on its open stop, no feeder), feeder (brochure p.18, sheet-feed paper handler),
-rear (PH 5218_3), carrier (PH 5218_4, close over the carrier), three (a three-quarter view).
+rear (PH 5218_3), carrier (PH 5218_4, close over the carrier), three (a three-quarter view), owner (the owner's photograph
+of a 5218 A02 from the front left), cartridge (the carrier from straight above, as MIM p.57), pgcart (Printer Guide p.41).
 """
 import argparse
 import math
@@ -23,10 +24,13 @@ OUT = os.path.join(HERE, "previews")
 VIEWS = {
     "front": ((0.0, 0.62, 2.5), (0.0, 0.10, 0.0), 130, 0, False),
     "open": ((0.0, 1.05, 0.80), (0.0, 0.08, -0.03), 40, 100, False),
-    "feeder": ((0.0, 0.62, 3.0), (0.0, 0.25, 0.0), 110, 0, True),
+    "feeder": ((0.0, 0.70, 3.0), (0.0, 0.22, 0.0), 85, 0, True),
     "rear": ((-0.32, 0.22, -0.80), (-0.27, 0.10, -0.32), 50, 0, False),
     "carrier": ((0.0, 0.60, 0.42), (0.0, 0.10, 0.13), 40, 100, False),
     "three": ((1.1, 0.85, 1.3), (0.0, 0.17, -0.02), 55, 0, True),
+    "owner": ((-0.34, 0.40, 1.02), (0.03, 0.105, 0.0), 44, 0, False),
+    "cartridge": ((0.0, 0.62, 0.17), (0.0, 0.10, 0.169), -0.34, 100, False),
+    "pgcart": ((0.0, 0.50, 0.42), (0.0, 0.11, 0.15), 50, 100, False),
 }
 
 
@@ -73,17 +77,21 @@ def main():
     s.collection.objects.link(cam)
     s.camera = cam
     cover = bpy.data.objects.get("printer_cover")
-    feeder = bpy.data.objects.get("printer_feeder")
+    feeder = [o for o in bpy.data.objects if o.name.startswith(("printer_feeder", "printer_tray"))]
     for name in a.views.split(","):
         pos, tgt, lens, open_deg, show_feeder = VIEWS[name]
-        cam.data.lens = lens
+        cam.data.type = "ORTHO" if lens < 0 else "PERSP"   # a negative lens is an orthographic view that wide (m)
+        if lens < 0:
+            cam.data.ortho_scale = -lens
+        else:
+            cam.data.lens = lens
         cam.location = b(pos)
         cam.rotation_euler = (b(tgt) - b(pos)).to_track_quat("-Z", "Y").to_euler()
         if cover:
             cover.rotation_mode = "XYZ"
             cover.rotation_euler = (-math.radians(open_deg), 0, 0)
-        if feeder:
-            feeder.hide_render = not show_feeder
+        for o in feeder:
+            o.hide_render = not show_feeder
         s.render.filepath = os.path.join(OUT, f"printer_{name}.png")
         bpy.ops.render.render(write_still=True)
         print("wrote", s.render.filepath)

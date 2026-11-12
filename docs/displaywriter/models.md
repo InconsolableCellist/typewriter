@@ -240,68 +240,116 @@ so the pairs agree in form and proportion rather than pixel for pixel.
 ## Printer
 `tools/blender/build_wp_printer.py` -> `public/assets/models/wp_printer.glb`, viewed by `src/render/wp/printer-view.js`.
 Dimensions shared with the mechanism and the soft bodies (platen, print point, wheel, ribbon spools, carrier travel, the
-slot, the hinge, the feeder's plate) come from `tools/blender/wp_printer.json`, written by
-`node tools/wp/export_printer.mjs` from the definition. Review images: `render_wp_printer.py` (Cycles) and
+slot, the hinge, the feeder's plate, the cabinet's offset) come from `tools/blender/wp_printer.json`, written by
+`node tools/wp/export_printer.mjs` from the definition. Review images: `render_wp_printer.py` (Cycles; views `front`,
+`open`, `feeder`, `rear`, `carrier`, `three`, `owner`, `cartridge` orthographic from above, `pgcart`) and
 `compare_wp_printer.py <photo dir>`, both writing to `tools/blender/previews/` (`compare_front`, `_open`, `_rear`,
-`_feeder`, `_plain`, `_carrier`), with browser screenshots of the printer printing and opened beside them
-(`browser_three`, `_top`, `_carrier`, `_feeder`, `_panel`).
+`_feeder`, `_plain`, `_carrier`, `_owner`, `_cartridge`, `_pgcart`), with browser screenshots beside them
+(`browser_three`, `_front`, `_panel`, and with the cover open `_carrier`, `_top`). The browser shots need the Vulkan
+ANGLE flags of architecture.md (Testing): with SwiftShader the context is lost and the frame stays black.
+
+References for the printer, besides the general list above:
+- **PG**: Displaywriter System Printer Guide `S544-0861-4` (May 1983; Bitsavers `pdf/ibm/5215/`, 170 pages, scanned):
+  p.38 the front drawing with every control numbered (the key and LED order below), p.41 a photograph straight down on
+  the carrier with both cartridges fitted, p.43-46 the ribbon cartridge (alone, p.44) and its latches, p.47 and p.50 the
+  printwheel cartridge (photograph and drawings), p.53-57 the cardholder and the paper path at the slot, p.89-103 the
+  sheet feeder: installed and lifted off from the side (p.90, p.103), its trays and their handles (p.93), its gate.
+  Page numbers are the PDF's (printed page + 9).
+- **MIM p.57** rendered at 300 dpi is a top view of the carrier drawn to scale (0.234 mm a pixel, from the 132 mm
+  between the spools): the ribbon plate 307 mm across, the cartridge 265 mm, the spools 105 mm in front of the print
+  line. MIM p.20 (plan of the mechanism in its bottom cover) and p.18 as before.
+- **Henry Ford Museum**, object 99.98.1 (IBM Displaywriter word processor and printer, 1983, its printer marked
+  5218 A02): printer width 28.00 in, length 26.00 in, height 18.75 in. Read from the search engine's copy of the record:
+  thehenryford.org does not resolve from this machine. The height is not the bare printer's (0.19 m in every
+  photograph), so something stood on it; only the width is used. The Science Museum Group's 5218 A04 (1992-755) was
+  quoted as 200 x 670 x 540 mm by the same search but could not be opened (collection.sciencemuseumgroup.org.uk does not
+  resolve): not used.
+- **Owner's photograph** `docs/displaywriter/refs/owner/printer_5218_front.jpg`: a 5218 A02 on a stand from the front
+  left with continuous forms, a white label stuck on the panel's right section; camera-matched as the `owner` view.
+  The chrome rod along its left top edge belongs to the forms stand, not to the printer.
+- Searched without result: dimensions in the Technical Manual for the Technical Coordinator `G320-0158-0` and the
+  Display Station Platform announcement (Bitsavers `6580_Displaywriter/productAnnoucements/`); stills of the dc4.nl
+  video "006 - IBM 6580 Displaywriter with HUGE daisy wheel printer 1980" (no page found; dc4.nl, computerhistory.org's
+  photographs, sharktastica.co.uk and the museum sites gave nothing for the printer).
+- Local copies: the scratchpad's `ref2/` (`dl/` the downloaded PDFs, `pg/` rendered Printer Guide pages, `mim/`, `bro/`
+  the brochure's p.18 at its native 300 dpi, `cmp/` the reference set for `compare_wp_printer.py`).
 
 Measurements and decisions:
-- **Size 0.73 x 0.188 x 0.645 m** (was the 0.74 x 0.23 x 0.58 estimate). Scale: the acoustic filter across the slot spans
-  0.55 of the cabinet's width in PH 5218_2 and 0.52 in 5218_1 (corrected for distance), and it must pass 392 mm paper,
-  so the width is 0.72 to 0.77; 0.73. The front face is 0.245 of the width (5218_1, the brochure's p.18, both
-  near-level views), the base band 0.22 of that. Depth from MIM p.20's plan: the bottom cover is 0.886 of its width.
-  The access cover stands 18 mm proud of the cabinet's top with a 24 mm lip down the front face (5218_1), so the
-  height is to the cover.
-- **Platen centre (y 0.132, z +0.064), length 0.52 m** (was y 0.150, z -0.060, 0.415). The platen lies under the
-  access cover's rear edge, 40 % of the depth from the front (MIM p.20: 0.355 including the panel; 5218_2), and its
-  rubber is 0.71 of the width (MIM p.20), which is also what a slot for 392 mm paper needs. The axle is 18 mm lower than
-  first drawn so the bail at its open stop clears the cabinet's top beyond the slot. Radius unchanged (belt ratio).
-  Everything derived (print point, wheel, ribbon, paper table, camera) follows from the definition.
-- **Cabinet**: base band inset 22 mm at the sides; top cover with the access opening (a trapezoid, 0.48 m wide at the
-  lip, 0.44 at the hinge), the paper slot behind it, the hood whose sloped front is the perforated acoustic filter with
-  the left paper guide and its triangle on the top edge (SET p.1-7), two paper-handler latch openings beside the hinge
-  and two at the rear corners (5218_2), the operator panel in a tan bezel with a tan strip under it, the power rocker in
-  its tan bezel at the front right, the finger scoop under the lip, the attachment panel recess at the left rear with
-  the round handler socket, the DE-9 and the IEC inlet (5218_3), and the fan grille on the right side near the rear
-  (SET p.3-2; the fan is at the right rear, MIM p.17).
-- **Access cover** (`printer_cover`) hinges on its rear top edge: a pivot lower down swings the cover's rear corners into
-  the slot's cheeks. Its rear is a recessed well holding the tinted window over the print line; the underside is lined
-  with acoustic foam (5218_2 shows both on the raised cover). Its open stop is 100 degrees (was 75): past upright, so
-  gravity holds it on the stop and the mechanism stays in view (the 5218 cover is lifted until it rests, SET p.1-3; with
-  the feeder fitted it cannot lie back on the top). At the stop it still clears the feeder.
-- **Panel** from 5218_1: 2 rows of 5 LEDs (bit order of the controller; Power On red, On Line and Ready green, the rest
-  amber), the two-digit window, keys of 19.5 mm in two pairs of columns (Start green, Stop yellow, the rest blue), the
-  divider and the blank right section. Legends, the key captions and the seven-segment digits are drawn at run time
-  (`printer-view.js`), so the model carries no lettering.
-- **Mechanism**: side frames, base plate, the two carrier shafts and the leadscrew (its three-start thread is a texture
-  on u = x / lead, turned by the carrier's travel), the escapement motor and coupler at the right, the index motor and
-  timing belt to the platen pulley at the left, the paper-handling cam outside the right frame, the paper pan, six feed
-  roller modules (front and rear rollers at the definition's feed-roll angles), the bail with four rollers on the
-  definition's bail angle (its pivot 15 mm back along the tangent so opening lifts the rollers straight off), and the
-  carrier's flat cable folded at the front. No platen knob: the 5218 has none (PR 2).
-- **Carrier** (`printer_carrier`): casting on the shafts and screw, the selection motor (axis front to back) in two
-  saddles, the hammer coil above it with its nose cone, the ribbon plate with six belt rollers, the belt and the
-  ribbon advance knob (MIM p.94-95), the ribbon cartridge (two lobes at the definition's spool positions, which are now
-  in the printer block: x 0.066, 16 mm below the print line, 64 mm in front of the platen axis, so a full 70 mm supply
-  spool fits), its guide posts at the definition's guide-post positions, the printwheel cartridge (a green shell round
-  the wheel's lower half), and the clear cardholder round the print point (0.8 mm off the platen, MIM p.57).
-- **Printwheel** (`printer_wheel`): 96 spokes and slugs, petal k k steps clockwise of the top (seen from the front), so
-  the snapshot's wheel angle brings the right petal under the hammer. Each slug's platen face is mapped to cell k of a
-  12 x 8 atlas that the view draws from the glyph faces that print (`glyphs_wp`), character up = outward.
-- **Sheet feeder** (`printer_feeder`) after the brochure's p.18 and SET p.2-2 to 3-14: a tall front with the stacker
-  opening, a flat top and a lower rear box with two trays whose handle ends stand 75 mm past the printer's back (the
-  printer moved 4 cm forward, `ROW_BACK` -0.44, so they stay on the desk). Its stacker plate is the paper table of the
-  soft body (`printer-soft.js`): the sheet the feeder delivers is laid on it from under the exit rollers and fingers and
-  slides down into the slot, and a printed sheet leans back on it. The front leans back 0.30 so the opened cover clears
-  it. Its middle stands on the hood at the cover's height, its sides on the cabinet's top with latches in the
-  openings. The upper tray shows its paper.
-- **Soft body** (`printer-soft.js`): the table runs to the top of the feeder's opening; the resting surfaces are the
-  cover, the well round the platen, the stacker plate and the feeder's top, as a height field.
-- **Budget**: 24 k triangles; the export is rewritten with `KHR_mesh_quantization` (`gltf_quantize.py`: positions as
-  shorts under a uniform node scale that keeps each pivot, normals as bytes), which three.js reads with no decoder.
-  The GLB is about 640 KB, more than half of the 1.1 MB budget for all five units: the printer carries the most
-  mechanism, and the feeder. Open: the other four units must come in near 460 KB together, or the budget is revised.
+- **Size 0.711 x 0.188 x 0.645 m.** The width is the museum's 28 in. It agrees with the photographs: the access cover
+  is 0.62 of the cabinet's width in BRO p.18 and PH 5218_1, the front face 0.238 of the width high in BRO p.18 (0.169 m,
+  the model's 0.170), the base band a quarter of the face. Depth as before (MIM p.20's bottom cover is 0.886 to 0.90 of
+  its width; the museum's 26 in is the same within its rounding). Height to the access cover, 18 mm proud of the top.
+- **The mechanism is left of the cabinet's centre.** The access cover, the panel, the scoop and the sheet feeder are
+  centred together 12 to 18 mm left of the cabinet's centre in BRO p.18 (both printers), PH 5218_1 and the owner's
+  photograph, while the power switch sits 94 to 102 mm from the right end. The model keeps the mechanism on x = 0 (the
+  definition's platen, carrier and paper path) and moves the cabinet shell 14 mm right (`printer.cabinet.offsetX`);
+  `units.printer.place` subtracts it, so the cabinet keeps its 40 mm gap to the module. The origin is therefore under
+  the mechanism, 14 mm left of the footprint's centre.
+- **Platen centre (y 0.132, z +0.064), length 0.52 m**, unchanged. MIM p.57 confirms the scale it implies: the
+  carrier is as wide as MIM p.20 draws it.
+- **Cabinet**: the cover half widths are 0.2205 m at the lip and 0.2135 at the hinge (were 0.239 and 0.219). The scoop
+  under the lip is a closed pocket with a light floor (PH 5218_1), not a dark hole. The IBM badge (36 x 26 mm, "IBM"
+  striped over "5218 A02", drawn by the view) is on the top at the front left (PH 5218_1, 5218_2). The open cover shows,
+  on the cabinet's front edge, the magnetic latch right of the scoop (the cover's keeper moved over it) and a plate with
+  two screws at the left (PH 5218_2); under the carrier, the dark acoustic foam over the base plate (MIM p.63). The
+  base band, feet, fan grille and attachment panel follow the cabinet's offset. The index motor rides higher, over the
+  base's wall, which now comes closer on the left.
+- **Access cover** as before, but its tinted window is 117 mm deep (was 40), over half the cover: PH 5218_2 shows the
+  clear part over half the raised cover's length, the owner's photograph and BRO p.18 a dark band over the cover's rear
+  half. The foam lines the front part.
+- **Panel** unchanged in place and order; PG p.38 confirms it: LEDs top row Power On, Ribbon, Printer Excep, Setup,
+  Change Font, bottom row On Line, Ready, Release, Load Paper, Diag Mode; keys Start (green) over Stop (yellow), Print
+  Test over Cancel, Load over Release, Paper Up over Paper Down. Node order `printer_key0..7` is the definition's
+  `panel.keys`, `printer_led0..9` the controller's bit order (the view's `LED_LABELS`).
+- **Frames**: the side frames now stay low in front (top 78 to 90 mm up, in front of z 0.15) and rise round the platen,
+  so the wide ribbon plate passes over them at the carrier's stops.
+- **Carrier** (`printer_carrier`), from MIM p.57 to scale and PG p.41: the ribbon plate is 300 mm across at the front
+  (was 210), narrow behind round the motor, with the cartridge's tapered spring latches at its ends, the belt rollers
+  and gear where MIM p.57 draws them, the feed belt round the first roller and the advance knob, and the release spring
+  along its front edge. The casting, motor, hammer coil and nose cone are unchanged.
+- **Ribbon cartridge**: a dark grey moulding 265 mm across with a straight front edge; over each spool a round lobe
+  (radius 39 mm) running back to a blunt tip where the film leaves for the guides; the motor's notch between the lobes,
+  round at its foot; a slot window in the left lobe and the IBM logo on the right one (`printer_cartlogo`, a decal the
+  view draws, carried by the carrier); the top rising 8.5 degrees toward the platen to the ribbon's height (PG p.44);
+  under the front edge the spool housings, open in a bay over each spool's toothed flange (PG p.41, p.44). Its spools
+  moved with it: the definition's `ribbon.spoolZ` is now 126 mm in front of the platen axis (was 64), 105 mm in front
+  of the print line as MIM p.57 measures; the soft ribbon runs from there to the guide posts.
+- **Printwheel cartridge** (PG p.47, p.50; MIM p.57): two plates either side of the wheel, round below a band with an
+  ear at each side, open above it over the upper petals inside a trapezoid handle whose top bar runs just above the
+  print point; the hub shows through a rounded triangle in the motor-side plate; the ribbon guide posts stand on
+  brackets from the band (the manual puts the ribbon guides on this cartridge). Green, as in PH 5218_2 and 5218_4.
+- **Printwheel** (`printer_wheel`) unchanged.
+- **Sheet feeder** (`printer_feeder`): 0.544 m wide (0.76 of the cabinet in BRO p.18; was 0.556). Hand scoops in its
+  sides under the top's rear edge (PG p.90, p.103), the left side guide standing the height of the opening in front of
+  the plate (BRO p.18, PG p.90), and the tray ends as handles: a frame round a wide window (PG p.93). The paper
+  insertion gate (`printer_feeder_gate`, SET p.26) and the two trays (`printer_tray0` upper, `printer_tray1` lower) are
+  nodes; the view parents them to the feeder.
+- **Soft body** (`printer-soft.js`) unchanged in form; it reads the moved spools from the definition.
+- **Controls** (each a node with its pivot at its axle; `parts` in the view): `printer_cover` (hinge on its rear top
+  edge, turns about x; open is negative rotation.x), `printer_power` (rocker, about x), `printer_key0..7` (press along
+  -z), `printer_led0..9`, `printer_ribbon_knob` (on the ribbon plate at x 0.127, z 0.232, turns about y; rides the
+  carrier), `printer_platen` (about x), `printer_bail` and `printer_feedrolls` (the cam's paper release, about x),
+  `printer_feeder_gate` (about the stacker plate's normal, (0, 0.174, 0.985)), `printer_tray0/1` (slide along z,
+  pivot at the middle of the handle end). The 5218 has no platen knobs and no paper release or bail lever: PG p.38 lists
+  every control (power switch, eight keys, the display and ten lights, the A03/A04 ribbon saver switch); the platen
+  knobs and bail lever of its p.11-29 are the 5215's. Paper moves with Paper Up and Paper Down, and the cam motor opens
+  the bail and releases the feed rolls (MIM p.181, p.186). The platen node is there for a hand that turns the platen
+  itself.
+- **Budget**: 25 k triangles; 663 KB (0.632 MiB) after `KHR_mesh_quantization`, about 20 KB more than before for the new
+  cartridges, nodes and details; the carrier casting and the ribbon cartridge go without bevels, and a few small
+  cylinders have fewer segments, to stay there. Still more than half of the 1.1 MB for all five units.
 - **Clearance**: the build exits 1 if the carrier, wheel or hammer at either stop touches the covers, filter, frame,
   feeder, platen or bail, if the cover touches the top, filter or feeder anywhere from closed to its stop, or if the
-  bail touches the top, the cover or the platen.
+  bail touches the top, the cover or the platen. The wide ribbon plate and the cartridge's tips are in that check.
+
+Not yet matched:
+- The depth rests on MIM p.20's proportions and a rounded museum figure (0.63 to 0.66 m); no source gives it exactly.
+- The paper's way from a tray to the platen: inside the feeder it is enclosed and no photograph or drawing shows it, so
+  it is not modelled; the soft body still lays the delivered sheet on the stacker plate from under the exit rollers.
+  The trays are only their protruding ends.
+- The ribbon cartridge's lobes are lower and blunter at the tips than PG p.41 (where they rise to points behind the
+  break lines of MIM p.57), and its lower housings are plain cylinders. The cardholder and the hammer's nose are as
+  before. The printwheel cartridge's label printing ("IBM Cartridge Printwheel", the style number) is not drawn.
+- The power switch's bezel is tan in the model; PH 5218_1 shows it tan, the owner's photograph pale grey.
+- The cabinet's front-top radius, the base band's inset and the front face are as before (they matched within a few
+  millimetres); the label on the owner's panel is not modelled (5218_1's right section is blank).

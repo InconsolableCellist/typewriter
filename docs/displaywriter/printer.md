@@ -15,6 +15,8 @@ by us, with the method stated. Names and marks are allowed for this machine (own
 | MD | 6580 Machine Description, Nov 1983 | — |
 | ORG | S544-2036-0, Operator Reference Guide, Textpack 4, Feb 1982 | — |
 | PH | bitsavers `pdf/ibm/5218/pictures/` photos `5218.jpg`, `5218_1.jpg` … `5218_5.jpg` | — |
+| PG | S544-0861-4, Displaywriter System Printer Guide, May 1983 (bitsavers `pdf/ibm/5215/`; PDF page = printed page + 9) | 170 |
+| HF | The Henry Ford, object 99.98.1, IBM Displaywriter word processor and printer, 1983 (catalogue record) | — |
 
 `p.N` is the PDF page: the number of form feeds before the line, plus 1. Page numbers were checked against
 renders for MIM p.18, 20, 51, 52, 57, 58, 87, 91 and 186.
@@ -33,7 +35,7 @@ the Bitsavers `pdf/ibm/5218/` directory.
 | Printing | Bidirectional: prints with the carrier moving left or right | MIM p.172; GIM p.28 |
 | Weight | about 29 kg (64 lb), a two-person lift | SET p.10 |
 | Sheet feeder option | about 11.3 kg, sits on top of the printer, latches into the cover openings | SET p.22–23 |
-| Overall dimensions | **Not found in any source.** Inferred from PH `5218_2.jpg` (top view) and `5218_1.jpg` (front), using the paper slot as the scale: it must pass 392 mm paper, so its inner width is taken as about 400 to 410 mm. Result: width about 0.70 to 0.79 m, depth about 0.55 to 0.60 m, height about 0.20 to 0.25 m. Low confidence (±10 %). Measured again for the model: 0.73 × 0.188 × 0.645 m (width, height to the access cover, depth; `models.md`, Printer) | inferred |
+| Overall dimensions | Width 28.00 in (711 mm), length 26.00 in, height 18.75 in for a 5218 A02 in a museum record (the height is with something on top: the bare cabinet is about 0.19 m in every photograph). No IBM source found. The model: 0.711 × 0.188 × 0.645 m (width, height to the access cover, depth from MIM p.20's proportions; `models.md`, Printer). The mechanism, cover and panel stand about 14 mm left of the cabinet's centre | HF; PH 5218_1; BRO p.18; inferred |
 | Cover | Off-white or light warm-grey plastic, matte finish to cut glare. A top cover over a bottom cover, and a lift-up operator access cover in the centre. The access cover is held by a magnetic latch on A01/A02 (a spring clip on A03/A04). Behind it, a tinted transparent window and a perforated "acoustic filter" form the paper slot at the rear top. Two square openings in the top take the paper handler latches, or snap-in cover inserts when no handler is fitted | GIM p.104 (matte); MIM p.183, MIM83 p.134 (latch); SET p.11, p.16 (inserts, "acoustic filter" with a paper-alignment triangle); PH 5218_1/5218_2 (colour, layout) |
 | Mechanism mounting | The printer mechanism sits on shock mounts inside the covers. The bottom cover is lined with acoustic material | MIM p.29–31 (shock mount screws), p.63 (acoustic material) |
 | Power switch | Rocker on the front right face (red rocker in a dark bezel, "I/O") | MIM p.17 item 1; PH 5218_1 |
@@ -66,7 +68,7 @@ serially into a 25-bit register (MIM p.180).
 | Platen diameter | **Not given.** Inferred at about 40 to 45 mm. Method: in PH `5218_4.jpg` the platen's visible length is about 9.8 times its diameter. Its length must exceed the 392 mm maximum paper, so about 410 to 420 mm is assumed. Check: index steps of 1/96 in at 180 steps per revolution move the paper 1.875 in per motor revolution. A 42 mm platen then needs a belt reduction of about 2.8:1, which is plausible | inferred |
 | Platen length | ≥ 392 mm (it handles paper up to 392 mm / 15.43 in). Inferred about 410 to 420 mm; the model takes 520 mm, 0.71 of the width as MIM p.20 draws it (`models.md`, Printer) | MIM p.172; GIM p.28 |
 | Platen surface | Black rubber (photo). End play 0.03 to 0.15 mm set by the platen gear | PH 5218_4; MIM p.36 |
-| Knobs | No operator platen knob is mentioned or visible. Paper is moved by the Paper Up/Down keys. The only knob in the manuals is the **ribbon advance knob** on the carrier | MIM p.95, p.181; PDG (S544-2000-2) p.25 |
+| Knobs | No operator platen knob is mentioned or visible; PG p.38 numbers every 5218 control and has none (the platen knobs and bail lever in PG p.11-29 are the 5215's). Paper is moved by the Paper Up/Down keys. The only knob in the manuals is the **ribbon advance knob** on the carrier, at the ribbon plate's front right | MIM p.57, p.95, p.181; PDG (S544-2000-2) p.25; PG p.38, p.42 |
 | Maximum writing line | 335 mm (13.2 in) | MIM p.172; GIM p.28 |
 | Paper width (manual feed) | 80 to 392 mm | GIM p.28 |
 | Feed | **Friction**: platen plus feed rollers. Six roller modules on a rod under the platen, each with a front and a rear roller and a paper aligner. A cam deflector arm with spring fingers rocks the modules front-to-rear to engage or release the paper | MIM p.186 |
@@ -88,7 +90,7 @@ serially into a 25-bit register (MIM p.180).
 |---|---|---|
 | Characters | Up to 96 different characters. The print test prints "all petals" | MIM p.172, p.131 |
 | Spokes | 96 (inferred: 96 characters on a 96-step motor, so 1 step = 1 petal = 3.75°, and home is lowercase "a") | MIM p.187 (inferred) |
-| Packaging | The wheel lives in a plastic **printwheel cartridge** that also carries ribbon guides. It snaps in, and the part number is on the front of the case | MIM p.57; MD; GIM p.104; ORG (line 26241) |
+| Packaging | The wheel lives in a plastic **printwheel cartridge** that also carries ribbon guides. It snaps in, and the part number is on the front of the case. The case: two round plates either side of the wheel below a band with an ear at each side, the upper petals open inside a trapezoid handle, the hub seen through a triangular window; colour-coded by pitch | MIM p.57; MD; GIM p.104; ORG (line 26241); PG p.37, p.47, p.50 |
 | Diameter, material | **Not in any source.** Modelling assumption: about 70 to 80 mm, moulded plastic petals with the glyph at each tip. Unverified | open |
 | Arrangement | Not given. The hammer force groups say that punctuation, medium and large glyphs are spread around the wheel. Print test order: a–z, A–Z, 0–9 forward, then the symbols in reverse | MIM p.189, p.131, p.118 |
 | Mounting | On a print wheel hub clamped to the selection motor shaft with a screw. The hub has an "extended part" (a key). Hub-to-shaft gap 0 to 0.1 mm | MIM p.58, p.85, p.89 |
@@ -133,7 +135,7 @@ serially into a 25-bit register (MIM p.180).
 
 | Item | Value | Source |
 |---|---|---|
-| Cartridge | A snap-in cartridge on the carrier's ribbon plate, held by left and right latches. The operator changes it without touching the ribbon | MIM p.188, p.56; MD |
+| Cartridge | A snap-in cartridge on the carrier's ribbon plate, held by left and right latches. The operator changes it without touching the ribbon. Dark grey, 265 mm across: two lobes over the spools (132 mm apart, 105 mm in front of the print line) with a notch for the selection motor between them, a slot window on the left lobe and the IBM logo on the right | MIM p.188, p.56, p.57 (to scale); MD; PG p.41, p.44 |
 | Ribbon size | 11.6 mm × 122 m (A01/A02). MIM83 gives 11.8 mm × 122 m | MIM p.188; MIM83 p.137 |
 | Yield | About 1 million characters per cartridge. On A03/A04: 340,000 in quality mode, 1 million in economy | MIM p.188; MIM83 p.137 |
 | Type | **Not stated.** Inferred: a multi-strike film. 122 m / 1e6 characters gives about 0.12 mm of advance per character, far less than a glyph width, so impressions must overlap, and the lift mechanism moves the ribbon up and down between tracks. A single-strike film would need much more length | inferred |
@@ -255,7 +257,8 @@ on-the-move timing. That split fits the project plan: the word-processor softwar
 
 1. Wheel positioning time (average and maximum), the acceleration profile, and the motor torque and inertia.
 2. Hammer energy or force per group, coil current and pulse width, flight time, dwell, and the moving mass.
-3. Overall dimensions (estimated from photos only, ±10 %) and platen diameter and length (inferred about 42 × 415 mm).
+3. Overall depth and height (the width is a museum record; depth from MIM p.20's proportions) and platen diameter and
+   length (inferred about 42 × 415 mm; the model takes 520 mm from MIM p.20 and p.57).
 4. Printwheel diameter, material, petal layout and glyph height.
 5. Ribbon type (multi-strike film is inferred), the lift travel and the number of tracks.
 6. Carrier slew speed and acceleration for returns and tabs. Line feed time (only bounded at ≤ 66 ms per 6 lpi line).

@@ -1,6 +1,6 @@
 {
  "size": [
-  0.73,
+  0.711,
   0.188,
   0.645
  ],
@@ -49,7 +49,7 @@
  "ribbon": {
   "spoolX": 0.066,
   "spoolY": 0.116,
-  "spoolZ": 0.128,
+  "spoolZ": 0.19,
   "width": 0.0116,
   "guidePostX": 0.026
  },
@@ -72,6 +72,7 @@
   "slope": -0.17632698070846492
  },
  "cabinet": {
+  "offsetX": 0.014,
   "top": 0.17,
   "coverTop": 0.188,
   "hinge": [
@@ -88,7 +89,7 @@
    0.028
   ],
   "feeder": {
-   "halfWidth": 0.278,
+   "halfWidth": 0.272,
    "top": 0.525,
    "opening": [
     0.17,

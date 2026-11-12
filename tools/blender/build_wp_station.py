@@ -51,8 +51,10 @@ SW_X, SW_W, SW_D, SW_DEPTH = -0.157, 0.066, 0.036, 0.009             # switch we
 SW_Z = ZF - 0.016 - SW_D / 2                                         # its front wall stands on the roll of the front edge
 SW_FLOOR = H - SW_DEPTH
 AXLE = (SW_X, SW_FLOOR - 0.004, SW_Z)                                # the rocker's axle, running front to back
-ROCK = 0.16                   # rad either way of centre; also the slope of each half of the paddle's top
+ROCK = 0.16                   # rad either way of centre
 PADDLE = (0.017, 0.0075)      # the rocker paddle's half length (x) and half depth (z)
+PADDLE_TOP = 0.0068           # its flat top above the axle: level 2.8 mm above the floor, so a pressed end meets the floor
+SLOT_CLEAR = 0.0014           # the slot in the floor and the bezel under it, round the paddle
 # Rear panels, measured on PH module_rear_panel (the module's width as the scale): panel 1 (left as seen from the back)
 # and panel 2, the power supply's back, both reaching across the parting line nearly to the foot. The sockets on them
 # keep the layout measured on PH Displaywriter_back.JPG for panels of the earlier size (LAYOUT), scaled to these.
@@ -142,7 +144,7 @@ def build_cover():
     W.boolean(cover, scoop)
     # The slot in its floor the paddle rocks in; the switch's dark body shows below it.
     hl, hw = PADDLE
-    W.boolean(cover, W.ob_from(W.prism(W.rounded_rect(SW_X - hl - 0.0009, SW_Z - hw - 0.0008, SW_X + hl + 0.0009, SW_Z + hw + 0.0008, 0.0006, seg=2), "y", SW_FLOOR - 0.02, SW_FLOOR + 0.002), "slot"))
+    W.boolean(cover, W.ob_from(W.prism(W.rounded_rect(SW_X - hl - SLOT_CLEAR, SW_Z - hw - 0.0008, SW_X + hl + SLOT_CLEAR, SW_Z + hw + 0.0008, 0.0006, seg=2), "y", SW_FLOOR - 0.02, SW_FLOOR + 0.002), "slot"))
     # Badge recess at the front right, just above the parting line (PH module_front, BRO p.18).
     bx, by, bw, bh = BADGE
     W.boolean(cover, W.ob_from(W.prism(W.rounded_rect(bx - bw / 2 - 0.0005, by - bh / 2 - 0.0005, bx + bw / 2 + 0.0005, by + bh / 2 + 0.0005, 0.0015), "z", ZF - 0.0012, ZF + 0.01), "b"))
@@ -294,7 +296,7 @@ def build_switch():
     ax, ay, az = AXLE
     hl, hw = PADDLE
     rim = W.ob_from(W.prism(W.rounded_rect(ax - hl - 0.0028, az - hw - 0.0026, ax + hl + 0.0028, az + hw + 0.0026, 0.0015, seg=2), "y", SW_FLOOR - 0.0035, SW_FLOOR - 0.0008), "rim")
-    W.boolean(rim, W.ob_from(W.prism(W.rounded_rect(ax - hl - 0.0009, az - hw - 0.0008, ax + hl + 0.0009, az + hw + 0.0008, 0.0006, seg=2), "y", SW_FLOOR - 0.01, SW_FLOOR + 0.01), "o"))
+    W.boolean(rim, W.ob_from(W.prism(W.rounded_rect(ax - hl - SLOT_CLEAR, az - hw - 0.0008, ax + hl + SLOT_CLEAR, az + hw + 0.0008, 0.0006, seg=2), "y", SW_FLOOR - 0.01, SW_FLOOR + 0.01), "o"))
     body = W.ob_from(W.box_bm(ax - hl - 0.002, SW_FLOOR - 0.016, az - hw - 0.002, ax + hl + 0.002, SW_FLOOR - 0.0035, az + hw + 0.002), "body")
     W.finish_small(rim, "wp_dark")
     W.finish_small(body, "wp_dark")
@@ -302,32 +304,48 @@ def build_switch():
 
 
 def build_rocker():
-    """The red rocker paddle, built round its axle at the origin, then posed as a node at AXLE. A small paddle of the
-    usual kind (PH module_front_power_switch, desk_station_keyboard_diskette): its top is two flats meeting in a
-    shallow valley over the axle, each rising ROCK toward its end, so whichever end is pressed lies level and the other
-    stands about 6 mm proud of the well's floor; most of it sits below the floor in the switch body. O is moulded on the
-    left half, I on the right."""
+    """The red rocker paddle, built round its axle at the origin, then posed as a node at AXLE: one solid rectangular
+    block with a single flat top (PH module_front_power_switch, desk_station_keyboard_diskette). The whole block tilts
+    ROCK about the axle, so the pressed end lies level with the well's floor and the other stands about 5.5 mm proud;
+    most of it sits below the floor in the switch body. O is printed on the left half of the top, I on the right."""
     hl, hw = PADDLE
-    valley, under, ch = 0.0055, -0.0075, 0.0009
-    end = valley + hl * math.tan(ROCK)
-    prof = W.round_poly([(-hl, under), (hl, under), (hl, end - ch), (hl - ch, end), (0.0, valley), (-hl + ch, end), (-hl, end - ch)],
-                        [0.0004, 0.0004, 0.0005, 0.0005, 0.0, 0.0005, 0.0005], seg=2)
-    paddle = W.ob_from(W.prism(prof, "z", -hw, hw), "paddle")
-    W.bevel_finish(paddle, width=0.0004, segs=1, angle=20)
+    top, under = PADDLE_TOP, -0.0075
+    paddle = W.ob_from(W.box_bm(-hl, under, -hw, hl, top, hw), "paddle")
+    W.bevel_finish(paddle, width=0.0005, segs=1, angle=20)
     W.assign(paddle, "wp_red")
     W.box_uv(paddle)
-    # I: a raised bar across the right half (front to back, PH); O: a ring on the left half. Each lies on its flat.
-    bar = W.box_bm(-0.00045, 0.0, -0.0032, 0.00045, 0.00025, 0.0032)
-    bmesh.ops.transform(bar, matrix=Matrix.Translation((hl * 0.5, valley + (end - valley) * 0.5, 0)) @ Matrix.Rotation(ROCK, 4, "Z"), verts=bar.verts)
-    mo = W.ob_from(bar, "marks")
-    ro = W.ob_from(W.cylinder_bm((0, 0.00012, 0), "y", 0.0027, 0.00025, 20), "ring")
-    W.boolean(ro, W.ob_from(W.cylinder_bm((0, 0.00012, 0), "y", 0.0019, 0.002, 20), "h"))
-    ro.data.transform(Matrix.Translation((-hl * 0.5, valley + (end - valley) * 0.5, 0)) @ Matrix.Rotation(-ROCK, 4, "Z"))
+    # I: a bar running front to back on the right half; O: a ring on the left half; both flat on the top face.
+    mo = W.ob_from(W.box_bm(hl * 0.5 - 0.00045, top, -0.0032, hl * 0.5 + 0.00045, top + 0.00025, 0.0032), "marks")
+    ro = W.ob_from(W.cylinder_bm((-hl * 0.5, top + 0.00012, 0), "y", 0.0027, 0.00025, 20), "ring")
+    W.boolean(ro, W.ob_from(W.cylinder_bm((-hl * 0.5, top + 0.00012, 0), "y", 0.0019, 0.002, 20), "h"))
     W.finish_small(mo, "wp_label")
     W.finish_small(ro, "wp_label")
     rocker = W.merge([paddle, mo, ro], "station_rocker")
     rocker.data.transform(Matrix.Translation(AXLE))
     return rocker
+
+
+def rocker_check():
+    """Each end of the tilted block must stay inside the floor's slot (SLOT_CLEAR round it) wherever it crosses the
+    floor and the bezel under it, at both stops; the pressed end must not sink below the floor. Exits 1 if not."""
+    hl, top = PADDLE[0], PADDLE_TOP
+    floor = SW_FLOOR - AXLE[1]
+    bad = []
+    for a in (ROCK, -ROCK):
+        c, s_ = math.cos(a), math.sin(a)
+        for x in (-hl, hl):
+            for y in [floor - 0.0035 + k * 0.0005 for k in range(9)]:      # from the bezel's underside to the floor
+                # the end face's x at height y after the turn: (x, v) -> (x c - v s, x s + v c)
+                v = (y - x * s_) / c
+                if -0.0075 <= v <= top and abs(x * c - v * s_) > hl + SLOT_CLEAR - 0.0002:
+                    bad.append(f"rock {a:+.2f}: end {x:+.3f} at {y * 1000:.1f} mm reaches {abs(x * c - v * s_) * 1000:.2f} mm")
+        low = min(x * s_ + top * c for x in (-hl, hl))
+        if low < floor - 0.0003:
+            bad.append(f"rock {a:+.2f}: pressed end {(low - floor) * 1000:.2f} mm under the floor")
+    if bad:
+        print("ROCKER CLEARANCE FAILED:\n  " + "\n  ".join(bad))
+        sys.exit(1)
+    print("rocker clearance ok")
 
 
 # ---------- the rest ----------
@@ -400,6 +418,7 @@ def main():
     interior = build_interior()
     cable = build_cable()
     rocker = build_rocker()
+    rocker_check()
     objs = [cover, base, badge, panels, switch, feet, interior, cable, rocker] + leds
     for o in objs:
         o.data.name = o.name

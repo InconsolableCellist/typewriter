@@ -19,7 +19,7 @@ PAIRS = {   # render name: (reference file, crop box as fractions of the image o
     "mrear_m_off": ("module_rear_panel.webp", None, "PH module_rear_panel"),
     "mleds_m": ("module_rear_led_column_lit.webp", None, "PH module_rear_led_column_lit"),
     "switch_m_off": ("module_front_power_switch.webp", (0.09, 0.50, 0.30, 0.69), "PH module_front_power_switch, switch"),
-    "switch": ("desk_station_keyboard_diskette.jpg", (0.47, 0.47, 0.63, 0.54), "PH desk_station_keyboard_diskette, switch on"),
+    "switch": ("desk_station_keyboard_diskette.jpg", (0.47, 0.50, 0.63, 0.58), "PH desk_station_keyboard_diskette, switch on"),
     "dfront": ("display_front_close.jpg", None, "PH display_front_close"),
     "desk": ("desk_station_keyboard_diskette.jpg", (0.25, 0.0, 1.0, 0.72), "PH desk_station_keyboard_diskette"),
     "deskfront": ("desk_front_scott_peterson.jpg", (0.0, 0.0, 0.62, 0.75), "PH desk_front_scott_peterson"),

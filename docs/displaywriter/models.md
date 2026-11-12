@@ -168,10 +168,13 @@ Module, 483 x 356 x 178 mm:
 - Power switch (the owner's "chonky" note): a small red-orange rocker of the usual kind, 34 x 15 mm, in a slot in the
   floor of a shallow well 66 x 36 mm with 10 mm corners and drafted walls, 9 mm deep, cut into the front left of the
   top where it rolls over the front, so its front wall is lower than its back (PH module_front_power_switch,
-  desk_station_keyboard_diskette; CSG p.40); centre x = -157 mm. The paddle's top is two flats meeting over the axle,
-  each rising 0.16 rad toward its end, so the pressed half lies level and the other end stands about 6 mm proud of
-  the floor, as both photographs show; most of the paddle is below the floor in the switch's dark body, and only a
-  dark gap shows round it. O is a ring on the left half, I a bar on the right. `parts.setRocker(on)` sets
+  desk_station_keyboard_diskette; CSG p.40); centre x = -157 mm. The paddle is one solid rectangular block with a
+  single flat top, 2.8 mm above the floor at the axle (the owner: "quite clearly a solid rectangle"; an earlier
+  two-flat top with a crease is gone). The whole block tilts 0.16 rad about the axle, so the pressed end lies level
+  with the floor and the other stands about 5.5 mm proud; most of it is below the floor in the switch's dark body,
+  and only a dark gap shows round it (the slot clears it by 1.4 mm; the builder exits 1 if either end would touch the
+  slot or the bezel under it, or sink below the floor, at either stop). O is a ring on the left half of the top, I a
+  bar on the right. `parts.setRocker(on)` sets
   `rocker.rotation.z` (on: -0.16, the I end down). The small "1" written beside the well on the owner's unit is not
   modelled.
 - Vents (PH module_side_vents_left_switch, _right): vertical slots straight through both side walls, no recessed
@@ -225,7 +228,7 @@ Comparison images (`tools/blender/previews/`, gitignored): `wp_station_cmp_mfron
 alone are `wp_station_<view>.png`, and `previews/before/` holds the previous model from the same viewpoints.
 
 Size: `tools/blender/quantize_glb.py` (run by `wp_mould.export`) stores positions as 16-bit integers in 0.05 mm steps
-and normals as 8 bits (KHR_mesh_quantization); UVs stay float. `wp_station.glb` is 396 KB and `wp_display.glb` 233 KB:
+and normals as 8 bits (KHR_mesh_quantization); UVs stay float. `wp_station.glb` is 393 KB and `wp_display.glb` 233 KB:
 0.60 MB together (was 0.59). The side vents cost most (about 2400 vertices in the cover); the rear panels' sockets
 come next.
 

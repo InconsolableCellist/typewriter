@@ -117,6 +117,31 @@ function petalAtlas(glyphs, order) {
   return canvasTexture(c);
 }
 
+/** The badge on the top at the front left (PH 5218_2): IBM's striped letters over the model, dark on a satin plate. */
+function badgeTexture() {
+  const W = 256, H = 184, c = canvas(W, H), g = c.getContext('2d');
+  g.fillStyle = '#d8d3c4'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#1b1b1d';
+  g.font = 'bold 92px "Times New Roman", Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  g.fillText('IBM', W / 2, 98);
+  g.fillStyle = '#d8d3c4';
+  for (let k = 0; k < 8; k++) g.fillRect(0, 28 + k * 9.4, W, 3.2);   // the stripes through the letters
+  g.fillStyle = '#1b1b1d'; g.font = `30px ${FONT}`; g.textAlign = 'left';
+  g.fillText('5218 A02', 34, 150);
+  return canvasTexture(c);
+}
+
+/** The ribbon cartridge's moulded logo (PG p.41), a shade lighter than its plastic, on a clear ground. */
+function cartridgeLogoTexture() {
+  const W = 256, H = 110, c = canvas(W, H), g = c.getContext('2d');
+  g.fillStyle = 'rgba(120,120,122,0.85)';
+  g.font = 'bold 78px "Times New Roman", Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('IBM', W / 2, H / 2 + 4);
+  g.globalCompositeOperation = 'destination-out';
+  for (let k = 0; k < 7; k++) g.fillRect(40, 22 + k * 10.5, W - 80, 3.2);
+  return canvasTexture(c);
+}
+
 /** The leadscrew's thread: three starts (lead 21.16 mm), u = x / lead and v = angle / 2 pi on the cylinder. */
 function threadTexture() {
   const S = 256, c = canvas(S, S), g = c.getContext('2d');
@@ -155,6 +180,10 @@ function perforationTexture() {
  * Loads the printer. size: units.printer.size (the model is built to it); mats: createUnitMaterials();
  * opts: { printer (the definition's printer block), glyphs (the printwheel faces), order (petal order), url }.
  * Returns { group, parts, update(state, layout) }; parts: cover, panelKeys, power, and the moving mechanism.
+ * The operator's controls, each a node whose origin is its pivot (models.md, Printer, Controls): cover (hinge, turns
+ * about x), power (rocker, about x), panelKeys[0..7] (press along -z), leds[0..9], ribbonKnob (on the carrier, about y),
+ * platen (about x; the 5218 has no platen knobs), bail and feedRolls (paper release, about x), feederGate (about the
+ * stacker plate's normal), trays[0..1] (slide along z).
  */
 export async function buildPrinter(size, mats, opts = {}) {
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
@@ -178,6 +207,9 @@ export async function buildPrinter(size, mats, opts = {}) {
     wp_red: plastic(0xc8261a, 0.42), wp_filter: filter, wp_wheel: wheelPlastic, wp_petal: petal,
     wp_cartridge: plastic(0x1d5a43, 0.45), wp_white: plastic(0xe6e2d6, 0.5), wp_motor: new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.4 }),
     wp_paper: new THREE.MeshStandardMaterial({ color: 0xf4f2ec, roughness: 0.9 }), wp_cable: plastic(0x8fa3a3, 0.6), wp_foam: new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 0.97 }),
+    wp_ribcart: plastic(0x3b3b3e, 0.55),   // the ribbon cartridge, a dark grey a shade lighter than the black plate (PG p.41)
+    wp_badge: new THREE.MeshStandardMaterial({ map: badgeTexture(), roughness: 0.35, metalness: 0.25 }),
+    wp_cartlogo: new THREE.MeshStandardMaterial({ map: cartridgeLogoTexture(), transparent: true, roughness: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }),
   };
   const nodes = {};
   const keyMats = KEY_COLOURS.map((c, i) => plastic(0xffffff, 0.38, { map: keyTexture(c, KEY_LEGENDS[i]), clearcoat: 0.25, clearcoatRoughness: 0.4 }));   // the colour is in the map
@@ -196,7 +228,12 @@ export async function buildPrinter(size, mats, opts = {}) {
   const group = new THREE.Group();
   group.add(gltf.scene);
   const carrier = nodes.printer_carrier, wheel = nodes.printer_wheel, hammer = nodes.printer_hammer;
-  carrier.attach(wheel); carrier.attach(hammer);   // they ride the carrier; their own motion is in its frame
+  // They ride the carrier; their own motion is in its frame. The ribbon advance knob turns on its own axle (y).
+  const ribbonKnob = nodes.printer_ribbon_knob, cartLogo = nodes.printer_cartlogo;
+  for (const o of [wheel, hammer, ribbonKnob, cartLogo]) if (o) carrier.attach(o);
+  // The sheet feeder's operator parts go with it: the paper insertion gate and the two trays.
+  const feederGate = nodes.printer_feeder_gate, trays = [nodes.printer_tray0, nodes.printer_tray1].filter(Boolean);
+  for (const o of [feederGate, ...trays]) if (o) nodes.printer_feeder.attach(o);
   const panelKeys = [...Array(8)].map((_, i) => nodes[`printer_key${i}`]);
   const leds = [...Array(10)].map((_, i) => nodes[`printer_led${i}`]);
   const rest = new Map();
@@ -204,7 +241,8 @@ export async function buildPrinter(size, mats, opts = {}) {
   const parts = {
     cover: nodes.printer_cover, panelKeys, power: nodes.printer_power, carrier, wheel, hammer, platen: nodes.printer_platen,
     bail: nodes.printer_bail, feedRolls: nodes.printer_feedrolls, leadscrew: nodes.printer_leadscrew, cam: nodes.printer_cam,
-    leds, display: nodes.printer_display, feeder: nodes.printer_feeder, body: nodes.printer_body,
+    leds, display: nodes.printer_display, feeder: nodes.printer_feeder, body: nodes.printer_body, ribbonKnob,
+    feederGate, trays,
   };
   const lead = P?.carrier?.lead ?? 0.02116, powerTravel = P?.power?.travel ?? 0.35;
   let lastLeds = -1, lastDigits = null;

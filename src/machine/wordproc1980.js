@@ -11,14 +11,14 @@ import calibration from './wp-printer-cal.js';
 const deg = Math.PI / 180;
 const IN = 0.0254;
 
-// Documented sizes (width, height, depth), m, and masses, kg. The printer's size is measured from the photographs
-// (docs/displaywriter/models.md, Printer): the paper slot passes 392 mm paper, the rest in proportion.
+// Documented sizes (width, height, depth), m, and masses, kg. The printer's width is the Henry Ford Museum's record of a
+// 5218 A02 (28 in), its height and depth measured from the photographs and MIM p.20 (docs/displaywriter/models.md, Printer).
 const SIZE = {
   station: [0.483, 0.178, 0.356],      // electronics module, HW 1.1
   display: [0.381, 0.292, 0.348],      // 25-line display, HW 1.2
   keyboard: [0.538, 0.101, 0.213],     // HW 2.1
   diskette: [0.254, 0.292, 0.398],     // dual unit, HW 3.1
-  printer: [0.73, 0.188, 0.645],       // measured from the photographs (models.md, Printer)
+  printer: [0.711, 0.188, 0.645],      // 28 in wide (museum record); height and depth from the photographs (models.md, Printer)
 };
 const GAP = 0.04;                      // between bodies standing side by side
 const KEYBOARD_GAP = 0.045;            // module front to keyboard back
@@ -29,7 +29,9 @@ const STATION_Z = -0.13;               // module and diskette unit centres: the 
 // Placements derived from the sizes and gaps, not typed in.
 const station = { x: STATION_X, z: STATION_Z };
 const diskette = { x: STATION_X + SIZE.station[0] / 2 + GAP + SIZE.diskette[0] / 2, z: STATION_Z };
-const printer = { x: STATION_X - SIZE.station[0] / 2 - GAP - SIZE.printer[0] / 2, z: ROW_BACK + SIZE.printer[2] / 2 };
+// The printer's origin is under its mechanism, which stands left of the cabinet's centre (PRINTER_CABINET_X, models.md).
+const PRINTER_CABINET_X = 0.014;
+const printer = { x: STATION_X - SIZE.station[0] / 2 - GAP - SIZE.printer[0] / 2 - PRINTER_CABINET_X, z: ROW_BACK + SIZE.printer[2] / 2 };
 const keyboard = { x: STATION_X, z: STATION_Z + SIZE.station[2] / 2 + KEYBOARD_GAP + SIZE.keyboard[2] / 2 };
 
 export default {
@@ -106,9 +108,9 @@ function printerBlock() {
     ribbon: {
       film: true, width: 0.0116, length: 122, tracks: 3, thickness: 0.00003,   // multi-strike film (PR 6)
       vibrator: { restDrop: trackPitch, fullLift: 2 * trackPitch },          // lift 0, 1 and 2 track pitches
-      // The cartridge's two spool lobes either side of the hammer, in front of the wheel (MIM p.57); a full supply
-      // spool of 122 m of film is 70 mm across.
-      spoolX: 0.066, spoolY: PLATEN[1] - 0.016, spoolZ: PLATEN[2] + 0.064,
+      // The cartridge's two spools either side of the selection motor, 132 mm apart and 105 mm in front of the print
+      // line (MIM p.57's top view to scale); a full supply spool of 122 m of film is 72 mm across.
+      spoolX: 0.066, spoolY: PLATEN[1] - 0.016, spoolZ: PLATEN[2] + 0.126,
       pawlFeedScale: 1, feedPerKey: 0.00037 / 3, colourBands: ['black'],
     },
     carriage: { typingDirection: -1, travel: 0.340 },
@@ -178,8 +180,9 @@ function printerBlock() {
     // the platen to the acoustic filter. The sheet feeder stands over the slot: its stacker plate is the paper table,
     // its front leans back clear of the opened cover.
     cabinet: {
+      offsetX: PRINTER_CABINET_X,                    // the cabinet's centre right of the mechanism's (PH 5218_1, BRO p.18)
       top: 0.170, coverTop: 0.188, hinge: [0.186, 0.094], slot: [0.012, 0.094], slotHalfWidth: 0.212, filterFoot: [0.160, 0.028],
-      feeder: { halfWidth: 0.278, top: 0.525, opening: [0.170, 0.430], openingHalfWidth: 0.215, front: 0.072, lean: 0.30,
+      feeder: { halfWidth: 0.272, top: 0.525, opening: [0.170, 0.430], openingHalfWidth: 0.215, front: 0.072, lean: 0.30,
         topBack: -0.135, rearTop: 0.345, rearTopFront: -0.155, back: -0.315, trayBack: -0.39 },
     },
     paperFeed: { chunk: 16, loadMaxSteps: 96 * 5, ejectMaxSteps: 96 * 13 },

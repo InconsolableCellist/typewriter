@@ -58,10 +58,10 @@ export default {
   },
 
   cameras: {
-    operator: { position: [0.12, 0.42, 0.66], target: [0.12, 0.30, 0.04] },
+    operator: { position: [0.12, 0.64, 1.10], target: [0.12, 0.2, 0.0] },   // a seated typist: the screen and the keyboard
     overview: { position: [0.0, 1.15, 2.45], target: [-0.05, 0.12, -0.05] },
     keyboard: { position: [0.12, 0.48, 0.62], target: [0.12, 0.06, 0.20] },
-    printer: { position: [-0.53, 0.78, 0.66], target: [-0.53, 0.20, -0.10] },
+    printer: { position: [-0.53, 0.62, 1.0], target: [-0.53, 0.14, -0.12] },     // the cabinet, its panel and the feeder
     diskette: { position: [0.62, 0.36, 0.62], target: [0.53, 0.15, 0.07] },
   },
   defaultCamera: 'overview',

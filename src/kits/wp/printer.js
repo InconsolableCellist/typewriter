@@ -14,6 +14,7 @@ const FEEDER_DROP = 0.010;   // m up the plate the sheet starts, its top just un
 export async function installPrinter({ stage, machine, geometry, mats, group, sim, glyphs, onDevice, controls, view, pickables }) {
   const softMachine = printerSoftMachine(machine);
   const soft = new SoftWorld({ machine: softMachine, geometry: geometry.printer, glyphs, origin: geometry.units.printer.origin });
+  soft.parkSheet();   // the printer starts empty: sheets come from the feeder when the software loads one
   const paper = new PaperView({ renderer: stage.renderer, soft, mats, keyDir: new THREE.Vector3() });
   const ribbon = new RibbonView({ soft, machine: softMachine, mats, renderer: stage.renderer });
   ribbon.printPointWorld = geometry.printer.printPoint;

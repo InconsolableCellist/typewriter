@@ -441,6 +441,7 @@ export class RibbonSim {
 
   /** Cloth weave pattern at a point on the ribbon (s along, w across), in 0..1. */
   weave(s, w) {
+    if (this.m.ribbon.film) return 1;     // a carbon film has no threads
     const P = this.m.ribbon.weaveThreadPitch;
     const a = Math.sin((2 * Math.PI * s) / P), b = Math.sin((2 * Math.PI * w) / P);
     return 0.86 + 0.14 * a * b + 0.06 * Math.sin((2 * Math.PI * s) / (3.1 * P)) * Math.cos((2 * Math.PI * w) / (2.7 * P));

@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                       TYPING TASKS
+
+                  ID    ITEM
+
+                  a     Create Document
+                  b     Revise Document
+                  c     Paginate Document
+                  d     Display Index of Diskette Contents
+                  e     Print Document
+                  f     Go to Task Selection
+
+
+
+
+
+
+
+
+
+
+Type ID letter to choose ITEM; press ENTER:
+

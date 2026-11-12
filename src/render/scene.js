@@ -212,7 +212,27 @@ export function createScene(canvas) {
     quality = q; resize(cssW, cssH);
   }
 
-  return { renderer, scene, camera, composer, look, applyLook, ao: scenePass.ao, key, rim, resize, setQuality, getQuality: () => quality, getPixelRatio: () => pixelRatio };
+  /**
+   * Fits the key light's shadow camera to a desk area of half size { halfX, halfZ } about the origin, up to `height`
+   * above the desk, so every unit of a system machine casts a shadow. The map size stays 2048.
+   */
+  function fitShadow({ halfX, halfZ, height = 0.5 }) {
+    const cam = key.shadow.camera;
+    key.updateMatrixWorld(); key.target.updateMatrixWorld();
+    const view = new THREE.Matrix4().lookAt(key.position, key.target.position, new THREE.Vector3(0, 1, 0));
+    view.setPosition(key.position); view.invert();
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    const p = new THREE.Vector3();
+    for (const x of [-halfX, halfX]) for (const y of [0, height]) for (const z of [-halfZ, halfZ]) {
+      p.set(x, y, z).applyMatrix4(view);
+      x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); z0 = Math.min(z0, -p.z); z1 = Math.max(z1, -p.z);
+    }
+    cam.left = x0; cam.right = x1; cam.bottom = y0; cam.top = y1;
+    cam.near = Math.max(0.01, z0 - 0.1); cam.far = z1 + 0.1;
+    cam.updateProjectionMatrix();
+  }
+
+  return { renderer, scene, camera, composer, look, applyLook, ao: scenePass.ao, key, rim, resize, setQuality, getQuality: () => quality, getPixelRatio: () => pixelRatio, fitShadow };
 }
 
 /** The room: one photographic HDRI lights the machine and, blurred, is the backdrop. */

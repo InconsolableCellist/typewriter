@@ -1,13 +1,16 @@
 // SimClient: the contract between the mechanism and everything else. A LocalHost runs the same
 // MechanicalSim on the main thread until audio is unlocked by a gesture (and in tests); after
 // unlockAudio the worklet carries on from the same mechanical state, sample accurate from then on.
-import { MechanicalSim, SUBSTEP_HZ } from './mechanics.js';
+import { SUBSTEP_HZ } from './mechanics.js';
+import { createMechanism, createAudioEngine } from './host-factory.js';
 import { makeLayout } from './layout.js';
-import { AudioEngine } from '../audio/engine.js';
 import { loadSamples } from '../audio/samples.js';
 
 const WORKLET_NAME = 'typewriter-sim';
 const HANDOVER_MIN_GAP_MS = 90;   // closest two replayed keystrokes may fall: the carriage must have stepped between them
+
+/** Strikes, device events (replies from a word processor's devices) and everything else go to their own listeners. */
+const channel = (e) => (e.type === 'strike' ? 'strike' : e.type === 'device' ? 'device' : 'event');
 
 class Emitter {
   constructor() { this.handlers = new Map(); }
@@ -17,12 +20,13 @@ class Emitter {
 
 /** Runs MechanicalSim synchronously. `advance` steps it; in the browser a timer calls advance on real time. */
 export class LocalHost extends Emitter {
-  constructor({ machine, geometry, glyphs, autoRun = true }) {
+  /** options: anything else the machine's mechanism host takes at construction (the word processor's `drives`). */
+  constructor({ machine, geometry, glyphs, autoRun = true, options = {} }) {
     super();
-    this.sim = new MechanicalSim({ machine, geometry, glyphs });
+    this.sim = createMechanism({ ...options, machine, geometry, glyphs });
     this.layout = this.sim.layout;
     this.state = new Float32Array(this.layout.length);
-    this.engine = new AudioEngine(this.sim, 48000);
+    this.engine = createAudioEngine(this.sim, 48000);
     this.engine.setEnabled(false);
     this.engine.onSnapshot = (snap, events) => {
       this.state.set(snap);
@@ -37,7 +41,7 @@ export class LocalHost extends Emitter {
     if (autoRun && typeof performance !== 'undefined') this.startClock();
   }
 
-  deliver(e) { this.emit(e.type === 'strike' ? 'strike' : 'event', e); }
+  deliver(e) { this.emit(channel(e), e); }
 
   /** Advance the simulation by `seconds` of simulated time, in audio blocks (renders silently). */
   advance(seconds) {
@@ -66,6 +70,7 @@ export class LocalHost extends Emitter {
 
   pressKey(k, f, d, g) { this.sim.pressKey(k, f, d, g); }
   flickBell() { this.sim.flickBell(); }
+  command(msg) { this.sim.command?.(msg); }
   grabRaw(dof, index, opts) { return this.sim.grab(dof, index, opts); }
   moveGrab(g, target) { this.sim.moveGrab(g, target); }
   releaseRaw(g) { this.sim.release(g); }
@@ -90,7 +95,7 @@ class WorkletHost extends Emitter {
       const m = e.data;
       if (m.t === 's') {
         this.state.set(m.snap);
-        if (m.ev) for (const ev of m.ev) this.emit(ev.type === 'strike' ? 'strike' : 'event', ev);
+        if (m.ev) for (const ev of m.ev) this.emit(channel(ev), ev);
         node.port.postMessage({ c: 'ret', buf: m.snap.buffer }, [m.snap.buffer]);
       } else if (m.t === 'ready') {
         this.sampleRate = m.sampleRate;
@@ -105,6 +110,7 @@ class WorkletHost extends Emitter {
   post(c, extra = {}) { this.node.port.postMessage({ c, ...extra }); }
   pressKey(k, f, d, g) { this.post('pressKey', { k, f, d, g }); }
   flickBell() { this.post('flickBell'); }
+  command(msg) { this.post('dev', { msg }); }
   grabRaw(dof, index, opts) { const id = ++this.grabIds; this.post('grab', { id, dof, index, opts }); return id; }
   moveGrab(g, target) { this.post('moveGrab', { id: g, target }); }
   releaseRaw(g) { this.post('release', { id: g }); }
@@ -136,6 +142,7 @@ class SimClient {
   bind(host) {
     host.on('strike', (e) => this.emitLocal('strike', e));
     host.on('event', (e) => this.emitLocal('event', e));
+    host.on('device', (e) => this.emitLocal('device', e));
   }
 
   emitLocal(name, e) { this.listeners.get(name)?.forEach((fn) => fn(e)); }
@@ -166,6 +173,8 @@ class SimClient {
   }
 
   pressKey(k, f, d, g) { this.later(() => this.host.pressKey(k, f, d, g)); }
+  /** Device commands to a mechanism host with devices (the word processor's printer); nothing on the typewriters. */
+  command(msg) { this.later(() => this.host.command(msg)); }
   flickBell() { this.later(() => this.host.flickBell?.()); }
 
   grab(dof, index = 0, opts = {}) {
@@ -233,8 +242,8 @@ class SimClient {
   advance(seconds) { this.host.advance?.(seconds); }
 }
 
-export async function createSimClient({ machine, geometry, glyphs, audioContext, autoRun } = {}) {
-  const host = new LocalHost({ machine, geometry, glyphs, autoRun: autoRun ?? (typeof window !== 'undefined') });
+export async function createSimClient({ machine, geometry, glyphs, audioContext, autoRun, options } = {}) {
+  const host = new LocalHost({ machine, geometry, glyphs, options, autoRun: autoRun ?? (typeof window !== 'undefined') });
   const client = new SimClient({ machine, geometry, glyphs, host });
   // Before a user gesture a context is suspended and resume() would never settle: stay local, the UI
   // calls unlockAudio() from its first gesture.

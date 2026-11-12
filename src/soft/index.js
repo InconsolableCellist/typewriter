@@ -19,7 +19,9 @@ export class SoftWorld {
     return true;
   }
 
-  constructor({ machine, geometry, glyphs: rawGlyphs, paperGrid, pose } = {}) {
+  /** origin: where this world's frame sits in the scene (a printer unit on the desk); world points are taken relative to it. */
+  constructor({ machine, geometry, glyphs: rawGlyphs, paperGrid, pose, origin = [0, 0, 0] } = {}) {
+    this.origin = origin;
     this.fixedPlaten = !!machine.action?.fixedPlaten;
     const glyphs = withGlyphApi(rawGlyphs);
     this.m = machine; this.geo = geometry; this.glyphs = glyphs;
@@ -179,7 +181,20 @@ export class SoftWorld {
       ribbonInGap: cover,
       paperPresent,
       paperStrength: 1,
+      paperEdgeV: this._paperEdgeV(),
     };
+  }
+
+  /**
+   * How far the sheet's leading edge has gone past the paper sensor, or -1 with no paper there: the printwheel
+   * printer's first-writing-line sensor, on the frame at the platen's centre and print-line height (so it sees the
+   * sheet wherever the carrier is parked).
+   */
+  _paperEdgeV() {
+    const o = this.geo.printPoint, n = this.geo.printNormal, up = 0.006;
+    const x = this.m.platen.center[0] + this.carrierOffset;
+    const hit = this.printer.raycast(x + n[0] * up, o[1] + n[1] * up, o[2] + n[2] * up, -n[0], -n[1], -n[2]);
+    return hit && hit.u >= 0 && hit.u <= this.m.paper.width && hit.v >= 0 && hit.v <= this.m.paper.height ? hit.v : -1;
   }
 
   _forkOffsetUp(f, fork) {
@@ -251,7 +266,7 @@ export class SoftWorld {
    */
   get carrierOffset() { return this.fixedPlaten && this.frame ? this.frame.cx - this.m.platen.center[0] : 0; }
 
-  _toFrame(point) { return [point[0] + this.carrierOffset, point[1], point[2]]; }
+  _toFrame(point) { const o = this.origin; return [point[0] - o[0] + this.carrierOffset, point[1] - o[1], point[2] - o[2]]; }
 
   // ---- interaction
   grabPaper(point) {

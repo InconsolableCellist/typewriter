@@ -9,8 +9,10 @@ const KEEP_IN_VIEW = 0.7;    // zoomed out, the machine's centre stays within th
 const GLIDE_LEFT_AFTER_1S = 1e-9;          // how much of a released drag's speed survives a second: stops within a few frames
 
 export class Orbit {
-  constructor(camera, element, target = [-0.0557, 0.1262, -0.0124]) {
+  /** `extent` replaces the machine's half extent { across, up, depth } for a larger subject, such as a desk of units. */
+  constructor(camera, element, target = [-0.0557, 0.1262, -0.0124], { extent } = {}) {
     this.camera = camera; this.el = element;
+    this.extent = extent ?? MACHINE_HALF;
     this.target = new THREE.Vector3().fromArray(target);
     const off = camera.position.clone().sub(this.target);
     this.radius = off.length();
@@ -58,9 +60,10 @@ export class Orbit {
     const up = this._up.crossVectors(right, forward);
     const off = this._off.copy(this.target).sub(this.home.target);
     const lim = (v, reach) => THREE.MathUtils.clamp(v, -reach, reach);
-    const a = lim(off.dot(right), Math.max(MACHINE_HALF.across, KEEP_IN_VIEW * halfW));
-    const b = lim(off.dot(up), Math.max(MACHINE_HALF.up, KEEP_IN_VIEW * halfH));
-    const d = lim(off.dot(forward), MACHINE_HALF.depth);
+    const e = this.extent;
+    const a = lim(off.dot(right), Math.max(e.across, KEEP_IN_VIEW * halfW));
+    const b = lim(off.dot(up), Math.max(e.up, KEEP_IN_VIEW * halfH));
+    const d = lim(off.dot(forward), e.depth);
     this.target.copy(this.home.target).addScaledVector(right, a).addScaledVector(up, b).addScaledVector(forward, d);
   }
 
@@ -88,7 +91,37 @@ export class Orbit {
     this.phi = THREE.MathUtils.clamp(this.phi, this.limits.phiMin, this.limits.phiMax);
   }
 
+  /** Glides to a camera preset { position, target } over `seconds`. Any drag or wheel input takes over. */
+  flyTo(preset, seconds = 0.7) {
+    const t = new THREE.Vector3().fromArray(preset.target);
+    const off = new THREE.Vector3().fromArray(preset.position).sub(t);
+    const r = off.length();
+    let theta = Math.atan2(off.x, off.z);
+    while (theta - this.theta > Math.PI) theta -= 2 * Math.PI;
+    while (theta - this.theta < -Math.PI) theta += 2 * Math.PI;
+    this.limits.rMax = Math.max(this.limits.rMax, r * 1.15);
+    this.vTheta = 0; this.vPhi = 0;
+    this._fly = {
+      from: { target: this.target.clone(), radius: this.radius, theta: this.theta, phi: this.phi },
+      to: { target: t, radius: r, theta, phi: Math.acos(off.y / r) },
+      t: 0, seconds: Math.max(1e-3, seconds),
+    };
+  }
+
   update(dt) {
+    if (this._fly && (this.dragging || Math.abs(this.vTheta) > 1e-4)) this._fly = null;
+    if (this._fly) {
+      const f = this._fly;
+      f.t = Math.min(1, f.t + dt / f.seconds);
+      const k = f.t * f.t * (3 - 2 * f.t);
+      this.target.lerpVectors(f.from.target, f.to.target, k);
+      this.radius = f.from.radius + (f.to.radius - f.from.radius) * k;
+      this.theta = f.from.theta + (f.to.theta - f.from.theta) * k;
+      this.phi = f.from.phi + (f.to.phi - f.from.phi) * k;
+      this.apply();
+      if (f.t >= 1) this._fly = null;
+      return this;
+    }
     const k = Math.pow(GLIDE_LEFT_AFTER_1S, dt);
     if (this.dragging) { this.vTheta *= k; this.vPhi *= k; return this; }   // holding still before letting go leaves nothing to glide on
     if (Math.abs(this.vTheta) > 1e-4 || Math.abs(this.vPhi) > 1e-4) {

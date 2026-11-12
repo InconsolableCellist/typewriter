@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                          CHECK DOCUMENT
+
+                                 YOUR     POSSIBLE
+ ID ITEM                         CHOICE   CHOICES
+
+ a  Kind Of Spelling Check         1      1 = Prompted  2 = Automatic
+                                          3 = None
+
+ b  System Page Number(s)
+    For Spelling Check
+
+ c  Hyphenation/Pagination         1      1 = Yes       2 = No
+
+
+
+
+
+
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:
+

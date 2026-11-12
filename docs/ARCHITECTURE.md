@@ -98,6 +98,19 @@ soft.ribbonTexture   // {data, width, height, dirty} window around the print poi
 soft.readouts()      // {skewDeg, lateralMm, ribbonTensionN, ribbonSlackMm, inkAtPoint, ...}
 ```
 
+## System machines (`kind: 'system'`)
+The word processor (`src/machine/wordproc1980.js`) is one definition with several units, each placed on the desk
+(`src/machine/wp-geometry.js`). `src/main.js` only chooses the machine and loads its family's kit
+(`src/kits/typewriter.js` or `src/kits/wordproc.js`), so a visit downloads one family. The word processor's
+mechanisms run in their own host, `WordprocSim` (`src/sim/wp/`), behind the same `SimClient` contract and
+transport; `src/sim/host-factory.js` picks the host by `action.type`. There, besides integrated mechanisms, live
+**controllers**: the firmware of the real machine (keyboard scanner, printer processors, diskette adapter). They
+run on deadlines, may only switch phases, set coil currents and read sensors, and never write a mechanical state;
+tests enforce this. The **software** (`src/wp/`, a reimplementation of Textpack 4) is plain modules on a simulated
+clock that reach the units only through a device interface: `VirtualDevices` in Node, the kit's devices in the
+browser. The printer reuses `SoftWorld` (with `origin`, in the printer's frame), the strike event, ink and the page
+pile unchanged. The full design is `docs/displaywriter/architecture.md`.
+
 ## Testing
 Node tests use `node --test tests/*.test.js`. Browser tests run ONLY through `tests/e2e/xrun.sh` (private Xvfb),
 never on the real display, with Chromium flags `--use-angle=vulkan --ignore-gpu-blocklist --enable-features=Vulkan

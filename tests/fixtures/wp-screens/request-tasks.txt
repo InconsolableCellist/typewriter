@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                      TEXTPACK REQUEST TASKS
+
+         ID    ITEM
+
+         a     Print Document
+         b     Display Print Queue or Cancel Print Job
+         c     Change Printing Order
+         d     Display Index of Diskette Contents
+         e     Continue Printing With Element Now On Printer
+         f     Request Printer
+         g     Release Printer
+         h     Start Printer
+
+
+
+
+
+
+
+
+Type ID letter to choose ITEM; press ENTER:
+

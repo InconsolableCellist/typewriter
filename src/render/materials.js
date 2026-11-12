@@ -168,7 +168,8 @@ async function roughnessChain(name, aniso) {
 /** Physical parameters from materials.json that this renderer applies. */
 const PHYSICAL_KEYS = ['clearcoat', 'clearcoatRoughness', 'ior', 'envMapIntensity', 'sheen', 'sheenRoughness', 'specularIntensity', 'anisotropy', 'anisotropyRotation'];
 
-export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTier = false } = {}) {
+/** `only` limits loading to the named sets (a machine that uses few of them downloads only those). */
+export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTier = false, only = null } = {}) {
   let table = {};
   try { table = await (await fetch(`${BASE}materials.json`)).json(); } catch { /* defaults below */ }
   const tile = (n, d) => table[n]?.tile ?? d;
@@ -207,6 +208,7 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
   jobs.push({ name: 'walnut_desk', mat: mats.desk, repeat: [0.2 / tile('walnut_desk', 2.2), 0.2 / tile('walnut_desk', 2.2)], sizes: lowTier ? { detail: 1024 } : {} });
   if (paperMaterial) jobs.push({ name: 'paper_fibre', mat: paperMaterial, repeat: [1, 1.29], keepColor: true, noAlbedo: true });
   for (const j of jobs) {
+    if (only && !only.includes(j.name)) continue;
     try {
       const [a, n, r, mt] = await loadSet(j.name, j);
       const phys = table[j.name]?.physical ?? {};

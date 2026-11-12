@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                       DUPLICATE DOCUMENT
+
+                                     YOUR
+  ID  ITEM                           CHOICE
+
+  a   Document Name
+  b   Diskette Name
+
+  c   New Document Name
+  d   Diskette Name
+
+
+
+
+
+
+
+
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:
+

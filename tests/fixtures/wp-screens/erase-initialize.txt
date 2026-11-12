@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                     ERASE OR INITIALIZE(NAME) DISKETTE
+
+                                     YOUR          POSSIBLE
+  ID  ITEM                           CHOICE        CHOICES
+
+  a   Diskette Slot                                1 = Left
+                                                   2 = Right
+
+
+
+
+
+
+
+ Insert Diskette to be Erased or Initialized into diskette slot.
+
+
+
+When finished with this menu, press ENTER.
+
+Type ID letter to choose ITEM; press ENTER:
+

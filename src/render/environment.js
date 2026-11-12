@@ -3,6 +3,7 @@
 // Everything lighting-related is set here each frame from a smoothed state, so a change eases in and "day, clear" is exactly the base look.
 import * as THREE from 'three';
 import { setEnvTint, setContactDisc } from './look.js';
+import { deskSpot } from './desk-layout.js';
 
 export const TIMES = ['dawn', 'day', 'afternoon', 'dusk', 'night'];
 export const WEATHERS = ['clear', 'rain', 'storm'];
@@ -131,7 +132,7 @@ function installBackgroundTint() {
 const lerp = (a, b, k) => a + (b - a) * k;
 
 export function installEnvironment({ stage, interaction, panel, machine }) {
-  const lampX = LAMP_AT.x - (machine?.deskSpread ?? 0);
+  const lampX = deskSpot(machine, 'lamp', LAMP_AT, -1).x;
   const { scene, renderer, key, rim, look } = stage;
   const bgTint = installBackgroundTint();
 

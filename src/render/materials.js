@@ -168,6 +168,22 @@ async function roughnessChain(name, aniso) {
 /** Physical parameters from materials.json that this renderer applies. */
 const PHYSICAL_KEYS = ['clearcoat', 'clearcoatRoughness', 'ior', 'envMapIntensity', 'sheen', 'sheenRoughness', 'specularIntensity', 'anisotropy', 'anisotropyRotation'];
 
+/**
+ * Puts an authored texture set (albedo, normal and the roughness mip chain) on several materials at once, each with
+ * its own repeat, sharing one upload. `uses` is [{ mat, repeat: [u, v] }]; repeat is UV units per tile. The material's
+ * colour multiplies the set's neutral albedo, so one set serves differently coloured parts.
+ */
+export async function applyTextureSet(name, uses, aniso = 8) {
+  const [a, n, r] = await Promise.all([mapTexture(name, 'albedo', aniso, true), mapTexture(name, 'normal', aniso, false), roughnessChain(name, aniso)]);
+  for (const { mat, repeat } of uses) {
+    const rep = (t) => { if (!t) return null; const c = t.clone(); c.repeat.set(repeat[0], repeat[1]); c.needsUpdate = true; return c; };
+    if (a) mat.map = rep(a);
+    if (n) { mat.normalMap = rep(n); mat.normalScale = new THREE.Vector2(1, 1); }
+    if (r) { mat.roughnessMap = rep(r); mat.roughness = 1; }
+    mat.needsUpdate = true;
+  }
+}
+
 /** `only` limits loading to the named sets (a machine that uses few of them downloads only those). */
 export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTier = false, only = null } = {}) {
   let table = {};

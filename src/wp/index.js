@@ -11,10 +11,17 @@ import { Messages } from './textpack/messages.js';
 import { coldStart } from './rom.js';
 import { shell, DEFAULT_SETTINGS } from './textpack/index.js';
 import { Spooler } from './textpack/print/spooler.js';
+import { Dictionary } from './textpack/spell/dictionary.js';
+import { SEGMENTS } from './disk/library.js';
 
 const TONE_MS = { short: 60, long: 400 };          // assumed (architecture 5.4)
 const SAVE_COALESCE_S = 1;
 
+/**
+ * options: cold (power on rather than start warm); wordList, the spelling dictionary's word list (architecture 12.3):
+ * its unpacked bytes, or a function the system calls once, when Spelling Tasks first loads, to have it fetched; the
+ * caller then hands the bytes (or null on failure) to `provideWordList`.
+ */
 export function createSystem({ devices, store = new MemoryStore(), library = new Library(), options = {} }) {
   return new WpSystem({ devices, store, library, options });
 }
@@ -37,6 +44,8 @@ export class WpSystem {
     this.doc = null;
     this.printQueue = [];
     this.spooler = new Spooler(this);
+    this.dictionary = null;
+    this.wordListState = null;               // null, 'asked', 'ready' or 'missing'
     this.pendingIo = new Map();
     this.saves = new Map();
     this.statusFields = null;                // the status fields last drawn, so a mount can refresh G and H
@@ -146,6 +155,24 @@ export class WpSystem {
   }
 
   tone(kind) { this.devices.kbd.tone(TONE_MS[kind] ?? kind); }
+
+  // ---- the spelling dictionary ----------------------------------------------------------------------------------------
+
+  /** Ask for the word list, once. */
+  requestWordList() {
+    if (this.wordListState) return;
+    const w = this.options.wordList;
+    if (w instanceof Uint8Array) this.provideWordList(w);
+    else if (typeof w === 'function') { this.wordListState = 'asked'; w(); }
+    else this.wordListState = 'missing';
+  }
+
+  /** The word list has arrived (or failed to: null). */
+  provideWordList(bytes) {
+    try { this.dictionary = bytes ? Dictionary.fromBytes(bytes, { blocks: SEGMENTS.dictionary }) : null; } catch { this.dictionary = null; }
+    this.wordListState = this.dictionary ? 'ready' : 'missing';
+    this.sched.signal('wordList');
+  }
 
   // ---- volumes ---------------------------------------------------------------------------------------------------
 

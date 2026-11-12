@@ -13,6 +13,7 @@ import './tasks/typing.js';
 import './tasks/index.js';
 import './tasks/workdisk.js';
 import './tasks/print.js';
+import { spellingLoaded } from './tasks/spell.js';
 import './formats.js';
 import './editor/functions.js';
 import { waitSignal } from '../sched.js';
@@ -42,6 +43,7 @@ export function* shell(sys) {
 /** Load a task family's program segment, asking for the program diskette if none is in a drive. */
 export function* loadSegment(sys, name) {
   if (!name || sys.program.segment === name) return;
+  if (name === 'spelling') sys.requestWordList();    // fetched while the segment is read (architecture 12.3)
   let vol = sys.programVolume();
   while (!vol) {
     drawPrompt(sys, fmt('insertProgram'), null);
@@ -50,6 +52,7 @@ export function* loadSegment(sys, name) {
   }
   yield* vol.readRun(vol.find(name));
   sys.program.segment = name;
+  if (name === 'spelling') yield* spellingLoaded(sys, vol);
 }
 
 function* waitMounted(sys) {
@@ -66,12 +69,15 @@ function* taskSelection(sys, { highlight } = {}) {
     onEmpty: () => (zicr ? { go: 'ipl' } : null),
   });
   if (r.go === 'ipl') return { to: 'ipl' };
-  const item = MENUS.taskSelection.items.find((i) => i.go === r.go);
-  if (SEGMENT[r.go] && sys.program.segment !== SEGMENT[r.go]) {
-    flash(sys, item.id);
-    yield* loadSegment(sys, SEGMENT[r.go]);
-  }
+  yield* enterFamily(sys, r.go);
   return { to: r.go };
+}
+
+/** A task family's program segment, read with TASK SELECTION up and the family highlighted (TB2 p.68, p.74). */
+function* enterFamily(sys, family) {
+  if (!SEGMENT[family] || sys.program.segment === SEGMENT[family]) return;
+  flash(sys, MENUS.taskSelection.items.find((i) => i.go === family).id);
+  yield* loadSegment(sys, SEGMENT[family]);
 }
 
 /** TASK SELECTION with the chosen task highlighted, while its program loads. */
@@ -81,10 +87,21 @@ function flash(sys, id) {
   drawPrompt(sys, '', null);
 }
 
-/** A task family's menu. REQST and Menu Bypass work over every one but the program diskette tasks (ORG p.446, 501). */
-function* menuScreen(sys, def, { highlight } = {}, keys = true) {
+/**
+ * A task family's menu. REQST and Menu Bypass work over every one but the program diskette tasks (ORG p.446, 501).
+ * `auto` starts the highlighted task at once, its prompts over the menu: after SPELL the document's name is already on
+ * the prompt line of SPELLING TASKS, and after a check on that of TYPING TASKS (SR 4.26).
+ */
+function* menuScreen(sys, def, { highlight, auto = false, family } = {}, keys = true) {
+  if (family) yield* enterFamily(sys, family);
   for (;;) {
-    const r = yield* runMenu(sys, def, null, { highlight, ...(keys ? menuKeys(sys) : {}) });
+    let r;
+    if (auto) {
+      auto = false;
+      sys.drawStatus({});
+      drawMenu(sys, def, null, { highlight });
+      r = { go: def.items.find((i) => i.id === highlight).go };
+    } else r = yield* runMenu(sys, def, null, { highlight, ...(keys ? menuKeys(sys) : {}) });
     if (r.cancel || r.go === 'taskSelection') return { to: 'taskSelection' };
     const task = TASKS[r.go];
     if (!task) { sys.messages.show('notAvailable', { what: def.items.find((i) => i.go === r.go).item }); continue; }
@@ -104,8 +121,8 @@ function* bypass(sys, { family, task, preset }) {
 const SCREENS = {
   bypass,
   taskSelection,
-  typingTasks: (sys, a) => menuScreen(sys, MENUS.typingTasks, a),
-  workDiskTasks: (sys, a) => menuScreen(sys, MENUS.workDiskTasks, a),
+  typingTasks: (sys, a) => menuScreen(sys, MENUS.typingTasks, { ...a, family: 'typingTasks' }),
+  workDiskTasks: (sys, a) => menuScreen(sys, MENUS.workDiskTasks, { ...a, family: 'workDiskTasks' }),
   programTasks: (sys, a) => menuScreen(sys, MENUS.programTasks, a, false),
-  spellingTasks: (sys, a) => menuScreen(sys, MENUS.spellingTasks, a),
+  spellingTasks: (sys, a) => menuScreen(sys, MENUS.spellingTasks, { ...a, family: 'spellingTasks' }),
 };

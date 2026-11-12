@@ -257,3 +257,29 @@ azimuth only. Past that the whole table shows, standing on nothing: the legs end
   the existing font at 12 pitch. Served as `.gz.bin`, not `.bin.gz`, because servers label `.gz` files with
   `Content-Encoding: gzip` and the browser would unpack them before the loader does.
 - **Diskette labels and key legends**: drawn at run time.
+
+## Spelling word list: `public/assets/wordlist_en.gz.bin`
+The word processor's spelling dictionary (`docs/displaywriter/architecture.md` 7.9, 12.3), 72 499 words, 114 KB
+gzipped (318 KB unpacked). Fetched only when Spelling Tasks first loads, behind the program-load wait
+(`src/kits/wp/wordlist.js`); Node tests read it from disk.
+
+**Source and licence.** Alan Beale's *12dicts* 6.0.2 (`12dicts-6.0.2.zip` from the SCOWL project's SourceForge
+downloads, wordlist.sourceforge.net). Its ReadMe: "The 12dicts lists were compiled by Alan Beale. I explicitly release
+them to the public domain, but request acknowledgment of their use", except `2of12inf` and the `2+2+3` lists, which
+depend on AGID and are not used here. Taken: `International/3of6all.txt` (inflected forms, British and American
+spellings) and `American/2of12.txt`. Thanks to Alan Beale.
+
+**Contents.** Words of letters with an inner apostrophe (`isn't`, `o'clock`); capitalised entries keep their capital
+(`Monday`). Dropped: abbreviations in capitals (`ABC`, `FIFO`, which E10 stops on), single letters but `a`, `I` and `O`,
+entries with digits, periods, slashes or spaces, and affixes. Hyphenated entries are split into their parts, since the
+checker checks a hyphenated word's parts one at a time. The list carries no hyphenation; hyphen points come from rules
+in `src/wp/textpack/spell/hyphen.js`.
+
+**Format.** gzip (level 9, no timestamp) of Latin-1 text: a header line `wordlist <count> 12dicts-6.0.2`, then the words
+in code-unit order, front-coded (one character `chr(0x30 + n)` for the n leading characters shared with the previous
+word, then the rest), one per line. Served as `.gz.bin` so that no server adds `Content-Encoding`; the loader gunzips
+with `DecompressionStream` (zlib in Node) and takes bytes that arrive already unpacked as they are.
+
+```sh
+python3 tools/wp/build_wordlist.py <unzipped 12dicts-6.0.2 directory>     # writes public/assets/wordlist_en.gz.bin
+```

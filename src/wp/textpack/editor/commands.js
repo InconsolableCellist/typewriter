@@ -4,11 +4,12 @@
 // moves a unit at a time sideways, a line at a time up and down keeping its column, and into the Non-Typing Area
 // to the right of a line's end, where nothing can be typed (ORG p.560). Down from the last line shows the next page.
 import { C, info, isChar, isEnd } from './codes.js';
-import { reflowParagraph, formatAt } from './layout.js';
+import { reflowParagraph, reflowWith, formatAt } from './layout.js';
 import { drawTyping, relayout, cursorPos, cursorLine, SEGMENT_STEP } from './view.js';
-import { getKey, isCancel } from '../input.js';
+import { getKey, isCancel, Navigate } from '../input.js';
 import { DiskError } from '../../disk/fs.js';
 import { requestTasks } from '../tasks/common.js';
+import { unmarkAt, hyphenateWhere } from '../tasks/spell.js';
 import { TEXT_ROWS } from '../../screen.js';
 
 /** Extensions: the editing functions (DEL, MOVE, FIND ...) register their keys here. */
@@ -235,7 +236,7 @@ export function* handle(sys, ed, ev) {
   }
   if (ev.code && ev.name === '8') { ed.insert = !ed.insert; return; }
   if (yield* moveKey(ed, ev)) return;
-  if (isCancel(ev)) { ed.sel = null; ed.prompt = null; ed.fn = ''; sys.messages.clear(); return; }
+  if (isCancel(ev)) { ed.sel = null; ed.prompt = null; ed.fn = ''; sys.messages.clear(); unmarkAt(ed); return; }
   if (ev.name === 'BKSP' && !ev.code) { backspace(ed); return; }
   if (ev.name === 'END' && !ev.code) { yield* ed.doc.close(); return 'end'; }
   if (ev.name === 'PAGE END' && !ev.code) {
@@ -243,19 +244,41 @@ export function* handle(sys, ed, ev) {
     ed.cur = 0; ed.top = 0; ed.nta = null;
     return;
   }
-  if (ev.name === 'LINE ADJ') { lineAdjust(ed); return; }
+  if (ev.name === 'LINE ADJ') { yield* lineAdjust(sys, ed); return; }
   if (ev.name === 'REQST' && !ev.code) { yield* requestTasks(sys); return; }
-  if (ev.name === 'SPELL' && !ev.code) { sys.messages.show('notAvailable', { what: 'Spelling' }); return; }
+  if (ev.name === 'SPELL' && !ev.code) {
+    // SPELL (SR 4.26): the document ends, and Spelling Tasks comes up with its name on the prompt line.
+    const doc = ed.doc;
+    yield* doc.close();
+    sys.doc = null;
+    sys.lastDocument = doc.name;
+    sys.lastDiskette = doc.vol.name;
+    throw new Navigate({ to: 'spellingTasks', highlight: 'a', auto: true });
+  }
   const u = codeFor(sys, ev);
   if (u != null && ed.nta == null) typeUnits(ed, [u]);
 }
 
-/** LINE ADJ (SR 4.19): adjust the cursored line's paragraph and go on to the next line, as a held key does. */
-function lineAdjust(ed) {
+/**
+ * LINE ADJ (SR 4.19): adjust the paragraph from the cursored line on and go to the next line, as a held key does. When
+ * a word crosses the right margin of the cursored line and no break falls inside the zone, adjusting stops on the
+ * word's first character with `Hyphenate where?` (TB2 p.579): the typing program has no dictionary, so there is no
+ * suggested point.
+ */
+function* lineAdjust(sys, ed) {
   const p = ed.doc.page;
   if (formatAt(p.buf.toArray(), p.objects, ed.cur, ed.doc.layoutCtx(p.k)).adjust !== 1) return;
-  adjust(ed, ed.cur, true);
+  relayout(ed);
+  const start = ed.L.lines[cursorLine(ed)].start;
+  const decide = function* (q) {
+    p.buf.reset(q.units);
+    const r = yield* hyphenateWhere(sys, ed, q, q.wordStart, '');
+    return r === 'end' ? 'down' : r;
+  };
+  const r = yield* reflowWith(p.buf.toArray(), p.objects, start, ed.doc.layoutCtx(p.k), { decide, from: start, onlyFirst: true });
+  p.buf.reset(r.units);
   touched(ed);
+  moveTo(ed, r.map(start));
   relayout(ed);
   const line = ed.L.lines[cursorLine(ed)];
   if (line.end < buf(ed).length) moveTo(ed, line.end);

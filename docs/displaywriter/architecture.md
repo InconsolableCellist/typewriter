@@ -648,6 +648,7 @@ src/wp/textpack/menus.js           the menu tree as data
 src/wp/textpack/menu-runner.js     menu and prompt coroutines
 src/wp/textpack/messages.js        every prompt and message string, keyed, with its source
 src/wp/textpack/tasks/             typing.js, paginate.js, print.js, index.js, workdisk.js, request.js, bypass.js, spell.js
+src/wp/textpack/spell/             dictionary.js (the word list and supplement), hyphen.js (hyphen points)
 src/wp/textpack/editor/            buffer.js, codes.js, format.js, layout.js, view.js, commands.js
 src/wp/textpack/print/             formatter.js, spooler.js
 src/wp/disk/                       geometry.js, image.js, fs.js, library.js, store.js
@@ -913,6 +914,23 @@ Choices the research and this document left open, made while building M1 to M3, 
 | Duplicate and Condense Diskette | The receiving diskette must be named and keeps its name. Condense erases it, then writes the documents in creation order, so they lie unfragmented | ORG p.118, 135; SR 9 |
 | Recover Documents | Each document left open is named, ENTER recovers it; a page that cannot be read becomes a Substitute code; the free map is rebuilt from what the index reaches | ORG p.218, 219, 497 |
 | REQST | Not over the program diskette tasks | ORG p.501 |
+| Word list (M8) | 12dicts `3of6all` and `2of12`, public domain, 72 499 words, 114 KB packed (docs/assets.md). All-capital abbreviations are left out, so FIFO and ABC are unknown, as E10 has them | SS E10 |
+| Loading the dictionary | The list is fetched when the spelling segment first loads (`options.wordList`, a function; the kit calls `sys.provideWordList`) and kept for the session; the segment's load waits for it. With no list, Spelling Tasks still comes up and Check Document answers `Spelling dictionary not available.` (ours) | 12.3 |
+| Dictionary on the diskette | A 512-sector `dictionary` entry beside the segments on the program diskette. Checking a page reads the sectors that hold its words, in runs; a hyphenation decision reads its word's sector. The spelling segment loads in about 2.8 s | 8.2 |
+| Lookup | A lower-case entry also matches the word Capitalised or in CAPITALS, a capitalised entry (Monday) only those; `'s` and `s'` possessives by the base word. Words with digits are not checked; a hyphenated word is checked part by part; an apostrophe belongs to a word only between letters. Syllable hyphens, underline and half-index codes inside a word do not split it | ours |
+| Suggestions | None: CHECK SPELLING OF WORD offers leave, remove and retype only | ORG p.110 |
+| Prompted stops | ENTER takes the word as right for the rest of this check; SPELL leaves it marked, and later occurrences are marked without a stop; a retyped word replaces the old one (codes inside it are lost), re-adjusts its paragraph and is checked in its turn; END stops prompting and the rest is marked as Automatic marks it. "Words marked" counts marked occurrences | SS E10; TB2 p.70, 71 |
+| Spelling marks | Two `smark` objects (`Spelling Mark Begin`, `Spelling Mark End`, a filled square, no column, not deleted by BKSP). The letters between show in reverse video; marks print nothing. A new check takes the marks off words now known and keeps them on words still unknown. CANCL in the typing area removes the pair around the cursored word; FIND then SPELL finds the next Begin mark and puts the cursor on the word's first letter | HW 1.6; SR 3.2, 4.9, 4.26 |
+| CHECK SPELLING OF WORD | Shows the page in memory, so a word on one of a page's first two lines stands above the third text line (the grid shows the previous page's end there). Status A `Spell Check`, E `U.S. English`, C and L blank; no scale line; the retyped word on the prompt line | ORG p.110 |
+| Order of a check | All the spelling stops of the chosen pages, then pagination with all the hyphenation stops, which is the order of E10's stops. The menu stays up, status `Spell Check`, between stops. Messages, posted: `(name) paginated`, then `Spelling Check complete. Words marked: n`. Then TASK SELECTION flashes and TYPING TASKS returns with Revise Document highlighted and its name prompt started; after SPELL, SPELLING TASKS likewise starts Check Document | TB2 p.69, 72; SR 4.26 |
+| Pages checked | System Page Numbers blank: from HYPHENATE AND PAGINATE's item b on, or every page with Hyphenation/Pagination No; else the pages named, ten at most. Preserve Page Numbers Yes: no HYPHENATE AND PAGINATE menu, the check only | ORG p.108, p.211, p.517 |
+| Print Paginated Pages | Yes queues the document with the Paper Handling chosen once it is paginated; other tasks are not held up (TB2 p.69 says they are) | TB2 p.69 |
+| Hyphenation decisions | Asked about a word crossing the right margin when moving it down would end the line before the zone (right margin - Zone Width + 1). The cursor moves from the word's first character (down) to just past its last, punctuation counting (kept, past the margin); in between a syllable hyphen goes in before the cursor, or the line breaks after a hyphen already there. A point whose hyphen would pass the margin is refused with a short beep. END abandons the rest: those words go down | ORG p.395; TB2 p.579, 585 |
+| Dictionary hyphenation | The list has no hyphen points, so they come from rules (vowel groups; consonants shared so the next syllable starts with an English onset; -ing, -ment, -ness, -less, -ful; two letters before a break, three after) applied to words the dictionary knows. The suggestion is the last point that fits. An unknown word, or one after End Spelling Check, has none: prompted, the cursor starts on its first character; automatic, it goes down | ORG p.167, p.402 |
+| LINE ADJ | Adjusts from the cursored line to the paragraph's end, the lines above keeping their endings, and asks only about the cursored line. The typing program has no dictionary, so the cursor starts on the word's first character | SR 4.19; TB2 p.579 |
+| Syllable hyphen | One that ends a line takes a column and shows as `-`, as it prints | ORG p.562 |
+| Supplement | Kept in memory with the dictionary. Load Supplement adds a document's unknown words (500 words, 4500 characters at most); Store writes them to a `supplement` entry on the program diskette, read again when Spelling Tasks next loads with a fresh list; Create Document Of Supplemental Words writes one word to a line after `Press ENTER to continue or press CANCL.`. Their completion messages are posted | ORG p.305, p.345, p.425, p.521, p.527 |
+| Not available | Choose Spelling Language Dictionary and the Language For Spelling Check instruction (one dictionary, U.S. English); GLOBAL with SPELL as its Search For | ORG p.393 |
 
 ---
 
@@ -1312,6 +1330,18 @@ cost). Decisions are listed in 10.3. Not done: listening in a browser and tuning
 against the targets in `LEVEL`'s comment), paper sound, the station's rocker and knobs, and the keyboard's own
 mechanical sound in the worklet.
 
+M8 spelling done (2026-11-12): the word list (`public/assets/wordlist_en.gz.bin` from public-domain 12dicts,
+`tools/wp/build_wordlist.py`, `src/kits/wp/wordlist.js`), `spell/dictionary.js` and `spell/hyphen.js`, and
+`tasks/spell.js`: SPELL in the typing area, SPELLING TASKS, Check Document with CHECK DOCUMENT, HYPHENATE AND PAGINATE
+DOCUMENT and the CHECK SPELLING OF WORD screen, spelling marks in reverse video, FIND SPELL and CANCL on a marked word,
+dictionary hyphenation in pagination (prompted and automatic), the LINE ADJ `Hyphenate where?` left from M3, the
+supplement tasks, and the spelling abbreviations of Menu Bypass. The dictionary sits on the program diskette and is
+read as pages are checked. Tests: `wp_spell` (E10; the list, lookup, hyphen points, words, marks, automatic and
+retyped checks, LINE ADJ, automatic hyphenation, supplements, the fetch, Menu Bypass). Decisions are listed in 7.9.
+Not done: Choose Spelling Language Dictionary and the Language For Spelling Check instruction, GLOBAL with SPELL,
+showing the previous page above a word near a page's top on CHECK SPELLING OF WORD, and holding other tasks while
+paginated pages print.
+
 ---
 
 ## 12. Tests, performance, assets
@@ -1352,7 +1382,7 @@ All Node tests run under `node --test tests/*.test.js`; browser tests only throu
 | `wp_plastic` texture set (pebble normal and roughness, 1024, AVIF) | 250 KB | One set for all pearl-white covers; colour in the material |
 | `glyphs_wp.gz.bin` and `.json` | 80 KB | 96 faces at 12 pitch from the existing font, baked by `tools/bake_glyphs.py --set wp`; unpacked with `DecompressionStream` in the browser and `zlib` in Node |
 | Font, key legends, diskette labels | 0 | In the JavaScript; canvas at run time |
-| Spelling word list, gzip | 150 KB | Fetched when Spelling Tasks first loads, behind the program-load wait |
+| Spelling word list, gzip | 150 KB (114 KB built) | `wordlist_en.gz.bin`, fetched when Spelling Tasks first loads, behind the program-load wait |
 | **Total for a first visit** | **under 2 MB** (1.7 MB without spelling) | |
 | Not fetched on a word-processor visit | `frame.glb`, `enclosure.glb`, `element_enclosure.glb`, both sample sprites, every texture set not in `machine.textures` | More is saved than added |
 

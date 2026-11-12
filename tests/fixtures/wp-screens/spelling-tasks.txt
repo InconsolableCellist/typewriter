@@ -1,0 +1,25 @@
+                    |                    |    |    |                   |
+~~~~~~~~~~~~~|                    |             |         |Kyb 1     |
+
+                         SPELLING TASKS
+
+            ID    ITEM
+
+            a     Check Document
+            b     Load Supplement
+            c     Clear Supplement
+            d     Store Supplement On Program Diskette
+            e     Choose Spelling Language Dictionary
+            f     Create Document Of Supplemental Words
+            g     Go To Task Selection
+
+
+
+
+
+
+
+
+
+Type ID letter to choose ITEM; press ENTER:
+

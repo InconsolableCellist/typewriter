@@ -4,9 +4,8 @@
 // early or late so that a paragraph's first line does not stand alone at the foot of a page, nor its last line at the
 // head of the next.
 import { C, isObj, objIndex, HARD_ENDS } from './codes.js';
-import { walkLine } from './layout.js';
+import { walkLine, adjustAllWith } from './layout.js';
 import { ADVANCE } from './format.js';
-import { adjustAll } from '../samples.js';
 import { compact } from './doc.js';
 
 /** Lines of a stream of units, with what pagination needs to know about each. */
@@ -64,9 +63,11 @@ export function pageBreaks(units, objects, ctx, { exact = false } = {}) {
 
 /**
  * Paginate a document from page index `from`. options: { exact, adjust, pageEnds } as the PAGINATE DOCUMENT menu
- * gives them (true for Yes). The new pages replace the old ones and are numbered with whole numbers.
+ * gives them (true for Yes), and `decide`, the hyphenation decisions of HYPHENATE AND PAGINATE DOCUMENT (see
+ * layout.reflowWith; it is also given `page`, the system page number the word's paragraph came from, and `ctx`). The new
+ * pages replace the old ones and are numbered with whole numbers.
  */
-export function* paginateDocument(doc, from, { exact = false, adjust = true, pageEnds = true } = {}) {
+export function* paginateDocument(doc, from, { exact = false, adjust = true, pageEnds = true, decide = null } = {}) {
   yield* doc.storePage();
   const vol = doc.vol;
   const old = doc.pages.slice(from);
@@ -74,21 +75,24 @@ export function* paginateDocument(doc, from, { exact = false, adjust = true, pag
   for (const p of old) read.push(yield* vol.readPage(p.lsn));
   const ctx = { ...doc.layoutCtx(from), first: from === 0 };
   const groups = [];                 // each a { units, objects } stream to cut
-  const join = (pages) => {
-    const units = [], objects = [];
-    for (const pg of pages) {
+  const join = (pages, k0) => {
+    const units = [], objects = [], starts = [];
+    pages.forEach((pg, k) => {
       const base = objects.length;
+      starts.push({ at: units.length, n: old[k0 + k].n });
       objects.push(...pg.objects);
       for (const u of Array.from(pg.units).slice(0, -1)) units.push(isObj(u) ? 0x8000 | (objIndex(u) + base) : u);
-    }
-    return { units, objects };
+    });
+    return { units, objects, starts };
   };
-  if (pageEnds) groups.push(join(read));
-  else for (const pg of read) groups.push(join([pg]));
+  if (pageEnds) groups.push(join(read, 0));
+  else read.forEach((pg, k) => groups.push(join([pg], k)));
   const out = [];
   for (const g of groups) {
     let units = g.units;
-    if (adjust) units = adjustAll(units, g.objects, ctx);
+    const pageOf = (i) => { let n = g.starts[0]?.n ?? '1'; for (const s of g.starts) if (s.at <= i) n = s.n; return n; };
+    const d = decide && ((q) => decide({ ...q, page: pageOf(q.origin), ctx }));
+    if (adjust) units = yield* adjustAllWith(units, g.objects, ctx, { decide: d });
     if (!pageEnds) { out.push({ units: [...units, C.PE], objects: g.objects }); continue; }
     const { breaks, lines: ls } = pageBreaks(units, g.objects, ctx, { exact });
     breaks.forEach((b, j) => {

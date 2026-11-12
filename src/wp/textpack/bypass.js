@@ -6,8 +6,8 @@ import { promptLine, splitName, Navigate } from './input.js';
 import { TASKS } from './tasks/common.js';
 
 // keyword: [short form, where it goes]. `task` targets run a task of a family; `text` targets act in the typing area;
-// `request` targets are request tasks, done where the operator is; `na` ones are the shared-printer, spelling, merge
-// and file tasks this machine does not offer yet.
+// `request` targets are request tasks, done where the operator is; `na` ones are the shared-printer, spelling language,
+// merge and file tasks this machine does not offer yet.
 export const ABBREVIATIONS = {
   create: ['c', { family: 'typingTasks', task: 'create' }],
   revise: ['r', { family: 'typingTasks', task: 'revise' }],
@@ -52,11 +52,11 @@ export const ABBREVIATIONS = {
   relptr: ['rlp', { na: 'Release Printer' }],
   reqptr: ['rqp', { na: 'Request Printer' }],
   startptr: ['stp', { na: 'Start Printer' }],
-  chkdoc: ['cd', { na: 'Check Document' }],
+  chkdoc: ['cd', { family: 'spellingTasks', task: 'checkDocument' }],
   langdic: ['lgd', { na: 'Choose Spelling Language Dictionary' }],
-  clearsup: ['clr', { na: 'Clear Supplement' }],
-  loadsup: ['ld', { na: 'Load Supplement' }],
-  storesup: ['sto', { na: 'Store Supplement' }],
+  clearsup: ['clr', { family: 'spellingTasks', task: 'clearSupplement' }],
+  loadsup: ['ld', { family: 'spellingTasks', task: 'loadSupplement' }],
+  storesup: ['sto', { family: 'spellingTasks', task: 'storeSupplement' }],
   lang: ['lg', { na: 'Language for Spelling Check' }],
   mergevar: ['mv', { na: 'Merge' }],
   mergesw: ['msw', { na: 'Merge' }],

@@ -74,7 +74,8 @@ export function drawTyping(sys, ed) {
       if (isChar(u)) s.cell(row, col, L.ovs[j] ? L.ovs[j].charCodeAt(0) : u, attr);
       else if (inf.width === 'char' && inf.shows && !(symbol && u === C.RSP)) {
         if (typeof inf.shows === 'number') s.sym(row, col, inf.shows, attr); else s.cell(row, col, inf.shows.charCodeAt(0), attr);
-      } else if (u === C.PE || symbol) s.sym(row, col, inf.sym, attr);
+      } else if (u === C.SHY && L.w[j] === 1 && !symbol) s.cell(row, col, 0x2d, attr);
+      else if (u === C.PE || symbol) s.sym(row, col, inf.sym, attr);
       else if (selected || L.attrs[j]) s.cell(row, col, 0x20, attr);
       if (selected && L.w[j] > 1) s.attr(row, col, L.w[j], ATTR.REVERSE);
     }

@@ -1,0 +1,129 @@
+{
+ "size": [
+  0.73,
+  0.188,
+  0.645
+ ],
+ "platen": {
+  "center": [
+   0,
+   0.132,
+   0.064
+  ],
+  "radius": 0.02122331166130424,
+  "length": 0.52
+ },
+ "printPoint": [
+  0,
+  0.132,
+  0.08522331166130424
+ ],
+ "wheel": {
+  "center": [
+   0,
+   0.094,
+   0.08692331166130424
+  ],
+  "axis": [
+   0,
+   0,
+   1
+  ],
+  "radius": 0.038,
+  "petalStep": 0.06544984694978735,
+  "order": "aeonhdcmfyb.kIS'MBHRE1LG2)9346:?jz/UQZ%#*=¢±½]²§.,¶³[¼°_+@$&XVK!qx;785YJ(OF0NDPW\"C-ATv,pgwulrsit",
+  "petals": 96
+ },
+ "carrier": {
+  "stops": [
+   -0.17,
+   0.17
+  ],
+  "home": -0.1675,
+  "lead": 0.02116
+ },
+ "hammer": {
+  "freeTravel": 0.0005,
+  "petalTravel": 0.0017
+ },
+ "ribbon": {
+  "spoolX": 0.066,
+  "spoolY": 0.116,
+  "spoolZ": 0.128,
+  "width": 0.0116,
+  "guidePostX": 0.026
+ },
+ "paper": {
+  "width": 0.2159,
+  "bailAngle": 1.0471975511965976,
+  "feedRollAngle": [
+   -2.0943951023931953,
+   -1.0471975511965976
+  ],
+  "panArc": [
+   -2.9670597283903604,
+   -0.6981317007977318
+  ],
+  "bailRollerRadius": 0.0052
+ },
+ "table": {
+  "tipY": 0.1281409624282903,
+  "tipZ": 0.04211431037834097,
+  "slope": -0.17632698070846492
+ },
+ "cabinet": {
+  "top": 0.17,
+  "coverTop": 0.188,
+  "hinge": [
+   0.186,
+   0.094
+  ],
+  "slot": [
+   0.012,
+   0.094
+  ],
+  "slotHalfWidth": 0.212,
+  "filterFoot": [
+   0.16,
+   0.028
+  ],
+  "feeder": {
+   "halfWidth": 0.278,
+   "top": 0.525,
+   "opening": [
+    0.17,
+    0.43
+   ],
+   "openingHalfWidth": 0.215,
+   "front": 0.072,
+   "lean": 0.3,
+   "topBack": -0.135,
+   "rearTop": 0.345,
+   "rearTopFront": -0.155,
+   "back": -0.315,
+   "trayBack": -0.39
+  }
+ },
+ "cover": {
+  "open": 1.7453292519943295
+ },
+ "power": {
+  "travel": 0.3490658503988659
+ },
+ "bail": {
+  "travel": 0.3141592653589793
+ },
+ "panel": {
+  "keys": [
+   "start",
+   "stop",
+   "printTest",
+   "cancel",
+   "load",
+   "release",
+   "paperUp",
+   "paperDown"
+  ],
+  "travel": 0.003
+ }
+}

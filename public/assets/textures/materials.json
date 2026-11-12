@@ -127,6 +127,31 @@
   },
   "note": "2048 px (authored at 4096 and filtered down), 1.07 mm per texel; larger than the desk so it never repeats; grain along U; no metalnessMap needed"
  },
+ "wp_pebble": {
+  "tile": 0.05,
+  "physical": {
+   "metalness": 0,
+   "roughness": 1,
+   "ior": 1.49,
+   "sheen": 0.2,
+   "sheenRoughness": 0.6,
+   "sheenColor": [
+    0.8,
+    0.8,
+    0.78
+   ]
+  },
+  "note": "1024 px; neutral albedo, colour in the material (Pearl White, Pebble Gray, dark mouldings)"
+ },
+ "wp_keycap": {
+  "tile": 0.03,
+  "physical": {
+   "metalness": 0,
+   "roughness": 1,
+   "ior": 1.49
+  },
+  "note": "1024 px; neutral albedo, colour in the material"
+ },
  "ribbon_cloth": {
   "tile": 0.0248,
   "physical": {

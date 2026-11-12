@@ -121,6 +121,33 @@ node tools/gen/export_element.mjs                                       # tools/
 The script exits 1 if a panel came out empty, or if the tilted box of the ribbon cartridge, the capsule the type element sweeps through its stroke (both at
 the travel extremes) or the platen touches a panel. The bail is not in that check, because its pivot comes from the renderer's rig.
 
+## Display station: `public/assets/models/wp_station.glb`, `wp_display.glb`
+`tools/blender/build_wp_station.py` (the electronics module, about 14 k triangles) and `build_wp_display.py` (the
+25-line display, about 9 k), for the machine `wordproc1980`, loaded by `src/render/wp/station-view.js`. Decisions and
+sources: `docs/displaywriter/models.md`, "Display station".
+
+| Node | Contents |
+|---|---|
+| `station_cover`, `station_base` | The two mouldings: turntable, switch scoop, badge, vents, rear openings, keyboard cable groove |
+| `station_panels`, `station_switch`, `station_cable` | Rear panels 1 and 2 with their sockets; the switch housing; the display cable on socket 2 |
+| `station_rocker` | The red rocker paddle. Its origin is the axle, axis z; rotation.z -0.16 is on (I, right side, down) |
+| `display_foot` | The turntable disc in the module's dish |
+| `display_swivel` | Empty at the origin, axis y, under it `display_plate` and `display_tilt` |
+| `display_tilt` | Empty at the cradle axis (0, 0.093, -0.035), axis x, rotation.x negative leans back; extras `face` for the CRT glass |
+| `display_frame`, `display_cabinet`, `display_bezel`, `display_badge`, `display_label`, `display_knob_*` | Under `display_tilt`; each knob's origin is its shaft |
+
+Materials by name (`wp_pearl`, `wp_gray`, `wp_dark`, `wp_rubber`, `wp_metal`, `wp_label`, `wp_led` from `glbUnitMaterials` in
+`src/render/wp/units.js`; `wp_red`, `wp_bezel`, `wp_badge`, `wp_tag` from the view). Box-projected UVs at 0.2 m; the badge and
+label faces span uv 0..1 for the artwork the view draws. Both files are quantized (KHR_mesh_quantization) by
+`tools/blender/quantize_glb.py`, which the builders run on export.
+
+### Regenerate
+```
+/root/bpyenv/bin/python tools/blender/build_wp_station.py
+/root/bpyenv/bin/python tools/blender/build_wp_display.py     # exits 1 if the cabinet touches the foot in the tilt range
+/root/bpyenv/bin/python tools/blender/render_wp_review.py -- bro18 csg37 back   # review renders into tools/blender/previews/
+```
+
 ## Materials: `public/assets/textures/`
 Authored procedurally by `tools/gen/materials.py`. Heights are in metres at the tile size, so normals are true slopes and `normalScale` 1 is correct.
 Metals hold their measured F0 in albedo. `materials.json` holds the tile sizes and physical parameters for code to read.

@@ -209,11 +209,11 @@ def downsample_n(x):
     return downsample(x) if x.ndim == 2 else np.dstack([downsample(x[..., c]) for c in range(x.shape[2])])
 
 
-def write(name, albedo_linear, normal, rough, metal):
+def write(name, albedo_linear, normal, rough, metal, max_size=MAX_SIZE):
     chain = roughness_chain(rough, normal)
     # Filter a larger set down to MAX_SIZE: albedo averaged in linear light, normals averaged then renormalised,
     # and roughness taken from its own chain, so the variance of the dropped detail stays in the roughness.
-    while albedo_linear.shape[0] > MAX_SIZE:
+    while albedo_linear.shape[0] > max_size:
         albedo_linear, metal = downsample_n(albedo_linear), downsample_n(metal)
         normal = downsample_n(normal)
         normal /= np.linalg.norm(normal, axis=2, keepdims=True)
@@ -559,8 +559,37 @@ def walnut_desk():
     write("walnut_desk", alb, n, np.clip(rough, 0.2, 0.75), np.zeros((S, S), np.float32))
 
 
+def wp_pebble():
+    """The word processor's moulded covers (HW 1.8): a fine pebble grain, rounded bumps about 0.4 mm across standing
+    out of a slightly rougher ground, with a soft sheen on their tops. Neutral albedo: the material colour gives Pearl
+    White, Pebble Gray or the dark bezels. Written at 1024 px (the budget, architecture.md 12.3). Dielectric."""
+    T = 0.05
+    r = rng_for("wppebble")
+    px = T / SIZE
+    d, _ = cells(r, int((T / 0.00042) ** 2), SIZE)
+    bumps = smooth(0.0, 9.0, d) ** 0.6                     # domes rising from each cell's edge
+    h = bumps * 9e-6 + spectral(r, 0.00008 / px, 0.0003 / px) * 0.6e-6 + spectral(r, 0.003 / px, 0.02 / px) * 1.5e-6
+    n = normal_from_height(blur(h, 0.7), T)
+    alb = col((0.92, 0.92, 0.92)) * (0.985 + 0.02 * bumps + 0.01 * spectral(r, 200, 1200))[..., None]
+    rough = 0.62 - 0.12 * bumps + 0.02 * spectral(r, 40, 300)
+    write("wp_pebble", alb, n, np.clip(rough, 0.35, 0.8), np.zeros((SIZE, SIZE), np.float32), max_size=1024)
+
+
+def wp_keycap():
+    """Keycap plastic: a satin, finely sanded surface with faint sink marks; neutral albedo for the cap colour."""
+    T = 0.03
+    r = rng_for("wpkeycap")
+    px = T / SIZE
+    h = spectral(r, 0.00003 / px, 0.00015 / px) * 0.35e-6 + spectral(r, 0.002 / px, 0.012 / px) * 0.8e-6
+    n = normal_from_height(h, T)
+    alb = col((0.93, 0.93, 0.92)) * (0.99 + 0.01 * spectral(r, 100, 900))[..., None]
+    rough = 0.42 + 0.03 * spectral(r, 30, 300)
+    write("wp_keycap", alb, n, np.clip(rough, 0.3, 0.6), np.zeros((SIZE, SIZE), np.float32), max_size=1024)
+
+
 SETS = [powder_coat, wrinkle_paint, bead_blasted_aluminium, nickel_polished, nickel_worn, chrome_steel, key_glass,
-        blued_spring_steel, japanned_enamel, vulcanised_rubber, green_felt, paper_fibre, ribbon_cloth, walnut_desk]
+        blued_spring_steel, japanned_enamel, vulcanised_rubber, green_felt, paper_fibre, ribbon_cloth, walnut_desk,
+        wp_pebble, wp_keycap]
 
 
 # Recommended tile size and three.js MeshPhysicalMaterial parameters. Written to materials.json for the renderer.
@@ -578,6 +607,8 @@ PARAMS = {
     "green_felt": {"tile": 0.08, "physical": {"metalness": 0, "roughness": 1, "sheen": 0.35, "sheenRoughness": 0.65, "sheenColor": [0.1, 0.26, 0.13]}, "note": "sheen simulates the fibre halo"},
     "paper_fibre": {"tile": 0.2159, "physical": {"metalness": 0, "roughness": 1}, "note": "laid lines along U"},
     "walnut_desk": {"tile": 2.2, "physical": {"metalness": 0, "roughness": 1, "clearcoat": 0.45, "clearcoatRoughness": 0.2, "ior": 1.5}, "note": "2048 px (authored at 4096 and filtered down), 1.07 mm per texel; larger than the desk so it never repeats; grain along U; no metalnessMap needed"},
+    "wp_pebble": {"tile": 0.05, "physical": {"metalness": 0, "roughness": 1, "ior": 1.49, "sheen": 0.2, "sheenRoughness": 0.6, "sheenColor": [0.8, 0.8, 0.78]}, "note": "1024 px; neutral albedo, colour in the material (Pearl White, Pebble Gray, dark mouldings)"},
+    "wp_keycap": {"tile": 0.03, "physical": {"metalness": 0, "roughness": 1, "ior": 1.49}, "note": "1024 px; neutral albedo, colour in the material"},
     "ribbon_cloth": {"tile": 0.0248, "physical": {"metalness": 0, "roughness": 1, "sheen": 0.3, "sheenRoughness": 0.5, "sheenColor": [0.05, 0.05, 0.06]}, "note": "tile is 40 threads at the definition's pitch"},
 }
 

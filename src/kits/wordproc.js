@@ -23,7 +23,11 @@ import { KEYS } from '../machine/wp-keys.js';
 import { loadGlyphs } from '../machine/glyphs.js';
 import { loadWordList } from './wp/wordlist.js';
 import { installPages } from '../pages/index.js';
-import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
+import { createUnitMaterials } from '../render/wp/units.js';
+import { buildKeyboard } from '../render/wp/keyboard-view.js';
+import { buildDiskette } from '../render/wp/diskette-view.js';
+import { buildStation, buildDisplay } from '../render/wp/station-view.js';
+import { buildPrinter } from '../render/wp/printer-view.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -38,23 +42,24 @@ export async function mount(ctx) {
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
   loadRoom(stage.scene, '/assets/hdri/combination_room_2k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
 
-  // The units, each in its own group at its world origin.
+  // The units, each in its own group at its world origin. The printwheel's faces are the glyphs that print.
   const umats = createUnitMaterials();
+  const glyphs = await loadGlyphs('glyphs_wp');
   const builders = {
     station: (u) => buildStation(u.size, umats),
-    display: (u) => buildDisplay(u.size, umats),
-    keyboard: (u) => buildKeyboard(u.size, machine.units.keyboard.slope, umats),
+    display: (u) => buildDisplay(u.size, umats, { tilt: machine.units.display.tilt, swivel: machine.units.display.swivel }),
+    keyboard: (u) => buildKeyboard(u.size, machine.units.keyboard.slope, umats, { maxAniso: stage.renderer.capabilities.getMaxAnisotropy() }),
     diskette: (u) => buildDiskette(u.size, umats),
-    printer: (u) => buildPrinter(u.size, umats),
+    printer: (u) => buildPrinter(u.size, umats, { printer: machine.printer, glyphs, order: geometry.printer.wheel.order }),
   };
-  const units = {}, parts = {}, footprints = [];
+  const units = {}, parts = {}, views = {}, footprints = [];
   let displayFace = null;
   for (const [name, u] of Object.entries(geometry.units)) {
-    const built = builders[name](u);
+    const built = await builders[name](u);
     built.group.name = `unit-${name}`;
     built.group.position.fromArray(u.origin);
     stage.scene.add(built.group);
-    units[name] = built.group; parts[name] = built.parts;
+    units[name] = built.group; parts[name] = built.parts; views[name] = built;
     if (built.face) displayFace = built.face;
     if (!u.on) footprints.push(u.box);
   }
@@ -70,11 +75,10 @@ export async function mount(ctx) {
   // closed. The software reaches them only through the device interface.
   let sys = null;
   const drives = [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }];
-  const glyphs = await loadGlyphs('glyphs_wp');
   const cold = params.has('cold');
   const sim = await createSimClient({ machine, geometry, glyphs, options: { cold, drives: cold ? [null, null] : drives } });
   const pickables = [];
-  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, sim, glyphs, onDevice: (e) => sys?.deviceEvent(e), controls: parts.printer, pickables });
+  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, sim, glyphs, onDevice: (e) => sys?.deviceEvent(e), controls: parts.printer, view: views.printer, pickables });
   devices.printer = printer.device;
   const diskettes = installDiskettes({ stage, machine, geometry, sim, unit: units.diskette, parts: parts.diskette, library, pickables });
   diskettes.onEvent((e) => sys?.deviceEvent(e));
@@ -84,7 +88,7 @@ export async function mount(ctx) {
   devices.power = { on: !cold };
   if (cold) sim.command({ dev: 'station', op: 'power', on: false });   // its fan and the drive motors stand still
   const rocker = parts.station.rocker;
-  const setRocker = () => { rocker.rotation.x = devices.power.on ? -0.25 : 0.25; };
+  const setRocker = () => parts.station.setRocker(devices.power.on);
   setRocker();
   pickables.push({ object: rocker, part: () => ({ label: devices.power.on ? 'Power (on)' : 'Power: switch on', onClick: () => {
     if (devices.power.on) return;
@@ -109,15 +113,17 @@ export async function mount(ctx) {
   // The CRT on the display's front.
   const screen = params.has('screentest') ? testCardScreen() : sys.screen;
   const crt = new CRT({ renderer: stage.renderer, screen });
-  const face = new THREE.Mesh(makeTubeFace(0.245, 0.17), crt.material);
+  // The glass sits in the display's tilt node, so it tilts and turns with the cabinet.
+  const faceParent = displayFace.parent ?? units.display;
+  const face = new THREE.Mesh(makeTubeFace(displayFace.w, displayFace.h, displayFace.radius), crt.material);
   face.position.set(displayFace.x, displayFace.y, displayFace.z);
-  units.display.add(face);
+  faceParent.add(face);
   // The screen's own light on the keyboard and desk: shadowless, from a little in front of the glass.
   const spill = new THREE.SpotLight(0x66ff99, 0, 1.5, 1.1, 0.9, 2);
   spill.position.set(displayFace.x, displayFace.y, displayFace.z + 0.03);
-  spill.target.position.set(displayFace.x, -0.25, displayFace.z + 0.6);
-  units.display.add(spill.target);
-  units.display.add(spill);
+  spill.target.position.set(displayFace.x, displayFace.y - 0.4, displayFace.z + 0.6);
+  faceParent.add(spill.target);
+  faceParent.add(spill);
   stage.fitShadow(machine.deskLayout.extent);
 
   const preset = machine.cameras[params.get('cam') ?? machine.defaultCamera] ?? machine.cameras[machine.defaultCamera];
@@ -146,7 +152,7 @@ export async function mount(ctx) {
     printer.update();
     diskettes.update();
     pages.update(dt);
-    crt.gain = devices.power.on ? 1 : 0;
+    crt.setPower(devices.power.on);
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();
@@ -188,8 +194,8 @@ function buildPanel(ctx, machine, orbit, feeder) {
  */
 function keyLabel(i) {
   const k = KEYS[i];
-  const top = k.top.replace('\n', ' / ') || 'blank';
-  return k.front ? `${top}  (CODE: ${k.front})` : top;
+  const top = k.top.includes('\n') && [...k.top].length === 3 ? k.top.replace('\n', ' / ') : k.top.replace(/\n/g, ' ') || 'blank';
+  return k.front ? `${top}  (CODE: ${k.front.replace(/\n/g, ' ')})` : top;
 }
 
 function installOrbitInput(canvas, orbit, camera, pickables, keyboardParts, press) {

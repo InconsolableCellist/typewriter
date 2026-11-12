@@ -269,7 +269,12 @@ References for the printer, besides the general list above:
   resolve): not used.
 - **Owner's photograph** `docs/displaywriter/refs/owner/printer_5218_front.jpg`: a 5218 A02 on a stand from the front
   left with continuous forms, a white label stuck on the panel's right section; camera-matched as the `owner` view.
-  The chrome rod along its left top edge belongs to the forms stand, not to the printer.
+  The dark slot at its top right is the right paper-handler latch opening (5218_1, 5218_2 and PG p.38 show one at each
+  side of the cover; the left one is under the rod in this photograph), so the model keeps both. The chrome rod lying
+  along the top's left side, from the front corner back to the left latch opening, is not a 5218 part: PG p.38 numbers
+  every part of the printer and has none, and no other photograph or drawing (5218_1, 5218_2, BRO p.18, PG p.89-103
+  for the sheet feeder, p.75-82 for the tractor feed) shows one; it is taken to be an accessory of the forms stand, and
+  is not modelled.
 - Searched without result: dimensions in the Technical Manual for the Technical Coordinator `G320-0158-0` and the
   Display Station Platform announcement (Bitsavers `6580_Displaywriter/productAnnoucements/`); stills of the dc4.nl
   video "006 - IBM 6580 Displaywriter with HUGE daisy wheel printer 1980" (no page found; dc4.nl, computerhistory.org's
@@ -299,7 +304,10 @@ Measurements and decisions:
   base's wall, which now comes closer on the left.
 - **Access cover** as before, but its tinted window is 117 mm deep (was 40), over half the cover: PH 5218_2 shows the
   clear part over half the raised cover's length, the owner's photograph and BRO p.18 a dark band over the cover's rear
-  half. The foam lines the front part.
+  half. The foam lines the front part. The glass is smoked: dark, glossy and 62 % opaque (the view's `wp_glass`).
+- **Panel frame, strip and power switch bezel** are a pale pearl a shade greyer than the covers (`wp_trim`; the owner's
+  photograph and BRO p.18), not PH 5218_1's yellowed tan; the frame's edges are rounded 1.2 mm. The panel's right
+  section carries a white card with the model written on it, as on the owner's printer.
 - **Panel** unchanged in place and order; PG p.38 confirms it: LEDs top row Power On, Ribbon, Printer Excep, Setup,
   Change Font, bottom row On Line, Ready, Release, Load Paper, Diag Mode; keys Start (green) over Stop (yellow), Print
   Test over Cancel, Load over Release, Paper Up over Paper Down. Node order `printer_key0..7` is the definition's
@@ -353,6 +361,5 @@ Not yet matched:
 - The ribbon cartridge's lobes are lower and blunter at the tips than PG p.41 (where they rise to points behind the
   break lines of MIM p.57), and its lower housings are plain cylinders. The cardholder and the hammer's nose are as
   before. The printwheel cartridge's label printing ("IBM Cartridge Printwheel", the style number) is not drawn.
-- The power switch's bezel is tan in the model; PH 5218_1 shows it tan, the owner's photograph pale grey.
 - The cabinet's front-top radius, the base band's inset and the front face are as before (they matched within a few
-  millimetres); the label on the owner's panel is not modelled (5218_1's right section is blank).
+  millimetres). The card's writing uses the system's handwriting face where there is one.

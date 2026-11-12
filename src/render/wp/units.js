@@ -1,10 +1,6 @@
-// Procedural models of the word processor's units, built in code to the documented sizes (no download), until each is
-// replaced by its moulded model and view (the keyboard: keyboard-view.js; docs/displaywriter/models.md). Shapes
-// follow the 1982 brochure's product photos (BRO p.18) and the setup guide's drawings: pearl-white covers, darker
-// bezels and panels, rounded edges. Each builder returns a THREE.Group in the unit's local frame (origin on the
-// surface it stands on, under its centre; x right, y up, z toward the typist) plus the parts other code drives.
+// The word processor's unit materials: the textured plastics the Blender-built units (src/render/wp/*-view.js) take by
+// name, with the pebble grain on the covers and the satin grain on the keycaps (docs/displaywriter/models.md).
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { applyTextureSet } from '../materials.js';
 
 /**
@@ -43,40 +39,41 @@ export function glbUnitMaterials(mats) {
   return mats.glb;
 }
 
-const box = (w, h, d, r, mat, segs = 3) => {
-  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, segs, Math.min(r, w / 2, h / 2, d / 2) * 0.999), mat);
-  m.castShadow = m.receiveShadow = true;
-  return m;
-};
-const at = (mesh, x, y, z) => { mesh.position.set(x, y, z); return mesh; };
+// The authored plastic sets (tools/gen/materials.py): neutral albedo, normal and roughness, loaded once and shared.
+const TEX = '/assets/textures/';
+const sets = new Map();
+function loadSet(name) {
+  if (!sets.has(name)) {
+    const one = async (kind, srgb) => {
+      const r = await fetch(`${TEX}${name}_${kind}.avif`);
+      if (!r.ok) return null;
+      const t = new THREE.Texture(await createImageBitmap(await r.blob(), { imageOrientation: 'flipY' }));
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.flipY = false; t.anisotropy = 8;
+      t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.needsUpdate = true;
+      return t;
+    };
+    sets.set(name, Promise.all([
+      fetch(`${TEX}materials.json`).then((r) => r.json()).then((j) => j[name]?.tile ?? 0.05).catch(() => 0.05),
+      one('albedo', true), one('normal', false), one('roughness', false),
+    ]));
+  }
+  return sets.get(name);
+}
 
 /**
- * Printwheel printer: a wide low cabinet on a plinth, the paper slot and access cover on top toward the rear, the
- * operator panel in a dark strip at the front and the power switch at the front right (BRO p.18; PR 1).
+ * A copy of a unit material with a textured plastic set on it, for models whose UVs are box projected at one UV unit
+ * = 0.2 m (the Blender-built units). The colour stays the material's; the maps arrive asynchronously.
  */
-export function buildPrinter(size, mats) {
-  const [w, h, d] = size, g = new THREE.Group();
-  const plinth = 0.02;
-  g.add(at(box(w - 0.03, plinth, d - 0.03, 0.006, mats.pebble), 0, plinth / 2, 0));
-  g.add(at(box(w, h * 0.62, d, 0.016, mats.pearl), 0, plinth + h * 0.31 - 0.002, 0));
-  const cover = new THREE.Group();
-  cover.position.set(0, plinth + h * 0.62 - 0.004, -d / 2 + 0.02);   // hinged at the back
-  cover.add(at(box(w * 0.9, h - plinth - h * 0.62 + 0.004, d * 0.78, 0.02, mats.pearl), 0, (h - plinth - h * 0.62) / 2, d * 0.39 - 0.01));
-  cover.add(at(box(w * 0.6, 0.008, 0.045, 0.003, mats.dark), 0, h - plinth - h * 0.62 + 0.004, d * 0.18));    // paper slot window
-  cover.name = 'printerCover';
-  g.add(cover);
-  const panel = at(box(w * 0.42, 0.05, 0.01, 0.004, mats.dark), 0, plinth + h * 0.3, d / 2 - 0.003);
-  g.add(panel);
-  const panelKeys = [];
-  // Two clusters of four keys, as in the photographs.
-  for (let i = 0; i < 8; i++) {
-    const cx = i < 4 ? -0.032 : 0.032, col = i % 2, row = (i >> 1) % 2;
-    const kk = at(box(0.011, 0.011, 0.005, 0.0015, mats.pearl), cx + (col - 0.5) * 0.014, plinth + h * 0.3 + (0.5 - row) * 0.014, d / 2 + 0.003);
-    kk.name = `panelKey${i}`;
-    g.add(kk); panelKeys.push(kk);
-  }
-  const power = at(box(0.02, 0.022, 0.006, 0.002, mats.dark), w / 2 - 0.05, plinth + h * 0.28, d / 2 + 0.001);
-  power.name = 'printerPower';
-  g.add(power);
-  return { group: g, parts: { cover, panelKeys, power } };
+export function texturedUnitMaterial(base, set = 'wp_pebble') {
+  const m = base.clone();
+  if (typeof document === 'undefined') return m;
+  loadSet(set).then(([tile, a, n, r]) => {
+    const rep = 0.2 / tile;
+    const use = (t) => { if (!t) return null; const c = t.clone(); c.repeat.set(rep, rep); c.needsUpdate = true; return c; };
+    if (a) m.map = use(a);
+    if (n) { m.normalMap = use(n); m.normalScale = new THREE.Vector2(1, 1); }
+    if (r) { m.roughnessMap = use(r); m.roughness = 1; }
+    m.needsUpdate = true;
+  }).catch((e) => console.info('texture', set, e));
+  return m;
 }

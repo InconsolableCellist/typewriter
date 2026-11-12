@@ -11,17 +11,18 @@ import calibration from './wp-printer-cal.js';
 const deg = Math.PI / 180;
 const IN = 0.0254;
 
-// Documented sizes (width, height, depth), m, and masses, kg. The printer's size is the photo estimate (PR 1).
+// Documented sizes (width, height, depth), m, and masses, kg. The printer's size is measured from the photographs
+// (docs/displaywriter/models.md, Printer): the paper slot passes 392 mm paper, the rest in proportion.
 const SIZE = {
   station: [0.483, 0.178, 0.356],      // electronics module, HW 1.1
   display: [0.381, 0.292, 0.348],      // 25-line display, HW 1.2
   keyboard: [0.538, 0.101, 0.213],     // HW 2.1
   diskette: [0.254, 0.292, 0.398],     // dual unit, HW 3.1
-  printer: [0.74, 0.23, 0.58],         // estimated, PR 1
+  printer: [0.73, 0.188, 0.645],       // measured from the photographs (models.md, Printer)
 };
 const GAP = 0.04;                      // between bodies standing side by side
 const KEYBOARD_GAP = 0.045;            // module front to keyboard back
-const ROW_BACK = -0.48;                // the printer's back edge, close to the desk's rear border
+const ROW_BACK = -0.44;                // the printer's back edge: its sheet feeder's trays reach 7 cm further, to the desk's rear border
 const STATION_X = 0.12;                // module and keyboard right of the desk centre, so the printer fits on the left
 const STATION_Z = -0.13;               // module and diskette unit centres: the screen at reading distance, cables behind
 
@@ -60,7 +61,7 @@ export default {
     operator: { position: [0.12, 0.42, 0.66], target: [0.12, 0.30, 0.04] },
     overview: { position: [0.0, 1.15, 2.45], target: [-0.05, 0.12, -0.05] },
     keyboard: { position: [0.12, 0.48, 0.62], target: [0.12, 0.06, 0.20] },
-    printer: { position: [-0.53, 0.62, 0.70], target: [-0.53, 0.16, -0.16] },
+    printer: { position: [-0.53, 0.78, 0.66], target: [-0.53, 0.20, -0.10] },
     diskette: { position: [0.62, 0.36, 0.62], target: [0.53, 0.15, 0.07] },
   },
   defaultCamera: 'overview',
@@ -85,10 +86,13 @@ function printerBlock() {
   // One index step is 1/96 in at the platen surface (PR 2): this radius makes the belt ratio exactly 2.8.
   const platenRadius = ((IN / 96) * INDEX_STEPS * BELT) / (2 * Math.PI);
   const trackPitch = 0.0116 / 3;
+  // The platen under the access cover's rear edge, 40 % of the depth from the front (MIM p.20, PH 5218_2), its rubber
+  // 0.71 of the width (MIM p.20); it reaches past the 392 mm paper the slot passes. models.md, Printer.
+  const PLATEN = [0, 0.132, 0.064];
   return {
     action: { fixedPlaten: true },
     platen: {
-      radius: platenRadius, length: 0.415, center: [0, 0.150, -0.060],
+      radius: platenRadius, length: 0.52, center: PLATEN,
       inertia: 2e-4, bearingViscous: 2.5e-4, bearingCoulomb: 7e-3, paperDrag: 0.01,   // assumed; paper drag from the feed rollers
       rubberE: 4.5e7, rubberNu: 0.47, rubberDepth: 0.006, huntCrossleyAlpha: 0.55, surfaceFriction: 0.85,
     },
@@ -102,6 +106,9 @@ function printerBlock() {
     ribbon: {
       film: true, width: 0.0116, length: 122, tracks: 3, thickness: 0.00003,   // multi-strike film (PR 6)
       vibrator: { restDrop: trackPitch, fullLift: 2 * trackPitch },          // lift 0, 1 and 2 track pitches
+      // The cartridge's two spool lobes either side of the hammer, in front of the wheel (MIM p.57); a full supply
+      // spool of 122 m of film is 70 mm across.
+      spoolX: 0.066, spoolY: PLATEN[1] - 0.016, spoolZ: PLATEN[2] + 0.064,
       pawlFeedScale: 1, feedPerKey: 0.00037 / 3, colourBands: ['black'],
     },
     carriage: { typingDirection: -1, travel: 0.340 },
@@ -165,9 +172,19 @@ function printerBlock() {
       release: { table: [0, 0.5, 0.2, 1.0, 0], inertia: 1.2e-5, spring: 0.05, rate: 0.1, damping: 2e-3, camStiffness: 40 },
       bail: { table: [0, 0, 0, 18 * deg, 18 * deg], inertia: 2.5e-5, spring: 0.03, rate: 0.08, damping: 2e-3, camStiffness: 40 },
     },
+    // The covers and the sheet feeder as the soft bodies meet them (printer-unit coordinates, m; the shapes are built by
+    // tools/blender/build_wp_printer.py from the same numbers). The access cover stands 18 mm proud of the cabinet's top
+    // (PH 5218_1) and hinges on its rear top edge, just in front of the paper slot; the slot runs from there back over
+    // the platen to the acoustic filter. The sheet feeder stands over the slot: its stacker plate is the paper table,
+    // its front leans back clear of the opened cover.
+    cabinet: {
+      top: 0.170, coverTop: 0.188, hinge: [0.186, 0.094], slot: [0.012, 0.094], slotHalfWidth: 0.212, filterFoot: [0.160, 0.028],
+      feeder: { halfWidth: 0.278, top: 0.525, opening: [0.170, 0.430], openingHalfWidth: 0.215, front: 0.072, lean: 0.30,
+        topBack: -0.135, rearTop: 0.345, rearTopFront: -0.155, back: -0.315, trayBack: -0.39 },
+    },
     paperFeed: { chunk: 16, loadMaxSteps: 96 * 5, ejectMaxSteps: 96 * 13 },
     cover: {
-      inertia: 0.012, gravityTorque: 0.35, latchTorque: 0.6, latchAngle: 2 * deg, open: 75 * deg,
+      inertia: 0.012, gravityTorque: 0.35, latchTorque: 0.6, latchAngle: 2 * deg, open: 100 * deg,   // past upright: it rests open on its stop
       viscous: 0.01, coulomb: 0.01, stopStiffness: 60, stopDamping: 0.5, interlockAngle: 3 * deg,
     },
     panel: {

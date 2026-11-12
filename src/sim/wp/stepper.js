@@ -12,7 +12,7 @@ const sat = (w, w0) => (w > w0 ? 1 : w < -w0 ? -1 : w / w0);
  * with th' offset by an eighth of an electrical period so that phase state s rests at th = s * step.
  */
 export class Stepper2Phase {
-  constructor(p) { this.setParams(p); this.th = 0; this.w = 0; this.iA = 0; this.iB = 0; this.state = 0; this.amp = 0; }
+  constructor(p) { this.setParams(p); this.th = 0; this.w = 0; this.iA = 0; this.iB = 0; this.state = 0; this.amp = 0; this.Te = 0; }
 
   setParams(p) {
     this.N = p.stepsPerRev / 4;
@@ -39,7 +39,9 @@ export class Stepper2Phase {
     const k = h / this.tauE;
     this.iA += (this.cmdA() - this.iA) * k;
     this.iB += (this.cmdB() - this.iB) * k;
-    const T = this.torque() + load - this.b * this.w - this.Tc * sat(this.w, 0.05);
+    const Te = this.torque();
+    this.Te = Te;               // kept for the sound: its reaction on the stator rings what the motor is bolted to
+    const T = Te + load - this.b * this.w - this.Tc * sat(this.w, 0.05);
     this.w += (T / this.J) * h;
     this.th += this.w * h;
   }
@@ -59,7 +61,7 @@ export class Stepper2Phase {
  * Phase k energised alone rests at th = k * step (mod three steps).
  */
 export class StepperVR3 {
-  constructor(p) { this.setParams(p); this.th = 0; this.w = 0; this.i = new Float64Array(3); this.phase = 0; this.amp = 0; }
+  constructor(p) { this.setParams(p); this.th = 0; this.w = 0; this.i = new Float64Array(3); this.phase = 0; this.amp = 0; this.Te = 0; }
 
   setParams(p) {
     this.Nr = p.rotorTeeth;
@@ -91,7 +93,9 @@ export class StepperVR3 {
       if (target === 0 && ik < 1e-9) ik = 0;
       this.i[k] = ik;
     }
-    const T = this.torque() + load - this.b * this.w - this.Tc * sat(this.w, 0.05);
+    const Te = this.torque();
+    this.Te = Te;               // kept for the sound: its reaction on the stator rings what the motor is bolted to
+    const T = Te + load - this.b * this.w - this.Tc * sat(this.w, 0.05);
     this.w += (T / this.J) * h;
     this.th += this.w * h;
   }

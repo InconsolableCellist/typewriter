@@ -49,7 +49,7 @@ class TypewriterProcessor extends AudioWorkletProcessor {
       case 'setAudioEnabled': this.engine.setEnabled(m.b); break;
       case 'paper': this.engine.setPaperSpeed(m.v); break;
       case 'samples': this.engine.loadSamples(m.pcm, m.manifest); break;
-      case 'samplesStatus': this.port.postMessage({ samplesStatus: { loaded: this.engine.sampler.loaded, counts: this.engine.sampler.counts, pcmLen: this.engine.sampler.pcm?.length ?? 0, paperV: this.engine.sampler.paperV } }); break;
+      case 'samplesStatus': this.port.postMessage({ samplesStatus: { loaded: !!this.engine.sampler?.loaded, counts: this.engine.sampler?.counts, pcmLen: this.engine.sampler?.pcm?.length ?? 0, paperV: this.engine.sampler?.paperV } }); break;
       case 'ret': if (m.buf) this.pool.push(new Float32Array(m.buf)); break;
       case 'export': this.port.postMessage({ t: 'state', state: sim.exportState(), reqId: m.reqId }); break;
     }
@@ -58,6 +58,11 @@ class TypewriterProcessor extends AudioWorkletProcessor {
   process(_inputs, outputs) {
     const out = outputs[0];
     const n = out[0]?.length ?? 128;
+    // A stereo engine (the word processor's) writes left and right; the typewriters' mono goes to every channel.
+    if (this.engine.stereo && out.length >= 2) {
+      this.engine.process(out[0], n, out[1]);
+      return true;
+    }
     if (this.mono.length !== n) this.mono = new Float32Array(n);
     this.engine.process(this.mono, n);
     for (let ch = 0; ch < out.length; ch++) out[ch].set(this.mono);

@@ -1165,6 +1165,61 @@ the typewriter sprite at all.
 | Printer cover | `cover` | A low-pass and 6 dB on the printer bus; opening the cover brightens it |
 | Paper | Soft-body speed, as now | The existing paper loops via `setPaperSpeed` if samples are present; otherwise filtered noise |
 
+### 10.3 Decisions made in implementation (sound)
+
+Choices left open above, settled while building `WpAudioEngine` (`src/audio/wp-engine.js`) and its voices
+(`src/audio/wp-synth.js`). Levels are the `LEVEL` table there; every number in it is assumed, since there is no
+recording and no dB figure (PR 10, HW 1.9).
+
+1. **Capture, then render.** Each audio block first steps the mechanism, reading one probe frame per sample (21
+   values: the port forces averaged over the sample's substeps, the motors' torques and the fast speeds), then renders
+   the block from the frames. The voices' cost is then measured apart from the mechanism's (`voiceNs`, `mechNs`).
+   Slow quantities (fan and motor speeds, power, the access cover) are read once a block.
+2. **Voices key on forces, torques and speeds only.** Every onset the `WAC` queue marks is also a contact force in a
+   port, so the queue is cleared each sample and nothing reads it. Nothing in the audio code knows a command.
+3. **A structure rings from the change in the force on it.** Each modal body (petal, platen, carrier, frame,
+   cabinet; drive chassis, lever) is driven by the per-sample change of the contact forces and of the motors' reaction
+   torques (over a 20 mm mounting radius) acting on it; the petal face's force, which is zero at rest, drives the
+   platen and petal directly. A steady load is silent, and with nothing moving every body sleeps.
+4. **Motor tones are not synthesised; they emerge.** The steppers keep their electromagnetic torque from the last
+   substep (`Stepper2Phase.Te`, `StepperVR3.Te`, read only by the sound). Its ripple rings the body each motor is
+   bolted to, so the carrier whines at its step rate (1440 Hz at 60 cps, about 20 dB over its neighbours), a line feed
+   buzzes at 400 steps per second, seeks tick at 200 per second and a recalibrate buzzes against the stop.
+5. **The hard click is the hammer's nose catching the petal**, about 1.3 ms before the face meets the paper (a stiff
+   contact, `WP_PORT.ARMATURE` with the armature forward). The face on ribbon, paper and rubber lasts 0.45 to 0.9 ms
+   and is the thud under it; the sound of that contact starts within a millisecond of the strike event's `tBegin`
+   (tested). The armature landing on its backstop is the same port with the armature home, voiced at a third as a
+   faced stop.
+6. **The step motors sit in resilient grommets** (a first-order high pass at 800 Hz on the escapement motor's
+   reaction): without it the torque of each start and stop outweighed the strikes when printing slowly.
+7. **The printer's enclosure**: the mechanism's sound reaches the room through the covers (a two-pole low pass at
+   1.6 kHz, 7 kHz and +6 dB with the access cover open), the paper slot's perforated filter (0.15 of it, low passed at
+   6 kHz) and, below the shock mounts' 300 Hz, the covers' own modes. The fan blows through its grille outside all of
+   that. The wheel's petal-pass whir (96 per turn, 3 to 7 kHz) is therefore faint, as the acoustic filter intends.
+8. **Air and rotors**: fans and drive pulleys give band-passed noise at amplitude (speed / synchronous speed)^2.5 and a
+   blade-pass partial (blades: printer 5, station 7, assumed); the drive motors add 1x and 2x rotor partials and a
+   24-bar slot harmonic, and hum at 120 Hz (twice the 60 Hz line, with its 240 Hz partial) in proportion to their
+   stator current, which rises with slip; a clamped diskette rubs its liner, more with the pad loaded. All the mains hum
+   shares one oscillator, so the units' hums are in phase as on one line.
+9. **Stereo**: each bus is panned by its unit's bearing from the operator's chair (`cameras.operator`), full at 45
+   degrees: printer -0.83, station 0, diskettes +0.61, constant power. The room is fed the mid and its reverberation
+   added to both sides; a radiation filter on each side; a linked stereo limiter with a 0.5 ms look-ahead (the
+   typewriters' 1.5 ms would delay a strike past a millisecond). The worklet writes left and right when the engine has
+   `stereo`; the typewriters' engines do not, and stay mono on both channels. A mono caller gets the mid.
+10. **The station is a mechanism now** (`src/sim/wp/station-mech.js`): its power and the power supply's fan, a shaded-pole
+    motor on the line integrated against air drag (about 3000 rpm), in the snapshot as `power` and `fanOmega`. The warm
+    start computes its running speed, and the printer fan's. `{ dev: 'station', op: 'power', on }` (or
+    `setStationPower`) switches it, and the diskette motors with it; the rocker DOF arrives with the station's view.
+11. **No CRT whine by default** (10.2): `machine.audio.crtWhine`, a level factor, enables a faint 15.72 kHz line
+    whistle while the station is powered.
+12. **Rendering is skipped** while the output is null or audio is disabled (`LocalHost` before the first gesture); the
+    mechanism runs as before, and the voices start again from the present state, without a jump.
+13. **Budget**: the voices may take 1 microsecond a sample (5 % of a 48 kHz sample period; 12.2 allows a load of 0.35
+    while printing and the mechanism alone takes about 0.2 in Node). Measured in Node with a line printing, a line feed
+    and a transfer at once: 0.45 to 0.6 microseconds (rendering, plus 0.03 for reading the mechanism); idle about 0.2.
+14. **Not voiced here**: the keyboard (its speaker stays on the main thread, `wp-speaker.js`), paper sliding
+    (`setPaperSpeed` is a no-op), the power rockers and the ribbon knob.
+
 ---
 
 ## 11. Plan
@@ -1247,6 +1302,15 @@ state, export and import). Decisions are listed in 8.7. Not done, because they n
 the host's disk commands in place of the virtual disk, the drive model and view, the holder and the scripted hand,
 drive sound, and the e2e run; so the software in Node still uses `VirtualDevices`, and the 12.1 checks that run the
 software on the mechanism (program load, lever opened mid-write leaving a document that needs recovery) wait for it.
+
+Sound done (2026-11-12): `WpAudioEngine` voices the printer, the diskette unit and the station from the mechanism's
+forces, torques and speeds (`src/audio/wp-synth.js`), on three panned buses, in stereo through the worklet; the
+station's power and fan (`station-mech.js`) joined the host for it. Tests: `tests/wp_audio.test.js` (a printed line, a
+line feed and a transfer sound and stay finite; energy rises with print rate; a strike's sound starts within a
+millisecond of its contact; idle output is exactly the motors and fans, steady; the pans; the station fan; the voices'
+cost). Decisions are listed in 10.3. Not done: listening in a browser and tuning the levels by ear (they are set
+against the targets in `LEVEL`'s comment), paper sound, the station's rocker and knobs, and the keyboard's own
+mechanical sound in the worklet.
 
 ---
 

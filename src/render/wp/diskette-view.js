@@ -91,19 +91,37 @@ function envelopeFace(name, printed) {
   });
 }
 
-/** The front badge (24 x 28 mm): IBM's striped logo on a satin plate, the machine type under it (BRO p.1, p.18). */
+/** The front badge (25 x 26 mm): a light grey satin plate, IBM's striped logo across its upper part and the machine type
+ *  small at its lower left (PH diskette_front; BRO p.1, p.18). */
 function badgeTexture() {
-  return canvasTexture(240, 280, (g, w, h) => {
+  return canvasTexture(250, 260, (g, w, h) => {
     const grad = g.createLinearGradient(0, 0, w, h);
-    grad.addColorStop(0, '#dcdcd7'); grad.addColorStop(1, '#c7c7c2');
+    grad.addColorStop(0, '#cfcfcb'); grad.addColorStop(1, '#b9b9b5');
     g.fillStyle = grad; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#20232a';
-    g.font = `bold 92px "Rockwell", "Courier New", serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('IBM', w / 2, 92);
+    g.fillStyle = '#25272c';
+    g.font = `bold 96px "Rockwell", "Courier New", serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('IBM', w / 2, 82);
     g.fillStyle = grad;                           // the logo's eight stripes, cut across the letters
-    for (let i = 0; i < 8; i++) g.fillRect(0, 56 + i * 9.6 + 5.6, w, 3.2);
-    g.fillStyle = '#20232a'; g.font = `bold 30px ${SANS}`;
-    g.fillText('6360', w / 2, 200);
+    for (let i = 0; i < 8; i++) g.fillRect(0, 44 + i * 10 + 6, w, 3.4);
+    g.fillStyle = '#25272c'; g.font = `bold 22px ${SANS}`; g.textAlign = 'left';
+    g.fillText('6360', 18, 222);
+  });
+}
+
+/** The mark on each pocket's floor right of the slot (12 x 16 mm), seen with the handle open: an arrow up (the way to turn
+ *  the handle to unlock) and a padlock in a frame, light on the dark drive front, the drive type small beside them
+ *  (PH diskette_front, desk_station_keyboard_diskette). */
+function lockTexture(mark) {
+  return canvasTexture(120, 160, (g, w, h) => {
+    g.fillStyle = '#232220'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = g.fillStyle = '#d8d6cf'; g.lineWidth = 4;
+    g.beginPath(); g.moveTo(22, 30); g.lineTo(12, 48); g.lineTo(32, 48); g.closePath(); g.fill();   // the arrow
+    g.strokeRect(38, 52, 56, 56);                                                                    // the frame
+    g.beginPath(); g.arc(66, 74, 10, Math.PI, 0); g.stroke();                                       // the shackle
+    g.fillRect(52, 74, 28, 22);                                                                      // the body
+    g.save(); g.translate(108, 80); g.rotate(-Math.PI / 2);
+    g.font = `bold 15px ${SANS}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(mark, 0, 0);
+    g.restore();
   });
 }
 
@@ -117,8 +135,10 @@ function leverTexture(mark) {
 }
 
 /**
- * Loads the unit. Returns `{ group, parts }`: `levers` (rest pose open; the kit sets rotation.z = -lever), `slots`
- * (each slot mouth's centre), `drives` (the dark fronts seen through the slots), `covers`,
+ * Loads the unit. Returns `{ group, parts }`: `levers` (each node's origin on its axle; rest pose open; the kit sets
+ * rotation.z = -lever), `leverRange` ({ axis, open, closed } in radians about the node's z), `slots` (each slot mouth's
+ * centre), `slotPaths` ({ mouth, axis, home, homeDepth } per slot, in the group's frame), `drives` (the dark fronts seen
+ * through the slots), `covers`,
  * `badge`, the desk file `holder` with its `places`, and `makeDiskette(id, type, opts)`,
  * whose result poses itself with `inSlot(i, depth)` and `inPlace(k)`.
  */
@@ -134,9 +154,10 @@ export async function buildDiskette(size, mats, { url = DISKETTE_URL, driveMark 
 
   const badgeMat = new THREE.MeshStandardMaterial({ map: badgeTexture(), roughness: 0.35, metalness: 0.6 });
   const leverMat = new THREE.MeshStandardMaterial({ map: leverTexture(driveMark), roughness: 0.6 });
+  const lockMat = new THREE.MeshStandardMaterial({ map: lockTexture(driveMark), roughness: 0.6 });
   const byName = {
     wp_pearl: mats.pearlGlb, wp_gray: mats.pebbleGlb, wp_dark: mats.darkGlb, wp_rubber: mats.rubber, wp_metal: mats.metal,
-    wp_label: leverMat,
+    wp_label: leverMat, wp_drive_label: lockMat,
   };
   root.traverse((o) => {
     if (!o.isMesh) return;
@@ -161,6 +182,19 @@ export async function buildDiskette(size, mats, { url = DISKETTE_URL, driveMark 
   const drives = [0, 1].map((i) => node(`wp_diskette_drive${i}`));     // the dark fronts behind the slots
   const covers = ['wp_diskette_front_cover', 'wp_diskette_top_cover'].map((n) => node(n));
   levers.forEach((lv, i) => { lv.name = `lever${i}`; });
+  // The controls as the builder describes them (glTF extras): each lever turns about its own z from `open` (0) to
+  // `closed` (-pi/2); each slot's diskette runs from the mouth along `axis`, its centre at `home` once pushed in.
+  const control = (o) => { try { return JSON.parse(o.userData?.control ?? 'null'); } catch { return null; } };
+  const leverRange = control(levers[0]) ?? { axis: [0, 0, 1], open: 0, closed: -Math.PI / 2 };
+  const slotPaths = slots.map((s, i) => {
+    const c = control(s) ?? {};
+    return {
+      mouth: s.position.clone(),
+      axis: new THREE.Vector3(...(c.axis ?? [0, 0, -1])),
+      home: s.position.clone().add(node(`wp_diskette_slot${i}_home`).position),   // the diskette's centre when home
+      homeDepth: c.home ?? DISK + 0.008,                                         // its leading edge's depth then
+    };
+  });
 
   const jacketMat = new THREE.MeshPhysicalMaterial({ color: 0x0d0d0d, roughness: 0.42, clearcoat: 0.3, clearcoatRoughness: 0.4 });
   const mediaMat = new THREE.MeshStandardMaterial({ color: 0x3a2412, roughness: 0.28, metalness: 0.1 });
@@ -205,5 +239,5 @@ export async function buildDiskette(size, mats, { url = DISKETTE_URL, driveMark 
     };
   }
 
-  return { group, parts: { levers, slots, drives, covers, badge: node('wp_diskette_badge'), holder, places, makeDiskette } };
+  return { group, parts: { levers, leverRange, slots, slotPaths, drives, covers, badge: node('wp_diskette_badge'), holder, places, makeDiskette } };
 }

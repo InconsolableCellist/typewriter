@@ -85,29 +85,73 @@ unit exported in the browser, since the caps and their atlas exist only at run t
 ## Diskette unit
 `tools/blender/build_wp_diskette.py` -> `public/assets/models/wp_diskette.glb` (the unit, one diskette, one
 envelope and the desk file); view `src/render/wp/diskette-view.js`; posed and clicked by `src/kits/wp/diskettes.js`.
-Previews: `tools/blender/render_wp_diskette.py` renders the photographs' viewpoints, `compare_wp_diskette.py REFDIR`
-puts each beside its reference (`tools/blender/previews/wp_diskette_cmp_*.png`).
+Review: `tools/blender/render_wp_diskette.py -- VIEW ... [--glb PATH --tag NAME]` renders the references' viewpoints
+(front, sp, desk, deskfront, levers for the owner's photographs; bro18, gim25, rear, lever, file for the documents) and
+`compare_wp_diskette.py REFDIR [--before NAME]` puts each beside its reference, with an earlier build between them
+(`tools/blender/previews/wp_diskette_cmp_*.png`).
 
-- **Cabinet.** 254 x 292 x 398 mm (HW 3.1). Covers 3 mm thick with 19 mm radii on the vertical and top edges (GIM
-  p.25, PSM p.61). The front cover is the front face and its rounded return, 34 mm deep, with a 0.8 mm gap to the top
-  cover, which is top, sides and back (front slides forward, top slides back, PSM p.61). The covers stop 16 mm above
-  the desk; below them a Pebble Gray base inset 8 mm on rubber feet, the dark band of BRO p.18.
-- **Slots.** Two, 90 mm apart about the centre (BRO p.18: 119 px at 1.32 px/mm), 9 mm wide, from 36 to 250 mm above the
-  desk. The photographs give 180 to 217 mm of slot; an 8-inch diskette needs 203.2, so the slot is 214 mm, as ORG p.54
-  (22 mm above the covers' lower edge, 37 mm under their top). Behind each, a dark drive front with a 3.5 mm guide and a
-  channel closed 12 mm beyond home, so the slot never shows the inside. The diskette's centre is 143 mm up.
-- **Levers.** Rest pose open, pointing up; the kit sets `rotation.z = -lever`, so 90 degrees closed lies across the
-  slot. The axle is 20 mm left of the slot at 82 mm (ST p.90: the shaft comes from the drive's left frame, the handle at
-  its foot when open, ST p.103). Hub 30 x 28 mm and arm 24 mm wide, 66 mm overall, with a grip rib standing 9 mm out:
-  closed, the L of ORG p.54 and the dark block of BRO p.18 (57 x 28 mm); open, it stands beside the slot and clears
-  it by 3.5 mm. It turns in front of the face; a dark pocket 74 x 40 mm round the closed position takes its hub (GIM
-  p.25). The "1/2D" mark (HW 3.3) is a plate low on the hub, the light window of BRO p.18, drawn at run time.
-- **Badge.** 24 x 28 mm, top left, its top level with the slots' (ORG p.54); a satin plate with IBM's striped logo
-  and "6360" drawn at run time (BRO p.1 shows a light badge with dark letters; GIM p.25's earlier unit has a dark one).
-- **Top and rear.** A 1.2 mm recess runs over the rear top edge and down the back (CSG p.42, PSM p.61; that it is a
-  grip is inferred). The connector panel sits in a notch at the bottom of the back, right of centre seen from behind,
-  with three sockets for the AC, DC and signal cables (HW 3.1, PSM p.61); two cover screws at the lower corners. The
-  cables themselves are not modelled yet.
+References for this unit, besides those above:
+- The owner's photographs (PH below): `diskette_front.jpg` (the unit head-on, left handle closed, right one open),
+  `desk_station_keyboard_diskette.jpg` (the unit close up at the left: the handle in depth, the slot's lip, the lock
+  mark), `desk_front_scott_peterson.jpg` (beside the display station). diskette_front.jpg is stretched sideways: its
+  face is 226 px wide and 238 px tall where 254 x 292 mm and the undistorted Scott Peterson photograph (H/W 1.14) want
+  it 1.09 times narrower, so widths and horizontal ratios are read from it and heights from the other two; the
+  comparison narrows it back.
+- The Incident Reporting Guide for the 6360 (`Z241-6253-2`, Feb 1983, bitsavers `pdf/ibm/6580_Displaywriter/`), IRG
+  p.1: the covers exploded (the front cover with its cross pockets, the slot liners, the top cover with a row of vents
+  across the rear of its top); p.4-5, the drive with its handle (FRU 18). Its parts list has no switch.
+
+- **Cabinet.** 254 x 292 x 398 mm (HW 3.1); the Scott Peterson photograph gives 1.14 for height over width, as the
+  documented sizes do. Covers 3 mm thick with 21 mm radii on the vertical and top edges (IRG p.1, PH desk_station_
+  keyboard_diskette). The front cover is the face and its rounded return, 34 mm deep (GIM p.25, IRG p.1); the top cover
+  is top, sides and back. The front cover stands 2.5 mm lower than the top cover, whose front edge reaches 3 mm forward
+  over it with a 0.8 mm gap: the slight overhang and the shadowed line across the top in PH diskette_front. The covers
+  stop 10 mm above the desk. Under them is a Pebble Gray base plate on rubber feet, inset 20 mm at the sides and 8 mm
+  front and back, in shadow (PH diskette_front shows a dark band, the Scott Peterson photograph a narrow light strip).
+- **Slots.** Two, 90 mm apart about the centre (PH diskette_front: 80 px on the 226 px face; BRO p.18), 9.4 mm wide in
+  the cover, from 27 to 236 mm above the desk (PH: 26-233 and 26-237 mm; the diskette needs 203.2). A dark liner stands
+  in each slot from the drive front to 0.7 mm under the face, its lip leaving a 7.6 mm mouth, so the slot is black to
+  its edge with a dark inner lip (IRG p.1's strip; PH desk_station_keyboard_diskette). Behind it are the guide (3.5 mm)
+  and a channel closed 12 mm beyond home. The diskette's centre is 131.5 mm up. The old slot (36 to 250 mm) was 10 to
+  14 mm too high.
+- **Pocket.** Each slot passes through a cross pocket a third of the way up: 52 x 33 mm about the slot, 66.5 to 99.5
+  mm up (PH diskette_front and Scott Peterson). Its pearl walls run 9 mm in to the dark drive front, which is its
+  floor (IRG p.1 draws the walls double; PH diskette_front shows them at the lower and right edges). On the floor right
+  of the slot, 9 to 21 mm out, is the lock mark (`wp_diskette_drive*_lock`, material `wp_drive_label`): an arrow up and
+  a framed padlock, with the drive type small beside them, drawn at run time (`lockTexture`). The old pocket was a dark
+  74 x 40 mm patch round the closed lever, and too high.
+- **Handles.** ST p.90's operator handle, as PH diskette_front shows it open on the right drive and closed on the
+  left. It is a dark plate 24 x 47 mm standing up beside the slot (35.5 to 11.5 mm left of it, 75 to 122 mm up), 1 mm in
+  front of the face and 3 mm thick. A fin 3 mm thick runs along its middle, standing 12.5 mm out of it, and its foot
+  reaches 8 mm below the plate (the thin light line in the front photograph; the block and the dangling foot in
+  desk_station_keyboard_diskette). A boss runs through the pocket to the axle, which ends in a ring on the plate (the
+  "O" on the closed handle). The axle is 19.5 mm left of the slot and 79 mm up: the point about which a quarter turn
+  clockwise lays the plate over the pocket, across the slot (CSG p.42), as on the left drive. The drive mark "1/2D"
+  (ST p.90) is printed on the plate beside the fin, reading across the slot when closed (`wp_diskette_lever*_label`,
+  `leverTexture`). The old handle (a 30 x 28 hub and an arm, 66 mm, with a grip rib) is gone.
+- **Badge.** 25 x 26 mm, 19 mm in from the left edge, 219 to 245 mm up, centred on the slots' tops (both photographs).
+  It is a light grey satin plate with IBM's striped initials across its upper part and "6360" small at the lower left,
+  drawn at run time (`badgeTexture`).
+- **Top and rear.** A row of 25 vent slots, 3 x 16 mm at 7.5 mm pitch, runs across the top 23 mm in from the rear
+  edge, with a dark tray under them (IRG p.1). It replaces the 1.2 mm recess over the rear top edge, which had been
+  inferred as a grip from CSG p.42 and PSM p.61. The connector panel sits in a notch at the bottom of the back, right
+  of centre seen from behind, with three sockets for the AC, DC and signal cables (HW 3.1, PSM p.61); two cover screws
+  sit at the lower corners. The cables (three, 1 m, out of the back, PH diskette_front) are not modelled.
+- **Power.** The 6360 has no power switch of its own. Service Theory (`S241-6247-2`): the diskette unit "is
+  controlled by, and receives its power from, the electronics module" (introduction); its AC is switched AC from panel
+  2 of the module's power supply, and "when the system power is on, the AC drive motor(s) and the fan run
+  continuously" (diskette unit, power); the module's switch "controls all AC and DC voltage distribution" (power
+  supply, printed p.72). No switch appears in the IRG's parts list, its covers' drawing or the photographs. The
+  station's rocker (`station_rocker`) powers the unit.
+- **Controls** (nodes for the kit; JSON in glTF extras, three.js `userData.control`, in the unit's frame):
+  - `wp_diskette_lever0` and `1`: origin on the axle at the face (x = -64.5 and +25.5 mm, y = 79 mm, z = +199 mm). The
+    rest pose is open; each turns about its own z from 0 (open) to -pi/2 (closed), which is the kit's
+    `rotation.z = -lever` with `machine.diskettes.lever.closed` = 90 degrees.
+  - `wp_diskette_slot0` and `1`: at each mouth's centre (x = -45 and +45 mm, y = 131.5 mm, z = +199 mm). The diskette
+    runs along -z, its leading edge 211.2 mm in when home. Its centre is then at the child `wp_diskette_slot*_home`
+    (z = -109.6 mm from the mouth).
+  - The view returns them as `parts.levers`, `parts.leverRange` and `parts.slotPaths` ({ mouth, axis, home,
+    homeDepth }).
 - **Diskette.** Built in a card frame (x along the label, y toward the label edge, z out of the label face): 203.2 mm
   square, 1.6 mm jacket, 38.1 mm hub hole, index hole, 12.7 mm head window from 32.5 to 91.5 mm below the centre,
   write-protect notch on the head-window edge, the brown media showing through. In a slot the head window leads and
@@ -125,9 +169,23 @@ puts each beside its reference (`tools/blender/previews/wp_diskette_cmp_*.png`).
 - **Picking.** The covers stop the pointer. A diskette at home lies wholly inside the slot (its trailing edge 8 mm in),
   so the hand reaches it through the slot and pocket: clicking there takes it out when the lever is open.
 - **Clearance.** The builder exits 1 if a diskette's whole path from the mouth to home, or a lever's sweep from open to
-  closed, touches a panel.
-- **Budget.** 264 KB, over a fifth of the 1.1 MB for five units, because it also carries the diskette, envelope and
-  file; the drives and levers are one mesh each, placed twice.
+  closed, touches a panel (covers, base, vent tray, drive fronts).
+- **Budget.** 270 KB (was 264), unquantized, since the view sets materials on the named meshes themselves. The slots,
+  pockets and vents are cut after the bevel, square-edged as the photographs show them, to keep it there. About 6.7 k
+  vertices; the drives and handles are one mesh each, placed twice.
+
+Comparison images (`tools/blender/previews/`, not committed): `wp_diskette_cmp_front.png`, `_sp`, `_desk`, `_levers`
+and `_deskfront`. Each reads photograph, before (`wp_diskette_<view>_before.png`, the previous GLB from the same
+camera), after. The renders alone are `wp_diskette_<view>.png` (also `rear`, `lever`, `file`).
+
+Not yet:
+- The closed handle's fin and foot lie across the pocket and stick out 8 mm left of it. The owner's left drive does
+  not show this (its handle may differ or be missing), and the Scott Peterson photograph shows a small tab at the
+  closed handle's right end instead.
+- The handle's depth is judged from one oblique photograph.
+- The cameras were placed by eye, so the pairs agree in proportion rather than pixel for pixel.
+- No photograph shows the back or the top of the owner's unit, so the vents follow IRG p.1 alone.
+- The cables are not modelled.
 
 ## Display station
 The electronics module (`build_wp_station.py`, `wp_station.glb`) and the 25-line display (`build_wp_display.py`,

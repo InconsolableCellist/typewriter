@@ -180,7 +180,7 @@ export async function buildPrinter(size, mats, opts = {}) {
     wp_paper: new THREE.MeshStandardMaterial({ color: 0xf4f2ec, roughness: 0.9 }), wp_cable: plastic(0x8fa3a3, 0.6), wp_foam: new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 0.97 }),
   };
   const nodes = {};
-  const keyMats = KEY_COLOURS.map((c, i) => plastic(c, 0.38, { map: keyTexture(c, KEY_LEGENDS[i]), clearcoat: 0.25, clearcoatRoughness: 0.4 }));
+  const keyMats = KEY_COLOURS.map((c, i) => plastic(0xffffff, 0.38, { map: keyTexture(c, KEY_LEGENDS[i]), clearcoat: 0.25, clearcoatRoughness: 0.4 }));   // the colour is in the map
   const ledMats = LED_COLOURS.map((c) => new THREE.MeshPhysicalMaterial({ color: new THREE.Color(c).multiplyScalar(0.18), emissive: c, emissiveIntensity: 0, roughness: 0.15, clearcoat: 1, transmission: 0 }));
   gltf.scene.traverse((o) => {
     if (o.name.startsWith('printer_')) nodes[o.name] = o;

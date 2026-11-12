@@ -46,7 +46,8 @@ Dimensions shared with the mechanism and the soft bodies (platen, print point, w
 slot, the hinge, the feeder's plate) come from `tools/blender/wp_printer.json`, written by
 `node tools/wp/export_printer.mjs` from the definition. Review images: `render_wp_printer.py` (Cycles) and
 `compare_wp_printer.py <photo dir>`, both writing to `tools/blender/previews/` (`compare_front`, `_open`, `_rear`,
-`_feeder`, `_plain`, `_carrier`).
+`_feeder`, `_plain`, `_carrier`), with browser screenshots of the printer printing and opened beside them
+(`browser_three`, `_top`, `_carrier`, `_feeder`, `_panel`).
 
 Measurements and decisions:
 - **Size 0.73 x 0.188 x 0.645 m** (was the 0.74 x 0.23 x 0.58 estimate). Scale: the acoustic filter across the slot spans
@@ -102,7 +103,8 @@ Measurements and decisions:
   cover, the well round the platen, the stacker plate and the feeder's top, as a height field.
 - **Budget**: 24 k triangles; the export is rewritten with `KHR_mesh_quantization` (`gltf_quantize.py`: positions as
   shorts under a uniform node scale that keeps each pivot, normals as bytes), which three.js reads with no decoder.
-  The GLB is about 640 KB, more than a fifth of the 1.1 MB budget: the printer carries the most mechanism and the feeder.
+  The GLB is about 640 KB, more than half of the 1.1 MB budget for all five units: the printer carries the most
+  mechanism, and the feeder. Open: the other four units must come in near 460 KB together, or the budget is revised.
 - **Clearance**: the build exits 1 if the carrier, wheel or hammer at either stop touches the covers, filter, frame,
   feeder, platen or bail, if the cover touches the top, filter or feeder anywhere from closed to its stop, or if the
   bail touches the top, the cover or the platen.

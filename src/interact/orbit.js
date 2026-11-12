@@ -9,10 +9,14 @@ const KEEP_IN_VIEW = 0.7;    // zoomed out, the machine's centre stays within th
 const GLIDE_LEFT_AFTER_1S = 1e-9;          // how much of a released drag's speed survives a second: stops within a few frames
 
 export class Orbit {
-  /** `extent` replaces the machine's half extent { across, up, depth } for a larger subject, such as a desk of units. */
-  constructor(camera, element, target = [-0.0557, 0.1262, -0.0124], { extent } = {}) {
+  /**
+   * `extent` replaces the machine's half extent { across, up, depth } for a larger subject, such as a desk of units.
+   * `keepInView: false` drops the pull back toward the home target (clampTarget), for a free view that goes anywhere.
+   */
+  constructor(camera, element, target = [-0.0557, 0.1262, -0.0124], { extent, keepInView = true } = {}) {
     this.camera = camera; this.el = element;
     this.extent = extent ?? MACHINE_HALF;
+    this.keepInView = keepInView;
     this.target = new THREE.Vector3().fromArray(target);
     const off = camera.position.clone().sub(this.target);
     this.radius = off.length();
@@ -67,10 +71,12 @@ export class Orbit {
     this.target.copy(this.home.target).addScaledVector(right, a).addScaledVector(up, b).addScaledVector(forward, d);
   }
 
+  /** Turns the view by a pointer drag in pixels, at once: update() leaves the camera alone while a drag holds it. */
   rotate(dx, dy) {
     const f = 0.0058;
     this.vTheta = -dx * f; this.vPhi = -dy * f;
     this.theta += this.vTheta; this.phi += this.vPhi; this.clamp();
+    this.apply();
   }
 
   zoom(factor, ndcX, ndcY) {
@@ -133,7 +139,7 @@ export class Orbit {
   }
 
   apply() {
-    this.clampTarget();
+    if (this.keepInView) this.clampTarget();
     const s = Math.sin(this.phi);
     this.camera.position.set(
       this.target.x + this.radius * s * Math.sin(this.theta),

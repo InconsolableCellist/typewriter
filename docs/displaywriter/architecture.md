@@ -1342,6 +1342,17 @@ Not done: Choose Spelling Language Dictionary and the Language For Spelling Chec
 showing the previous page above a word near a page's top on CHECK SPELLING OF WORD, and holding other tasks while
 paginated pages print.
 
+M4, M6, M7 and M8 in the browser done (2026-11-12): the kit runs the software on the CRT with the simulated keyboard
+(main-thread keyboard host with time-stamped fingers), one mechanism client for the printer, diskette unit and station,
+the printer's paper and ribbon as soft bodies in its frame with the sheet feeder and page pile, the diskette unit's
+levers, diskettes and holder, the printer's panel keys, cover and power switch, the cold start with the module's rocker,
+hover labels, and a panel with the feeder toggle and key map. Unit models are built in code (no GLB files: Blender was
+not available, and code costs no download). Checked in a browser: typing through the menus, printing a document onto
+a fed sheet, revising a document read through the drives, Spelling Tasks with the word list fetched. Measured first
+visit: about 5.0 MB, of which 4.3 MB are the room and desk shared with the typewriters; the word processor adds about
+0.7 MB, plus 114 KB of word list on the first Spelling Tasks. The shared AudioWorklet bundle grew from 119 KB to about
+190 KB (unpacked) because it carries the word processor's host. Still listed only with `?wp`.
+
 ---
 
 ## 12. Tests, performance, assets

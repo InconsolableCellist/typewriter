@@ -1,6 +1,6 @@
-// The word processor's voices (architecture.md 10.2). No recordings of this machine exist, so every sound is made
-// here from what the mechanism is doing: contact forces and motor torques excite small modal bodies (petal, platen,
-// carrier, frame, cabinet; the drive chassis and its lever), and rotor and air speeds set the level and pitch of the
+// The word processor's voices (architecture.md 10.2). Every sound no recording covers is made here (10.4: the owner's
+// recordings replace the drive motors, station fan, steps and head load once loaded) from what the mechanism is doing:
+// contact forces and motor torques excite small modal bodies (petal, platen, carrier, frame, cabinet; the drive chassis and its lever), and rotor and air speeds set the level and pitch of the
 // motors, fans and air noise. Nothing is triggered by intent: a steady load is silent, a force that changes rings the
 // structure it acts on, and a motor that is not turning makes no tone. The keyboard's click and beep are voiced
 // elsewhere (wp-speaker.js).
@@ -45,8 +45,8 @@ export const PR = {
 // (hammer on petal near -18, petal face near -20) and runs near -33 dBFS RMS, the carrier's whine near -40 and the
 // selection near -45; a 16-step line feed near -34 RMS; a recalibrate buzz near -32 and a head-load clunk near -32
 // peak; a lever closing near -28 peak; the paper cam's whirr near -48; and at idle the whole machine near -50 dBFS RMS
-// (drive hum -56, station fan -56, printer fan -60, drive air -60). Assumed: there is no recording and no dB figure
-// (PR 10, HW 1.9).
+// (drive hum -56, station fan -56, printer fan -60, drive air -60). Assumed: no recording has the printer, and there is
+// no dB figure (PR 10, HW 1.9). The recordings' levels are in 10.4.
 export const LEVEL = {
   // Bodies: output gain per unit of modal response.
   petal: 1e-3, platen: 1e-3, carrier: 1e-3, frame: 1e-3, cabinet: 1e-3, chassis: 1e-3, lever: 1e-3,
@@ -75,7 +75,7 @@ const GROMMET_HP = 800;         // Hz: the step motors' resilient mounting passe
 const PETALS = 96;
 const COMMUTATIONS = 6;         // the cam motor's commutator segments a turn (three-slot armature); assumed
 const ROTOR_BARS = 24;          // the drive motors' rotor slots: the slot harmonic; assumed
-const CRT_LINE_HZ = 15720;      // horizontal deflection: not documented (HW 9); off unless machine.audio.crtWhine
+const CRT_LINE_HZ = 15030;      // horizontal deflection: not documented (HW 9); a 15.03 kHz line in the owner's recording (10.4)
 
 // ---- small DSP parts ---------------------------------------------------------------------------------------------
 /** xorshift noise in [-1, 1); deterministic, no Math.random in the audio path. */
@@ -382,6 +382,7 @@ export class WpSynth {
     [this.pL, this.pR] = panGains(this.pan.printer);
     [this.sL, this.sR] = panGains(this.pan.station);
     [this.dL, this.dR] = panGains(this.pan.diskette);
+    this.pans = [this.sL, this.sR, this.dL, this.dR];   // the station's and the diskette unit's, for the recorded sounds
     this.mains = new Osc(); this.mains.set(2 * (m.station?.mainsHz ?? 60), sampleRate);   // magnetostriction: twice the line
     this.frame = new Float64Array(PR.COUNT * 128);
     this.primed = false;

@@ -37,7 +37,9 @@ export default {
   name: 'IBM Displaywriter word processor, c. 1980',
   kind: 'system',
   action: { type: 'printwheel-system' },
-  audio: { samples: false },
+  // Recorded sprites (architecture.md 10.4): the running machine and its diskette unit in the worklet, the beam spring
+  // keys on the main thread. crtWhine: the display's line whistle, measured 18 dB under the idle machine.
+  audio: { samples: 'samples_wp', alone: true, keys: 'samples_wpkeys', crtWhine: 14 },
 
   units: {
     station: { size: SIZE.station, mass: 14, place: station, color: 0xd9d4c7 },

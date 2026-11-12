@@ -16,6 +16,7 @@ import { IdbStore, restoreLibrary } from './wp/store.js';
 import { KeyboardHost } from './wp/keyboard-host.js';
 import { WpKeyboardInput } from '../interact/wp-keyboard.js';
 import { WpSpeaker } from '../audio/wp-speaker.js';
+import { WpKeySampler } from '../audio/wp-keys.js';
 import { installPrinter } from './wp/printer.js';
 import { installDiskettes } from './wp/diskettes.js';
 import { createSimClient } from '../sim/client.js';
@@ -102,10 +103,15 @@ export async function mount(ctx) {
   loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre'] }).catch((e) => console.info('textures', e));
   const pages = installPages({ stage, soft: printer.soft, paper: printer.paper, machine: { ...printer.softMachine, deskLayout: machine.deskLayout }, interaction: { picker: { add: (e) => pickables.push(e) } }, hands: { loadPaper: () => printer.loadSheet() } });
   const t0 = performance.now();
-  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done && !params.has('localsim')) {   // ?localsim keeps the mechanism on the main thread (machines with no audio device, tests)
+  // The keys' own sound comes from the keyboard's mechanism, which runs here on the main thread: a sampler on the same
+  // AudioContext plays the recorded beam spring cuts at each stem's felt and top-stop contacts (architecture 10.4).
+  const keySounds = new WpKeySampler(machine.audio?.keys);
+  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx) keySounds.attach(speaker.ctx);
+    if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done && !params.has('localsim')) {   // ?localsim keeps the mechanism on the main thread (machines with no audio device, tests)
      unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
   const simNow = () => (performance.now() - t0) / 1000;
   const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
+  keyboard.onSound = (e) => keySounds.play(e, simNow());
   new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => unlockAudio() });
   window.addEventListener('pointerdown', () => unlockAudio(), { once: true });
   window.addEventListener('beforeunload', (e) => { if (sys.doc) { e.preventDefault(); e.returnValue = ''; } });

@@ -16,6 +16,14 @@ export class KeyboardHost {
     this.now = now;
     this.t = 0;
     this.queue = [];      // { t, i, f }, in time order
+    this.onSound = null;  // ({ kind: 'press' | 'release', key, v, t }) => void: the keys' mechanical sound (architecture 10.4)
+  }
+
+  /** The mechanism's acoustic events since the last call, at mechanism time t. */
+  drainSound() {
+    const m = this.mech;
+    if (this.onSound) for (let k = 0; k < m.nEv; k++) this.onSound({ kind: m.evKind[k] ? 'press' : 'release', key: m.evKey[k], v: m.evV[k], t: this.t });
+    m.nEv = 0;
   }
 
   press(i, force) { this.queue.push({ t: Math.max(this.now(), this.queue.at(-1)?.t ?? 0), i, f: force }); this.presses = (this.presses ?? 0) + (force > 0 ? 1 : 0); }
@@ -37,7 +45,7 @@ export class KeyboardHost {
         continue;
       }
       const end = Math.min(t, this.queue[0]?.t ?? t);
-      while (this.t + H <= end + 1e-12) { this.mech.step(H); this.t += H; this.ctl.advance(this.t); }
+      while (this.t + H <= end + 1e-12) { this.mech.step(H); this.t += H; if (this.mech.nEv) this.drainSound(); this.ctl.advance(this.t); }
       if (this.t + H > end && end === t) { this.t = t; break; }
       if (this.t < end) this.t = end;
     }

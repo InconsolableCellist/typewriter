@@ -36,7 +36,7 @@ The **machine** menu in Settings switches between them; the choice is remembered
 
 ## Audio
 
-Keystrokes and carriage sounds are samples triggered and scaled by the physics, cut from "ASMR Typing on 1950s Typewriter". Bar-on-bar clashes come from a modal model, which also voices everything until the samples load. The electric machine has its own sprite, cut from recordings of a real one and triggered by its clutches and carrier; only its motor hum and key clicks are synthesised. See `public/assets/audio/SOURCES.md`.
+Keystrokes and carriage sounds are samples triggered and scaled by the physics, cut from "ASMR Typing on 1950s Typewriter". Bar-on-bar clashes come from a modal model, which also voices everything until the samples load. The electric machine has its own sprite, cut from recordings of a real one and triggered by its clutches and carrier; only its motor hum and key clicks are synthesised. The word processor's diskette steps, seeks and head loads, the hum of its running module and drives, and its beam spring keys are cut from recordings of a real Displaywriter and of a beam spring keyboard, played from the mechanism's own events; its printer, which no recording has, is synthesised from the mechanism's forces. See `public/assets/audio/SOURCES.md`.
 
 ## Terminal mode
 

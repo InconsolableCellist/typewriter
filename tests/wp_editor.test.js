@@ -258,7 +258,7 @@ test('E9: paginate a long document', () => {
     if (k === 26) assert.equal(devices.log.tones.length, tones, 'no beep up to the last typing line');
     if (k === 27) assert.equal(row(sys, 2).slice(49, 58).trim(), 'Ln. 61');
   }
-  assert.ok(devices.log.tones.slice(tones).some((t) => t.ms === 60), 'a beep after typing Ln. 60');
+  assert.ok(devices.log.tones.slice(tones).some((t) => t.ms === 200), 'a beep after typing Ln. 60');
   assert.equal(row(sys, 2).slice(35, 48).trim(), 'Pg. 1', 'typing goes on, all on one page');
   run(sys, 'END');
   run(sys, 'c ENTER "Change" ENTER "TRAIN" ENTER');

@@ -3,9 +3,11 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const dir = fileURLToPath(new URL('../../public/assets/audio/samples/', import.meta.url));
+const root = fileURLToPath(new URL('../../public/assets/audio/', import.meta.url));
 
-export function readSamples() {
+/** name: the sprite's directory under public/assets/audio. */
+export function readSamples(name = 'samples') {
+  const dir = `${root}${name}/`;
   const manifest = JSON.parse(readFileSync(dir + 'manifest.json', 'utf8'));
   const raw = execFileSync('ffmpeg', ['-nostdin', '-loglevel', 'error', '-i', dir + manifest.sprite, '-f', 'f32le', '-ac', '1', '-ar', '48000', '-'], { maxBuffer: 1 << 28 });
   const pcm = new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));

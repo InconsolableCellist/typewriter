@@ -14,7 +14,7 @@ import { Spooler } from './textpack/print/spooler.js';
 import { Dictionary } from './textpack/spell/dictionary.js';
 import { SEGMENTS } from './disk/library.js';
 
-const TONE_MS = { short: 60, long: 400 };          // assumed (architecture 5.4)
+const TONE_MS = { short: 200, long: 400 };         // short: the one beep in the owner's recording lasts 0.2 s; long assumed (architecture 5.4, 10.4)
 const SAVE_COALESCE_S = 1;
 
 /**

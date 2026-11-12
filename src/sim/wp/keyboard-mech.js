@@ -36,7 +36,13 @@ export class KeyboardMech {
     this.awake = new Uint8Array(this.n);
     this.lockLatched = false;
     this.P = P;
+    // Acoustic events (architecture 10.4): a stem meeting its felt (kind 1) or coming home on its top stop (kind 0),
+    // with its speed. The host drains them with their time; the key sampler voices them.
+    this.evKind = new Uint8Array(64); this.evKey = new Uint16Array(64); this.evV = new Float64Array(64); this.nEv = 0;
   }
+
+  /** Record an acoustic event (no allocation; beyond 64 undrained events the rest are dropped). */
+  sound(kind, i, v) { const n = this.nEv; if (n < 64) { this.evKind[n] = kind; this.evKey[n] = i; this.evV[n] = v; this.nEv = n + 1; } }
 
   /** Wakes a key whose input changed. */
   wake(i) { this.awake[i] = 1; }
@@ -66,7 +72,11 @@ export class KeyboardMech {
       if (pen > 0) f -= P.feltK * pen + P.feltC * Math.max(0, v[i]);
       v[i] += (f / P.ms) * h;
       x[i] += v[i] * h;
-      if (x[i] < 0) { x[i] = 0; if (v[i] < 0) v[i] = 0; }          // the top stop
+      if (pen <= 0 && x[i] > P.travel) this.sound(1, i, v[i]);       // the cap bottoming on the felt
+      if (x[i] < 0) {                                                  // the top stop
+        if (v[i] < 0) { this.sound(0, i, -v[i]); v[i] = 0; }
+        x[i] = 0;
+      }
       // The plate: driven by the toggle spring through the stem, snapping between pad and lift stop.
       const fp = P.Kt * (x[i] - P.xc) + P.A * (y[i] - P.Y / 2) - P.cp * vy[i];
       const seated = y[i] <= 0 && fp <= 0, lifted = y[i] >= P.Y && fp >= 0;

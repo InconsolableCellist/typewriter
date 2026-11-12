@@ -43,44 +43,86 @@ viewpoint (Cycles on the CPU in the bpy module, small samples) and place the two
 and details until they match. Keep the comparison images; the final reply names them.
 
 ## Keyboard
-`tools/blender/build_wp_keyboard.py` (case) and `src/render/wp/keyboard-view.js` (caps, legends), sharing the layout
-in `src/render/wp/keyboard-layout.js` through `tools/gen/export_wp_keyboard.mjs` -> `tools/blender/wp_keyboard.json`.
-Review renders: `tools/blender/render_wp_keyboard.py` (views kbd2, brochure, plan, csg, side), from a GLB of the live
-unit exported in the browser, since the caps and their atlas exist only at run time.
+`tools/blender/build_wp_keyboard.py` (case) and `src/render/wp/keyboard-view.js` (caps, legends, the card's face),
+sharing the layout in `src/render/wp/keyboard-layout.js` through `tools/gen/export_wp_keyboard.mjs` ->
+`tools/blender/wp_keyboard.json`. Review: the owner's photographs (`refs/owner/`), the browser's own render
+camera-matched to them (below); `tools/blender/render_wp_keyboard.py` still renders a GLB of the case or of the live
+unit from the older reference viewpoints.
 
-- **Case.** The top runs at the documented 12 degrees and reaches the documented 101 mm at the rear edge, so the back
-  is the high side and the cap tops lean up toward the typist. The brochure (p.18) puts the key field in the middle of
-  the top with borders of about the same depth front and back; its front band reads as a rounded nose over a face
-  that leans back, which the setup guide's drawings (CSG p.18, p.22) also show, so the front is a 16 mm nose over a
-  face set back 13 mm at the base. Ends are flat, plan corners 12 mm. One opening per group (left, main with INDEX,
-  right upper, right lower): the brochure shows cover between them, and the left and right-upper openings rise a row
-  above the number row. The well round each opening is a dark wall down to the dark key plate (the contamination
-  shield of KBD_2.JPG), so the cover's hollow never shows. A pebble-grey base tray shows as a band above four rubber
-  feet. The cable leaves the rear at the left, where the logic card's connector is (KBD_3.JPG), through a strain-relief
-  bush, and runs back over the desk toward the electronics module (it passes under the module in its groove, HW 2.1).
-  The covers carry the `wp_pebble` grain (normal and roughness from `createUnitMaterials`; colour stays the
-  material's). 182 KB, about 5.5 k triangles; no images.
-- **Layout.** KBD_2.JPG is the authority where the drawings are schematic: BKSP 1.75 u; RETURN 1.25 u over a 1 u leg
-  (legend RET); right SHIFT 2.5 u; CODE 2 u starting under Z-X; space bar 5.5 u; ENTER 1.25 u; INDEX a narrow 0.8 u
-  cap standing a little apart; the right groups 0.4 u past it. The main block is then 14.75 u wide and the field 22.65
-  u, which matches the brochure's proportions. KeyboardMech treats RETURN as a wide key by its `tall` mark.
-- **Caps.** Built per key from the table: a straight tapered skirt (2.5 mm each side), a rolled shoulder, a crown with
-  a 1 mm cylindrical dish across the width, corner radii 0.9 mm at the base and 2.1 mm at the crown. Row profile (top
-  height, extra lean toward the typist): rows 0-1 12.8 mm, 9 degrees; tab 12.1, 5; home 11.6, 0; shift 11.8, -4;
-  space row 10.6, -7; ENTER 3 mm lower than the space bar (ST p.62). The caps stand 8.5 mm into their wells, tops a
-  few millimetres proud of the cover, as in the brochure. Each cap is one mesh in the tilted `deck` group, its rest at
-  the base centre, and moves along the deck's own down (`pressDir`), so keys travel along their stems.
-- **Legends.** One canvas atlas drawn at run time from `wp-keys.js` at 12 px/mm: each cap gets a top region (u, v over
-  the crown's box) and, if it has one, a front region on the front skirt just under the top edge, mapped in true
-  millimetres; sides and backs map to a blank texel. Letters alone 5 mm caps in a Helvetica-like face; shifted over
-  unshifted characters 3.3 over 3.7 mm; words in 1.9 mm bold capitals, shrunk to fit narrow caps (INDEX); front
-  legends 1.6 mm bold. Arrows, the boundary arrows of the cursor keys and the hollow arrows of ½⇧ / ½⇩ are drawn as
-  paths, as the photograph shows them. Cap colour #dcd8c8 and near-black ink from KBD_2.JPG; the caps' matte finish
-  (GIM p.104) with the `wp_keycap` grain on a second uv set.
-- **Not yet matched.** The case's side profile has no photograph: it is inferred from the brochure's front view and
-  the setup guide's line drawings. The face of the legends is a Helvetica stand-in for IBM's; the 92-character and
-  Dvorak variants are not modelled; the space bar's stabiliser and the key modules under the caps are not modelled
-  (hidden by the cover).
+References, in order of authority: `keyboard_US_top_AUTHORITATIVE.jpg` (the owner's US keyboard from above: layout,
+key shapes, legends, the card, the plan); `keyboard_side_profile_vs_modelM.jpg` (the side profile, beside an IBM
+Model M as a scale bar); `keyboard_three_quarter.jpg` (the case from the front left, the card recess, the connector at
+the back); the close-ups (cap sculpt, grain, the black gaps; their legends are a European set); the desk photographs
+(size beside the station); KBD_2.JPG and KBD_3.JPG (cover off). The European photographs are used for the case and
+the caps' shape only.
+
+Method. The three-quarter and US photographs' cameras were solved (OpenCV `solvePnP`, focal length searched) from 15
+opening corners each, which lie on the deck plane at known places in the layout: 4 px and 6 px rms. The browser's
+own camera is then put there and the scene shot (Playwright, SwiftShader), so the comparison shows the caps, legends
+and materials as the app draws them. Rays from the photographs through that camera onto the deck plane measured the
+recess, the case's back edge and the ends against the key field. The side profile was measured on the end face of
+the side photograph, which faces the camera: depth 1185 px for the documented 213 mm (the Model M's 210 mm end
+measures 1175 px beside it), heights scaled so the back is the documented 101 mm. The side view in the browser uses a camera solved from the
+recess's corners and the end's two desk corners (16 px rms on 2592), good enough to compare the whole case.
+
+Before and after: `docs/displaywriter/review/keyboard_{three_quarter,us_top,side}_{before,after}.png` (photograph,
+render, 50 % overlay), `keyboard_side_profile.png` (the model's end outline before and after on the side
+photograph's end face) and `keyboard_operator_{before,after}.png` (the app's operator view).
+
+- **What was off.** The key field sat in the middle of the top with a deep front band and a narrow rear one; the
+  photographs show the reverse: a 23 mm rear flat, then the card recess, and in front of the space row little more
+  than the nose. The card recess was missing. The front was a small 16 mm nose over a face leaning back 13 mm, where
+  the photographs show a big round front and a flat upright back. A 5 mm pebble-grey band showed under the cover;
+  the end face runs down nearly to the desk. Caps stood 2 to 4 mm proud of the cover; they stand 7 to 9 mm proud,
+  taller and more tapered. Legends were smaller than the US caps' and front legends sat at the top edge of the
+  face. The function keys of the left and right groups were KBD_2.JPG's arrangement, not the US keyboard's.
+- **Case.** A tall wedge: the back upright, 101 mm at the crown of a 9 mm round into the top (the deck plane meets
+  the back 2 mm higher, `rearCorner`); the top falls 10 degrees (was 12): the side photograph's end face measures 10
+  once its perspective is allowed for, and the caps' row sculpt adds about 2 (tops 15.0 mm over row 1, 12.6 over the
+  space row), which gives the documented 12 degrees of the key surface (GIM p.104; `units.keyboard.slope`); the
+  front a 22 mm round over a short upright face and an 18 mm round back under it, the front band in front of the
+  space row's opening 22 mm, as the US photograph shows. The key field's centre is 20 mm ahead of the
+  unit's centre (`CASE.fieldZ`): the solved camera puts the case's back edge 127 mm behind it on the deck and the US
+  photograph 22 to 26 mm of nose before the space row. Ends flat, their edges softened (3.2 mm, in four steps), plan
+  corners 12 mm. One opening per group as before; the well round each is a dark wall down to the dark key plate, so
+  the gap between caps and case is black. The cover reaches 3 mm from the desk; the pebble-grey tray is a dark line
+  under it on low feet. The covers carry the `wp_pebble` grain.
+- **Card recess** (`recess()` in the layout): from 2.6 mm left of the main opening to INDEX's left edge, its front
+  edge 11.5 mm behind the main opening's, 54 mm deep (both photographs agree within 2 mm). A stepped rim: a 1.6 mm
+  ledge 4.5 mm wide on which the clear window (`wp_keyboard_window`) lies, and the floor 3.6 mm down, where the
+  information card lies (`wp_keyboard_card`). The card's face is drawn at run time in the manner of the US
+  photograph's, not copied from it: the striped IBM, "Displaywriter System Information Card", the SYSTEM
+  CONFIGURATION checklist in two columns with this desk's units ticked in pen, and the serial number, access code and
+  communications ID fields left blank.
+- **Connector and cable.** A dark connector housing high on the back, 90 mm left of centre, stepped higher at its
+  right, as the three-quarter photograph shows it standing over the rear edge; the cable leaves its underside and runs
+  down and back over the desk. The US keyboard's cable (a later USB conversion) leaves near the centre; KBD_3.JPG puts
+  the logic card's connector at its left end.
+- **Layout.** KBD_2.JPG and the US photograph agree on the shapes: BKSP 1.75 u; RETURN 1.25 u over a 1 u leg (legend
+  RET); right SHIFT 2.5 u; CODE 2 u from under Z-X; space bar 5.5 u; ENTER 1.25 u; the left and right-upper groups a
+  row above the number row. INDEX is 0.72 u (was 0.8), measured on the US photograph. The function keys stand where
+  the US keyboard has them: left PRINT REQST / SPELL - / GET - / CHG FMT - / MSG MOVE; right upper LINE ADJ, GO TO,
+  FIND, - / DEL, END, PAGE END, -; right lower the cursor keys as an inverted T (- up - - / left down right -). Each
+  key keeps its service number, legend and marks, so the scan code a cap sends still names the function printed on it
+  (`src/wp/keys.js` is unchanged), and the PC keymap still reaches each function; only the places moved. The nine
+  unlettered positions (1 to 4, 73, 77, 81 to 83) fill the blank places. The KEYS array keeps its order (the
+  mechanism's state is indexed by it).
+- **Caps.** Built per key from the table: a straight tapered skirt (3.1 mm each side), a rolled shoulder, a crown with
+  a 1.2 mm cylindrical dish across the width, corner radii 0.9 mm at the base and 2.6 mm at the crown. Row profile
+  (top height above the base, extra lean toward the typist): rows 0-1 15.0 mm, 10 degrees; tab 14.1, 5; home 13.5, 0;
+  shift 13.8, -5; space row 12.6, -8; ENTER 3 mm lower than the space bar (ST p.62). The bases stand 5.5 mm into
+  their wells. Each cap is one mesh in the tilted `deck` group, its rest at the base centre, and moves along the
+  deck's own down (`pressDir`).
+- **Legends.** One canvas atlas drawn at run time from `wp-keys.js` at 12 px/mm. Sizes from the US photograph: letters
+  5.6 mm, shifted over unshifted 3.9 over 4.9 mm, a little left of the cap's centre; words in 2.1 mm bold capitals.
+  Front legends (2.0 mm bold, 2.4 for arrows and ½) are centred about a third of the way down the front face, on the
+  part that shows above the cover, as in the close-ups; the US photograph shows them faintly from above, so they stay.
+- **Parts.** `buildKeyboard` returns `{ keys, deck, pressDir, cable, bush, card, window, cover }`; GLB nodes as the
+  builder's docstring lists them. The GLB is quantized (`quantize_glb.py`): 157 KB, about 6.8 k triangles; no images.
+- **Not yet matched.** The face of the legends is a Helvetica stand-in for IBM's; the 92-character and Dvorak variants
+  are not modelled; the space bar's stabiliser and the key modules are hidden by the cover and not modelled; the
+  feet and the underside have no photograph. The side comparison is a scaled overlay on the end face, not a solved
+  camera: the face's far (front) end is about 9 % farther from the lens, so the photograph's front reads a little low.
 
 ## Diskette unit
 `tools/blender/build_wp_diskette.py` -> `public/assets/models/wp_diskette.glb` (the unit, one diskette, one

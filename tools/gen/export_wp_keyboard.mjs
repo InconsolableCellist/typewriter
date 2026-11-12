@@ -7,11 +7,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import machine from '../../src/machine/wordproc1980.js';
 import { KEYS } from '../../src/machine/wp-keys.js';
-import { CASE, deckOrigin, keyRect, keyGroup, openings } from '../../src/render/wp/keyboard-layout.js';
+import { CASE, deckOrigin, keyRect, keyGroup, openings, recess } from '../../src/render/wp/keyboard-layout.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const { size, slope } = machine.units.keyboard;
 const out = resolve(here, '../blender/wp_keyboard.json');
 const keys = KEYS.map((k) => ({ pos: k.pos, row: k.row, group: keyGroup(k), ...keyRect(k) }));
-writeFileSync(out, JSON.stringify({ size, slope, case: CASE, deck: deckOrigin(size, slope), openings: openings(), keys }, null, 1));
+writeFileSync(out, JSON.stringify({ size, slope, case: CASE, deck: deckOrigin(size, slope), openings: openings(), recess: recess(), keys }, null, 1));
 console.log(`wrote ${out}: ${keys.length} keys, openings ${Object.keys(openings()).join(', ')}`);

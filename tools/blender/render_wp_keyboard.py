@@ -25,7 +25,7 @@ from mathutils import Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 OUT = os.path.join(HERE, "previews", "wp_keyboard")
-SLOPE = math.radians(12)
+SLOPE = math.radians(10)       # the case top (models.md, Keyboard)
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
 ap = argparse.ArgumentParser()

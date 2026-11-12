@@ -81,12 +81,14 @@ export async function mount(ctx) {
   // The electronics module's power switch. A cold start (?cold) finds everything off and both drives empty: switch on
   // the module and the printer, put the program diskette in the left drive and close its lever.
   devices.power = { on: !cold };
+  if (cold) sim.command({ dev: 'station', op: 'power', on: false });   // its fan and the drive motors stand still
   const rocker = parts.station.rocker;
   const setRocker = () => { rocker.rotation.x = devices.power.on ? -0.25 : 0.25; };
   setRocker();
   pickables.push({ object: rocker, part: () => ({ label: devices.power.on ? 'Power (on)' : 'Power: switch on', onClick: () => {
     if (devices.power.on) return;
     devices.power.on = true; setRocker();
+    sim.command({ dev: 'station', op: 'power', on: true });
     sys.deviceEvent({ dev: 'power', ev: 'on' });
   } }) });
   sys = createSystem({ devices, store, library, options: { cold } });

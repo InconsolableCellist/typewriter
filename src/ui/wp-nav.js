@@ -94,14 +94,16 @@ export function installNavUi({ nav, highlight }) {
   };
 
   const show = (hit, e) => {
-    const label = !hit ? '' : hit.kind === 'key' ? hit.label ?? '' : hit.kind === 'control' ? hit.label
+    // A control that passes its click on to the view behind it names both.
+    const label = !hit ? '' : hit.kind === 'key' ? hit.label ?? '' : hit.kind === 'control'
+      ? (hit.fallback ? `${hit.label} · click: ${hit.fallback.label}` : hit.label)
       : `${hit.target.label} · ${hit.target.kind === 'focus' ? 'look closer' : 'go there'}`;
     highlight?.(hit?.kind === 'nav' ? hit.target.box : null);
     if (tip) {
       tip.style.display = label ? 'block' : 'none';
       if (label) { tip.textContent = label; tip.style.left = `${e.clientX + 14}px`; tip.style.top = `${e.clientY + 12}px`; }
     }
-    if (e.target?.style) e.target.style.cursor = !hit ? '' : hit.kind === 'nav' ? 'zoom-in' : 'pointer';
+    if (e.target?.style) e.target.style.cursor = !hit ? '' : hit.kind === 'nav' ? 'zoom-in' : hit.part?.onDrag ? 'grab' : 'pointer';
   };
   // A move clears the hover: what was under the pointer is somewhere else now.
   nav.onChange(() => { highlight?.(null); if (tip) tip.style.display = 'none'; });

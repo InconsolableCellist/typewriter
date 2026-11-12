@@ -33,6 +33,7 @@ import { ViewNav, viewSpec, poseOf, fallbackBoxes, LEGACY_CAMERAS } from '../int
 import { makePicker, installWpPointer, makeHighlight } from '../interact/wp-pointer.js';
 import { installNavUi } from '../ui/wp-nav.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
+import { installStationControls } from './wp/station.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -83,37 +84,43 @@ export async function mount(ctx) {
   const cold = params.has('cold');
   const sim = await createSimClient({ machine, geometry, glyphs, options: { cold, drives: cold ? [null, null] : drives } });
   const pickables = [];
+  const t0 = performance.now();
+  const simNow = () => (performance.now() - t0) / 1000;
   const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, sim, glyphs, onDevice: (e) => sys?.deviceEvent(e), controls: parts.printer, view: views.printer, pickables });
   devices.printer = printer.device;
   const diskettes = installDiskettes({ stage, machine, geometry, sim, unit: units.diskette, parts: parts.diskette, library, pickables });
   diskettes.onEvent((e) => sys?.deviceEvent(e));
   devices.disk = diskettes.device;
   // The electronics module's power switch. A cold start (?cold) finds everything off and both drives empty: switch on
-  // the module and the printer, put the program diskette in the left drive and close its lever.
+  // the module and the printer, put the program diskette in the left drive and close its lever. Switched off, the
+  // station's fan and drive motors run down (the mechanism host, and the sound with it), the CRT collapses and the
+  // software stops; switched on again, a new system runs the power-on test and loads the program, as ?cold does.
   devices.power = { on: !cold };
+  let poweredAt = cold ? null : -60;   // warm: long past its self-test
   if (cold) sim.command({ dev: 'station', op: 'power', on: false });   // its fan and the drive motors stand still
   const rocker = parts.station.rocker;
   const setRocker = () => parts.station.setRocker(devices.power.on);
   setRocker();
-  pickables.push({ object: rocker, part: () => ({ label: devices.power.on ? 'Power (on)' : 'Power: switch on', onClick: () => {
-    if (devices.power.on) return;
-    devices.power.on = true; setRocker();
-    sim.command({ dev: 'station', op: 'power', on: true });
-    sys.deviceEvent({ dev: 'power', ev: 'on' });
-  } }) });
   // The spelling word list is fetched only when Spelling Tasks first loads (architecture 12.3).
   const wordList = () => loadWordList().then((b) => sys.provideWordList(b), (e) => { console.info('word list', e); sys.provideWordList(null); });
-  sys = createSystem({ devices, store, library, options: { cold, wordList } });
+  const makeSystem = (coldStart) => createSystem({ devices, store, library, options: { cold: coldStart, wordList, t0: simNow() } });
+  const switchPower = (on) => {
+    if (on === devices.power.on) return;
+    devices.power.on = on; setRocker();
+    sim.command({ dev: 'station', op: 'power', on });
+    if (on) { poweredAt = simNow(); sys = makeSystem(true); if (!params.has('screentest')) { crt.screen = sys.screen; crt.lastVersion = -1; } }
+    else { poweredAt = null; sys.powerOff(); }
+  };
+  pickables.push({ object: rocker, part: () => ({ label: devices.power.on ? 'Power: switch off' : 'Power: switch on', onClick: () => switchPower(!devices.power.on) }) });
+  sys = makeSystem(cold);
   loadStudioTextures(mats, printer.paper.material, stage.renderer.capabilities.getMaxAnisotropy(), { only: ['walnut_desk', 'paper_fibre'] }).catch((e) => console.info('textures', e));
   const pages = installPages({ stage, soft: printer.soft, paper: printer.paper, machine: { ...printer.softMachine, deskLayout: machine.deskLayout }, interaction: { picker: { add: (e) => pickables.push(e) } }, hands: { loadPaper: () => printer.loadSheet() } });
-  const t0 = performance.now();
   // The keys' own sound comes from the keyboard's mechanism, which runs here on the main thread: a sampler on the same
   // AudioContext plays the recorded beam spring cuts at each stem's felt and top-stop contacts (architecture 10.4).
   const keySounds = new WpKeySampler(machine.audio?.keys);
   const unlockAudio = () => { speaker.unlock(); if (speaker.ctx) keySounds.attach(speaker.ctx);
     if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done && !params.has('localsim')) {   // ?localsim keeps the mechanism on the main thread (machines with no audio device, tests)
      unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
-  const simNow = () => (performance.now() - t0) / 1000;
   const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
   keyboard.onSound = (e) => keySounds.play(e, simNow());
   new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => unlockAudio() });
@@ -121,7 +128,7 @@ export async function mount(ctx) {
   window.addEventListener('beforeunload', (e) => { if (sys.doc) { e.preventDefault(); e.returnValue = ''; } });
 
   // The CRT on the display's front.
-  const screen = params.has('screentest') ? testCardScreen() : sys.screen;
+  const screen = params.has('screentest') ? testCardScreen() : sys.screen;   // a new system after a power cycle brings its own
   const crt = new CRT({ renderer: stage.renderer, screen });
   // The glass sits in the display's tilt node, so it tilts and turns with the cabinet.
   const faceParent = displayFace.parent ?? units.display;
@@ -142,7 +149,7 @@ export async function mount(ctx) {
   const named = {
     screen: [face], keyboard: [units.keyboard], controls: [parts.station.rocker, ...parts.display.knobs],
     slots: [...parts.diskette.slots, ...parts.diskette.drives], levers: parts.diskette.levers, file: [parts.diskette.holder],
-    panel: [...parts.printer.panelKeys, ...parts.printer.leds, parts.printer.display], mechanism: [parts.printer.platen, parts.printer.carrier],
+    panel: [...parts.printer.panelKeys, ...parts.printer.leds, parts.printer.display, parts.printer.power], mechanism: [parts.printer.platen, parts.printer.carrier],
     paperPath: [units.printer],
   };
   for (const [n, objs] of Object.entries(named)) boxes[n] = boxOf(objs) ?? boxes[n];
@@ -164,6 +171,10 @@ export async function mount(ctx) {
   installWpPointer({
     canvas, orbit, nav, press: (i, f) => keyboard.press(i, f), hint: navUi.hint, show: navUi.show,
     pick: (e) => { const h = pickAt(e); if (h?.kind === 'key') h.label = keyLabel(h.key); return h; },
+  });
+  const station = installStationControls({
+    parts, crt, limits: { tilt: machine.units.display.tilt, swivel: machine.units.display.swivel },
+    storage: safeStorage(), tick: () => speaker.tick(), poweredAt: () => poweredAt, now: simNow, pickables,
   });
   const screenCard = new ScreenCard({ renderer: stage.renderer, crt, insets: document.getElementById('insets'), panel: document.getElementById('panel') });
 
@@ -187,6 +198,7 @@ export async function mount(ctx) {
     for (let i = 0; i < keys.length; i++) keys[i].position.copy(keys[i].userData.rest).addScaledVector(dir, x[i]);
     printer.update();
     diskettes.update();
+    station.update(dt);
     pages.update(dt);
     crt.setPower(devices.power.on);
     crt.update(dt);
@@ -198,7 +210,7 @@ export async function mount(ctx) {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, sys, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower };
   return window.__tw;
 }
 
@@ -213,7 +225,10 @@ function buildPanel(ctx, feeder, screenCard) {
       Views (the machine never sees these): Ctrl+Shift+← / → next station · Ctrl+Shift+↓ back · Ctrl+Shift+↑ free view · or keypad 4 / 6, 2, 5</div>
     <div class="actions"><select id="a-machine" title="machine" aria-label="machine"></select></div>`;
   const fb = el.querySelector('#a-feeder');
-  fb.addEventListener('click', () => { feeder.on = !feeder.on; fb.setAttribute('aria-pressed', String(feeder.on)); });
+  // The same flag as the feeder's gate on the printer: either one sets it, both show it.
+  const showFeeder = (on) => fb.setAttribute('aria-pressed', String(on));
+  feeder.onChange(showFeeder); showFeeder(feeder.on);
+  fb.addEventListener('click', () => { feeder.toggle(); fb.blur(); });
   const sb = el.querySelector('#a-screen');
   sb.setAttribute('aria-pressed', String(screenCard.visible));
   sb.addEventListener('click', () => { screenCard.setVisible(!screenCard.visible); sb.setAttribute('aria-pressed', String(screenCard.visible)); sb.blur(); });
@@ -226,6 +241,9 @@ function buildPanel(ctx, feeder, screenCard) {
   if (hint) hint.textContent = 'type on your keyboard · Alt = CODE, AltGr = ENTER, Esc = CANCL · the edge arrows and the bar move the view · ◎ free view';
   return el;
 }
+
+/** localStorage, or null where the browser refuses it (a private window, blocked site data). */
+function safeStorage() { try { return window.localStorage; } catch { return null; } }
 
 /** The world box of some objects as { min, max }, or null. An object with no geometry (a marker) counts as a point. */
 const _box = new THREE.Box3(), _one = new THREE.Box3(), _p = new THREE.Vector3(), MARK = new THREE.Vector3(0.04, 0.04, 0.04);

@@ -37,6 +37,14 @@ export class WpSpeaker {
     s.buffer = this.clickBuf; s.connect(this.input); s.start();
   }
 
+  /** A control's detent: the same short pulse, far quieter and straight out, not through the speaker's cone. */
+  tick(level = 0.05) {
+    if (!this.ctx) return;
+    const s = this.ctx.createBufferSource(), g = this.ctx.createGain();
+    g.gain.value = level;
+    s.buffer = this.clickBuf; s.connect(g).connect(this.ctx.destination); s.start();
+  }
+
   tone(ms) {
     if (!this.ctx) return;
     const o = this.ctx.createOscillator(), g = this.ctx.createGain(), t = this.ctx.currentTime;

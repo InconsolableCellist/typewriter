@@ -18,7 +18,8 @@ const TONE_MS = { short: 200, long: 400 };         // short: the one beep in the
 const SAVE_COALESCE_S = 1;
 
 /**
- * options: cold (power on rather than start warm); wordList, the spelling dictionary's word list (architecture 12.3):
+ * options: cold (power on rather than start warm); t0, the clock's start (a system made when the station is switched
+ * on again starts at the kit's time); wordList, the spelling dictionary's word list (architecture 12.3):
  * its unpacked bytes, or a function the system calls once, when Spelling Tasks first loads, to have it fetched; the
  * caller then hands the bytes (or null on failure) to `provideWordList`.
  */
@@ -51,6 +52,8 @@ export class WpSystem {
     this.statusFields = null;                // the status fields last drawn, so a mount can refresh G and H
     this.sched.onIo = (req, id) => this.dispatch(req, id);
     this.sched.onKeyTaken = () => this.devices.kbd.click();
+    this.off = false;
+    this.sched.t = options.t0 ?? 0;
     devices.attach?.(this);
     this.screen.clear();
     if (options.cold) { if (devices.power?.on !== false) this.powerOn(); }
@@ -59,10 +62,26 @@ export class WpSystem {
 
   get now() { return this.sched.t; }
   get idle() { return this.sched.idle; }
-  advance(t) { this.sched.advance(t); }
+  advance(t) { if (!this.off) this.sched.advance(t); }
   runUntilIdle(limit) { this.sched.runUntilIdle(limit); }
 
   powerOn() { this.sched.spawn(coldStart(this), 'rom'); this.sched.run(); }
+
+  /**
+   * The station switched off: what was in memory is gone. Saves already due to the store are written first (the
+   * diskette's bytes were written when the drive did; this only keeps IndexedDB level with them). Every task and timer
+   * stops and nothing more is accepted; switching on again makes a new system (the kit does this).
+   */
+  powerOff() {
+    const due = [...this.saves.values()];
+    for (const timer of due) { this.sched.cancel(timer); timer.fn(); }
+    this.saves.clear();
+    const s = this.sched;
+    s.tasks.length = 0; s.timers.length = 0; s.io.clear(); s.keys.length = 0;
+    this.pendingIo.clear();
+    this.screen.clear();
+    this.off = true;
+  }
 
   /** Powered, program loaded, TASK SELECTION on screen (architecture decision 9). */
   warmStart() {
@@ -91,6 +110,7 @@ export class WpSystem {
   // ---- devices ---------------------------------------------------------------------------------------------------
 
   deviceEvent(evt) {
+    if (this.off) return;
     switch (evt.dev) {
       case 'kbd': {
         if (evt.ev !== 'scan') return;

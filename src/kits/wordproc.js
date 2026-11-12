@@ -23,7 +23,8 @@ import { KEYS } from '../machine/wp-keys.js';
 import { loadGlyphs } from '../machine/glyphs.js';
 import { loadWordList } from './wp/wordlist.js';
 import { installPages } from '../pages/index.js';
-import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
+import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette } from '../render/wp/units.js';
+import { buildPrinter } from '../render/wp/printer-view.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -38,23 +39,24 @@ export async function mount(ctx) {
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
   loadRoom(stage.scene, '/assets/hdri/combination_room_2k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
 
-  // The units, each in its own group at its world origin.
+  // The units, each in its own group at its world origin. The printwheel's faces are the glyphs that print.
   const umats = createUnitMaterials();
+  const glyphs = await loadGlyphs('glyphs_wp');
   const builders = {
     station: (u) => buildStation(u.size, umats),
     display: (u) => buildDisplay(u.size, umats),
     keyboard: (u) => buildKeyboard(u.size, machine.units.keyboard.slope, umats),
     diskette: (u) => buildDiskette(u.size, umats),
-    printer: (u) => buildPrinter(u.size, umats),
+    printer: (u) => buildPrinter(u.size, umats, { printer: machine.printer, glyphs, order: geometry.printer.wheel.order }),
   };
-  const units = {}, parts = {}, footprints = [];
+  const units = {}, parts = {}, views = {}, footprints = [];
   let displayFace = null;
   for (const [name, u] of Object.entries(geometry.units)) {
-    const built = builders[name](u);
+    const built = await builders[name](u);
     built.group.name = `unit-${name}`;
     built.group.position.fromArray(u.origin);
     stage.scene.add(built.group);
-    units[name] = built.group; parts[name] = built.parts;
+    units[name] = built.group; parts[name] = built.parts; views[name] = built;
     if (built.face) displayFace = built.face;
     if (!u.on) footprints.push(u.box);
   }
@@ -70,11 +72,10 @@ export async function mount(ctx) {
   // closed. The software reaches them only through the device interface.
   let sys = null;
   const drives = [{ mediaId: PROGRAM_NAME, type: '2D' }, { mediaId: 'WORK01', type: '2D' }];
-  const glyphs = await loadGlyphs('glyphs_wp');
   const cold = params.has('cold');
   const sim = await createSimClient({ machine, geometry, glyphs, options: { cold, drives: cold ? [null, null] : drives } });
   const pickables = [];
-  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, sim, glyphs, onDevice: (e) => sys?.deviceEvent(e), controls: parts.printer, pickables });
+  const printer = await installPrinter({ stage, machine, geometry, mats, group: units.printer, sim, glyphs, onDevice: (e) => sys?.deviceEvent(e), controls: parts.printer, view: views.printer, pickables });
   devices.printer = printer.device;
   const diskettes = installDiskettes({ stage, machine, geometry, sim, unit: units.diskette, parts: parts.diskette, library, pickables });
   diskettes.onEvent((e) => sys?.deviceEvent(e));

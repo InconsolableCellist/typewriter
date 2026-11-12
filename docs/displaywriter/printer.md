@@ -33,7 +33,7 @@ the Bitsavers `pdf/ibm/5218/` directory.
 | Printing | Bidirectional: prints with the carrier moving left or right | MIM p.172; GIM p.28 |
 | Weight | about 29 kg (64 lb), a two-person lift | SET p.10 |
 | Sheet feeder option | about 11.3 kg, sits on top of the printer, latches into the cover openings | SET p.22–23 |
-| Overall dimensions | **Not found in any source.** Inferred from PH `5218_2.jpg` (top view) and `5218_1.jpg` (front), using the paper slot as the scale: it must pass 392 mm paper, so its inner width is taken as about 400 to 410 mm. Result: width about 0.70 to 0.79 m, depth about 0.55 to 0.60 m, height about 0.20 to 0.25 m. Low confidence (±10 %) | inferred |
+| Overall dimensions | **Not found in any source.** Inferred from PH `5218_2.jpg` (top view) and `5218_1.jpg` (front), using the paper slot as the scale: it must pass 392 mm paper, so its inner width is taken as about 400 to 410 mm. Result: width about 0.70 to 0.79 m, depth about 0.55 to 0.60 m, height about 0.20 to 0.25 m. Low confidence (±10 %). Measured again for the model: 0.73 × 0.188 × 0.645 m (width, height to the access cover, depth; `models.md`, Printer) | inferred |
 | Cover | Off-white or light warm-grey plastic, matte finish to cut glare. A top cover over a bottom cover, and a lift-up operator access cover in the centre. The access cover is held by a magnetic latch on A01/A02 (a spring clip on A03/A04). Behind it, a tinted transparent window and a perforated "acoustic filter" form the paper slot at the rear top. Two square openings in the top take the paper handler latches, or snap-in cover inserts when no handler is fitted | GIM p.104 (matte); MIM p.183, MIM83 p.134 (latch); SET p.11, p.16 (inserts, "acoustic filter" with a paper-alignment triangle); PH 5218_1/5218_2 (colour, layout) |
 | Mechanism mounting | The printer mechanism sits on shock mounts inside the covers. The bottom cover is lined with acoustic material | MIM p.29–31 (shock mount screws), p.63 (acoustic material) |
 | Power switch | Rocker on the front right face (red rocker in a dark bezel, "I/O") | MIM p.17 item 1; PH 5218_1 |
@@ -64,7 +64,7 @@ serially into a 25-bit register (MIM p.180).
 | Item | Value | Source |
 |---|---|---|
 | Platen diameter | **Not given.** Inferred at about 40 to 45 mm. Method: in PH `5218_4.jpg` the platen's visible length is about 9.8 times its diameter. Its length must exceed the 392 mm maximum paper, so about 410 to 420 mm is assumed. Check: index steps of 1/96 in at 180 steps per revolution move the paper 1.875 in per motor revolution. A 42 mm platen then needs a belt reduction of about 2.8:1, which is plausible | inferred |
-| Platen length | ≥ 392 mm (it handles paper up to 392 mm / 15.43 in). Inferred about 410 to 420 mm | MIM p.172; GIM p.28 |
+| Platen length | ≥ 392 mm (it handles paper up to 392 mm / 15.43 in). Inferred about 410 to 420 mm; the model takes 520 mm, 0.71 of the width as MIM p.20 draws it (`models.md`, Printer) | MIM p.172; GIM p.28 |
 | Platen surface | Black rubber (photo). End play 0.03 to 0.15 mm set by the platen gear | PH 5218_4; MIM p.36 |
 | Knobs | No operator platen knob is mentioned or visible. Paper is moved by the Paper Up/Down keys. The only knob in the manuals is the **ribbon advance knob** on the carrier | MIM p.95, p.181; PDG (S544-2000-2) p.25 |
 | Maximum writing line | 335 mm (13.2 in) | MIM p.172; GIM p.28 |

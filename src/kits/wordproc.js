@@ -23,7 +23,8 @@ import { KEYS } from '../machine/wp-keys.js';
 import { loadGlyphs } from '../machine/glyphs.js';
 import { loadWordList } from './wp/wordlist.js';
 import { installPages } from '../pages/index.js';
-import { createUnitMaterials, buildStation, buildDisplay, buildKeyboard, buildDiskette, buildPrinter } from '../render/wp/units.js';
+import { createUnitMaterials, buildStation, buildDisplay, buildDiskette, buildPrinter } from '../render/wp/units.js';
+import { buildKeyboard } from '../render/wp/keyboard-view.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -43,14 +44,14 @@ export async function mount(ctx) {
   const builders = {
     station: (u) => buildStation(u.size, umats),
     display: (u) => buildDisplay(u.size, umats),
-    keyboard: (u) => buildKeyboard(u.size, machine.units.keyboard.slope, umats),
+    keyboard: (u) => buildKeyboard(u.size, machine.units.keyboard.slope, umats, { maxAniso: stage.renderer.capabilities.getMaxAnisotropy() }),
     diskette: (u) => buildDiskette(u.size, umats),
     printer: (u) => buildPrinter(u.size, umats),
   };
   const units = {}, parts = {}, footprints = [];
   let displayFace = null;
   for (const [name, u] of Object.entries(geometry.units)) {
-    const built = builders[name](u);
+    const built = await builders[name](u);
     built.group.name = `unit-${name}`;
     built.group.position.fromArray(u.origin);
     stage.scene.add(built.group);
@@ -188,8 +189,8 @@ function buildPanel(ctx, machine, orbit, feeder) {
  */
 function keyLabel(i) {
   const k = KEYS[i];
-  const top = k.top.replace('\n', ' / ') || 'blank';
-  return k.front ? `${top}  (CODE: ${k.front})` : top;
+  const top = k.top.includes('\n') && [...k.top].length === 3 ? k.top.replace('\n', ' / ') : k.top.replace(/\n/g, ' ') || 'blank';
+  return k.front ? `${top}  (CODE: ${k.front.replace(/\n/g, ' ')})` : top;
 }
 
 function installOrbitInput(canvas, orbit, camera, pickables, keyboardParts, press) {

@@ -1,10 +1,10 @@
-// Procedural models of the word processor's five units, built in code to the documented sizes (no download). Shapes
+// Procedural models of the word processor's units, built in code to the documented sizes (no download), until each is
+// replaced by its moulded model and view (the keyboard: keyboard-view.js; docs/displaywriter/models.md). Shapes
 // follow the 1982 brochure's product photos (BRO p.18) and the setup guide's drawings: pearl-white covers, darker
 // bezels and panels, rounded edges. Each builder returns a THREE.Group in the unit's local frame (origin on the
 // surface it stands on, under its centre; x right, y up, z toward the typist) plus the parts other code drives.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { KEYS, KEY_UNIT, KEY_FIELD } from '../../machine/wp-keys.js';
 import { applyTextureSet } from '../materials.js';
 
 /**
@@ -81,47 +81,6 @@ export function buildDisplay(size, mats) {
   }
   g.add(at(box(0.026, 0.012, 0.004, 0.001, mats.dark), w / 2 - 0.035, faceY + 0.06, d / 2 + 0.001));   // badge
   return { group: g, parts: { knobs }, face: { x: faceX, y: faceY, z: d / 2 + 0.002 } };
-}
-
-/**
- * Keyboard: a low wedge at the documented 12 degree slope, the stepped key field on top. Each key is its own mesh in
- * `keys` (same order as KEYS), so the view can move it by the mechanism's stem travel along `pressDir`.
- */
-export function buildKeyboard(size, slope, mats) {
-  const [w, h, d] = size, g = new THREE.Group();
-  const frontH = 0.028, backH = frontH + d * Math.tan(slope) * 0.7;
-  const shape = new THREE.Shape();
-  shape.moveTo(-d / 2, 0); shape.lineTo(d / 2, 0); shape.lineTo(d / 2, frontH * 0.8); shape.quadraticCurveTo(d / 2, frontH, d / 2 - 0.012, frontH);
-  shape.lineTo(-d / 2 + 0.01, backH); shape.quadraticCurveTo(-d / 2, backH, -d / 2, backH - 0.01); shape.lineTo(-d / 2, 0);
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: w, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 3 });
-  geo.translate(0, 0, -w / 2); geo.rotateY(Math.PI / 2);
-  const body = new THREE.Mesh(geo, mats.pearl); body.castShadow = body.receiveShadow = true;
-  g.add(body);
-  // The key field lies on the slope: rows run along x, row 0 at the back.
-  const deck = new THREE.Group();
-  const tilt = Math.atan2(backH - frontH, d - 0.024);
-  deck.position.set(0, (frontH + backH) / 2 + 0.002, 0.004);
-  deck.rotation.x = tilt;
-  g.add(deck);
-  const u = KEY_UNIT, cap = 0.0175, capH = 0.009;
-  const field = { w: KEY_FIELD.w * u, d: KEY_FIELD.rows * u };
-  const keys = [];
-  const capGeo = new Map();
-  for (const key of KEYS) {
-    const kw = key.w * u - (u - cap), kd = key.tall ? 2 * u - (u - cap) : cap;
-    const id = `${kw.toFixed(4)}:${kd.toFixed(4)}`;
-    if (!capGeo.has(id)) capGeo.set(id, new RoundedBoxGeometry(kw, capH, kd, 2, 0.002));
-    const m = new THREE.Mesh(capGeo.get(id), mats.keycap);
-    m.castShadow = m.receiveShadow = true;
-    const x = -field.w / 2 + (key.x + key.w / 2) * u;
-    const z = -field.d / 2 + (key.row + (key.tall ? 1 : 0.5)) * u;
-    m.position.set(x, capH / 2, z);
-    m.userData.rest = m.position.clone();
-    m.name = `key${key.pos}`;
-    deck.add(m); keys.push(m);
-  }
-  const pressDir = new THREE.Vector3(0, -1, 0);   // in the deck's frame: keys travel normal to the slope
-  return { group: g, parts: { keys, deck, pressDir } };
 }
 
 /** Diskette unit: an upright cabinet on a plinth, two vertical drive slots each with its lever (ORG p.54, BRO p.18). */

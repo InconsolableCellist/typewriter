@@ -25,51 +25,102 @@ async function load(url, mats) {
   return { scene: gltf.scene, nodes };
 }
 
-/** Materials only these two units use: the rocker's red, the bezel's grey, and the display's badge and label, whose
- * artwork is drawn here. */
+/** Materials only these two units use: the rocker's red, the bezel's grey, the badges, the rear panel's LED window
+ * and legend and the label plate, whose artwork is drawn here. */
 function unitOwnMaterials(mats, g) {
   if (mats.station) return mats.station;
-  // The bezel round the tube: a charcoal grey, darker than the Pebble Gray base (BRO p.18), with the cover grain.
+  // The bezel round the tube: a warm mid grey, about two thirds as light as the Pearl White frame (PH
+  // display_front_close, display_three_quarter), with the cover grain.
   const bezel = g.wp_dark.clone();
-  bezel.color.set(0x4b4945);
+  bezel.color.set(0x948e82);
   g.ready?.then(() => { bezel.normalMap = g.wp_dark.normalMap; bezel.roughnessMap = g.wp_dark.roughnessMap; bezel.roughness = g.wp_dark.roughness; bezel.needsUpdate = true; });
   mats.station = {
     wp_bezel: bezel,
-    wp_red: new THREE.MeshPhysicalMaterial({ color: 0xb3150e, roughness: 0.42, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 }),
+    wp_red: new THREE.MeshPhysicalMaterial({ color: 0xd2391c, roughness: 0.45, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4 }),
     wp_badge: new THREE.MeshPhysicalMaterial({ map: badgeTexture(), roughness: 0.35, metalness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.2 }),
+    wp_mbadge: new THREE.MeshPhysicalMaterial({ map: moduleBadgeTexture(), roughness: 0.4, metalness: 0.3, clearcoat: 0.4, clearcoatRoughness: 0.25 }),
     wp_tag: new THREE.MeshStandardMaterial({ map: labelTexture(), roughness: 0.6, metalness: 0 }),
+    wp_legend: new THREE.MeshStandardMaterial({ map: legendTexture(), roughness: 0.55, metalness: 0 }),
+    wp_window: new THREE.MeshPhysicalMaterial({ color: 0x2a1a16, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.45, depthWrite: false }),
   };
   return mats.station;
 }
 
+/** IBM's striped initials, centred on (cx, cy), `h` tall: the letters cut by seven stripes of the ground. */
+function stripedIBM(x, cx, cy, h, ink, ground) {
+  x.fillStyle = ink;
+  x.font = `900 ${Math.round(h * 1.37)}px "Rockwell", "Roboto Slab", "Georgia", serif`;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.save(); x.translate(cx, cy + h * 0.07); x.scale(1.18, 1); x.fillText('IBM', 0, 0); x.restore();
+  const bar = h / 15;
+  x.fillStyle = ground;
+  for (let i = 1; i < 15; i += 2) x.fillRect(cx - h * 2, cy - h / 2 + i * bar, h * 4, bar);
+}
+
 /**
- * The maker's badge above the display's knobs (BRO p.18, CSG p.40, ST p.28): the initials in the striped letters on a
- * brushed light plate, drawn in a canvas at run time (architecture.md 13.2: names and marks, our own artwork).
- * The badge mesh's uv spans its face, 26 x 11 mm.
+ * The maker's badge above the display's knobs (PH display_front_close, BRO p.18, ST p.28): a square brushed light plate
+ * with the striped initials in its upper half, drawn in a canvas at run time (architecture.md 13.2: names and marks,
+ * our own artwork). The badge mesh's uv spans its face, 19 x 19 mm.
  */
 function badgeTexture() {
-  const W = 260, H = 110, c = document.createElement('canvas');
+  const W = 200, H = 200, c = document.createElement('canvas');
   c.width = W; c.height = H;
   const x = c.getContext('2d');
   const plate = x.createLinearGradient(0, 0, W, H);
   plate.addColorStop(0, '#d9d9d4'); plate.addColorStop(0.5, '#c4c5c1'); plate.addColorStop(1, '#d2d2cd');
   x.fillStyle = plate; x.fillRect(0, 0, W, H);
-  x.fillStyle = '#1b2433';
-  x.font = '900 82px "Rockwell", "Roboto Slab", "Georgia", serif';
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.save(); x.translate(W / 2, H / 2 + 4); x.scale(1.18, 1); x.fillText('IBM', 0, 0); x.restore();
-  // Eight bars: the letters are cut by seven light stripes across their height.
-  const top = H / 2 + 4 - 30, bar = 60 / 15;
-  x.fillStyle = plate;
-  for (let i = 1; i < 15; i += 2) x.fillRect(0, top + i * bar, W, bar);
+  x.strokeStyle = '#a9aaa6'; x.lineWidth = 4; x.strokeRect(2, 2, W - 4, H - 4);
+  stripedIBM(x, W / 2, H * 0.33, 46, '#2a2f38', plate);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.flipY = false;
   return t;
 }
 
 /**
- * The small printed label under the badge (CSG p.40): a ruled box of fine print, too small to read at the desk, so it
- * is drawn as lines of print rather than words.
+ * The module's badge at the front right (PH module_front_power_switch): a black plate with the striped initials in
+ * silver and "Displaywriter System" in two lines of light italic under them; 38 x 28 mm.
+ */
+function moduleBadgeTexture() {
+  const W = 380, H = 280, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = '#1d1d1f'; x.fillRect(0, 0, W, H);
+  stripedIBM(x, W * 0.55, H * 0.3, 74, '#c8c9c6', '#1d1d1f');
+  x.fillStyle = '#b9bab6';
+  x.font = 'italic 300 40px "Helvetica Neue", "Arial", sans-serif';
+  x.textAlign = 'left'; x.textBaseline = 'alphabetic';
+  x.fillText('Displaywriter', W * 0.2, H * 0.7);
+  x.fillText('System', W * 0.2, H * 0.86);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.flipY = false;
+  return t;
+}
+
+/**
+ * The printing beside the LED column on rear panel 1 (PH module_rear_led_column): the letters A to H, each level with
+ * its LED, and the machine type running down the strip. The legend's uv spans 13 x 58 mm at 10 px a millimetre.
+ */
+function legendTexture() {
+  const W = 130, H = 580, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = '#0f0f10'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#e8e6e0';
+  x.font = 'bold 34px "Helvetica Neue", "Arial", sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  for (let i = 0; i < 8; i++) x.fillText('ABCDEFGH'[i], 22, 59 + 66 * i);
+  x.save(); x.translate(88, 290); x.rotate(Math.PI / 2);
+  x.font = '30px "Helvetica Neue", "Arial", sans-serif';
+  x.fillText('6580-026', 0, 0);
+  x.restore();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.flipY = false;
+  return t;
+}
+
+/**
+ * The machine's label plate at the rear right of the module (PH module_rear_panel): a ruled box of fine print, too
+ * small to read at the desk, so it is drawn as lines of print rather than words.
  */
 function labelTexture() {
   const W = 192, H = 120, c = document.createElement('canvas');
@@ -89,7 +140,9 @@ function labelTexture() {
 
 /**
  * Electronics module. parts.rocker is the power switch's red paddle (its node's origin on the axle, which runs front
- * to back); parts.setRocker(on) rocks it: on presses the I side (right) down, off the O side.
+ * to back); parts.setRocker(on) rocks it: on presses the I side (right) down, off the O side. parts.leds are the
+ * status LEDs A to H on rear panel 1 (PH module_rear_led_column: G lights while the station runs), each with its own
+ * material; parts.setLed(i, on) lights LED i (0 = A, or the letter).
  */
 export async function buildStation(size, mats) {
   const { scene, nodes } = await load(STATION_URL, mats);
@@ -99,7 +152,20 @@ export async function buildStation(size, mats) {
   rocker.name = 'powerRocker';
   const setRocker = (on) => { rocker.rotation.z = on ? -ROCK : ROCK; };
   setRocker(false);
-  return { group, parts: { rocker, setRocker } };
+  const leds = [...'abcdefgh'].map((k) => {
+    const n = nodes[`station_led_${k}`];
+    let mesh = null;
+    n.traverse((o) => { if (o.isMesh) mesh = o; });
+    mesh.material = new THREE.MeshPhysicalMaterial({ color: 0x3a0604, emissive: 0xff2a12, emissiveIntensity: 0, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.1 });
+    mesh.castShadow = false;
+    n.name = `led${k.toUpperCase()}`;
+    return n;
+  });
+  const setLed = (i, on) => {
+    const k = typeof i === 'string' ? 'ABCDEFGH'.indexOf(i.toUpperCase()) : i;
+    leds[k]?.traverse((o) => { if (o.isMesh) { o.material.emissiveIntensity = on ? 2.4 : 0; o.material.color.set(on ? 0xff3a20 : 0x3a0604); } });
+  };
+  return { group, parts: { rocker, setRocker, leds, setLed } };
 }
 
 /**

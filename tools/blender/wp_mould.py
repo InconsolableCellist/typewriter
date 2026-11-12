@@ -28,7 +28,10 @@ MATERIALS = {
     "wp_led": ((0.12, 0.01, 0.005, 1), 0.3, 0.0),
     "wp_badge": ((0.55, 0.55, 0.55, 1), 0.3, 0.6),
     "wp_tag": ((0.6, 0.6, 0.58, 1), 0.5, 0.0),
-    "wp_bezel": ((0.07, 0.068, 0.062, 1), 0.6, 0.0),
+    "wp_bezel": ((0.30, 0.28, 0.24, 1), 0.6, 0.0),
+    "wp_mbadge": ((0.03, 0.03, 0.03, 1), 0.4, 0.3),
+    "wp_window": ((0.03, 0.02, 0.018, 1), 0.15, 0.0),
+    "wp_legend": ((0.02, 0.02, 0.02, 1), 0.5, 0.0),
 }
 
 
@@ -115,6 +118,29 @@ def prism(poly, axis, a0, a1):
     bm.faces.new(lo[::-1])
     bm.faces.new(hi)
     n = len(poly)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    return bm
+
+
+def loft(poly0, a0, poly1, a1, axis="y"):
+    """A closed solid between two outlines with the same number of points: poly0 at a0 and poly1 at a1 along the axis
+    (the planes as in prism). For drafted walls: a dish, a scoop, a sloped reveal."""
+    bm = bmesh.new()
+
+    def v(u, w, a):
+        if axis == "x":
+            return Vector((a, w, u))
+        if axis == "z":
+            return Vector((u, w, a))
+        return Vector((u, a, w))
+    lo = [bm.verts.new(v(p[0], p[1], a0)) for p in poly0]
+    hi = [bm.verts.new(v(p[0], p[1], a1)) for p in poly1]
+    bm.faces.new(lo[::-1])
+    bm.faces.new(hi)
+    n = len(poly0)
     for i in range(n):
         j = (i + 1) % n
         bm.faces.new((lo[i], lo[j], hi[j], hi[i]))

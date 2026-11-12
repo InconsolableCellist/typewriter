@@ -33,6 +33,8 @@ part the operator touches modelled and moving with the mechanism. This file is t
 - Local copies made during research (render more pages with `pdftoppm -f N -l N -r 150 -png`):
   `/tmp/claude-0/-home-user-typewriter/f8518805-a6b0-5ba3-88f6-f2782e19df73/scratchpad/` subfolders `dw-docs/` (PDFs),
   `dw-photos/`, `dw-render/`, `dl5218/pics/`, `ref/hi-18.png` (brochure product page at 220 dpi).
+- The owner's photographs in `docs/displaywriter/refs/owner/` (PH with the file name: display, module, keyboard,
+  printer and diskette unit; listed per unit below), and the Incident Reporting Guide for the 6580 (`Z241-6252-3`).
 - Facts: `docs/displaywriter/hardware.md` and `printer.md` (sizes, controls and their positions, colours).
 
 ## Review
@@ -130,69 +132,110 @@ puts each beside its reference (`tools/blender/previews/wp_diskette_cmp_*.png`).
 ## Display station
 The electronics module (`build_wp_station.py`, `wp_station.glb`) and the 25-line display (`build_wp_display.py`,
 `wp_display.glb`), loaded by `src/render/wp/station-view.js` (`buildStation`, `buildDisplay`, async). Shared
-helpers for the word processor's builders are in `tools/blender/wp_mould.py`; `tools/blender/render_wp_review.py`
-makes the review renders (`-- VIEW ... [--tilt DEG] [--swivel DEG] [--off]`).
+helpers for the word processor's builders are in `tools/blender/wp_mould.py` (now with `loft`, a solid between two
+outlines, for drafted walls). Review: `tools/blender/render_wp_review.py -- VIEW ... [--tilt DEG] [--swivel DEG]
+[--off] [--nodisplay]` renders the references' viewpoints and `compare_wp_station.py REFDIR` puts each beside its
+reference (`tools/blender/previews/wp_station_cmp_*.png`; REFDIR holds the owner's photographs and the rendered pages
+`bro18-000.jpg` and `st-028.png`).
+
+References for this unit, besides those above:
+- The owner's photographs, `docs/displaywriter/refs/owner/` (PH below): `display_front_close.jpg` (the display
+  head-on), `display_three_quarter.jpg`, `desk_station_keyboard_diskette.jpg` (the station on a desk, switched on;
+  the best view of the switch and the pedestal), `desk_front_scott_peterson.jpg` (the whole desk from the front, for
+  the display against the module), `module_three_quarter.jpg`, and seven of the module alone: `module_front_power_switch`,
+  `module_side_vents_left_switch`, `module_side_vents_right`, `module_rear_panel`, `module_rear_led_column` and
+  `_lit`, `module_bottom_or_display_base` (`.webp`).
+- Bitsavers `pdf/ibm/6580_Displaywriter/`: the Incident Reporting Guide for the 6580 display station
+  (`Z241-6252-3`, Feb 1983): p.8, a drawing of the 25-line display that shows the vent band across its top and the
+  rear's slope, and p.12, the power supply with its rocker switch at the front corner; the brochure's photographs
+  extracted at full resolution (`pdfimages`, `G552-0323-1` p.1 and p.18); PH `main_assy/inside.JPG` cropped to the
+  switch; also read without new figures for this unit: `G320-0158-0`, `S241-6248-3`, `G544-0851-3`, the training
+  books `S544-2229-0`, `S544-2263-0`, `S544-2275-0` and the platform accessory announcement.
+- Tried and not reachable from the build machine: the Computer History Museum's catalogue entries (102685352,
+  102665264: no images served), Wikimedia Commons (rate-limited), the Home Computer Museum, the Smithsonian, The
+  Henry Ford, muzeuldecalculatoare.ro and the VCFed forum (blocked).
 
 Module, 483 x 356 x 178 mm:
-- Two mouldings meeting at a parting line 95 mm above the desk (BRO p.1 and p.18, where the base shows as a band
-  below the cover): a Pearl White top cover with a 26 mm bullnose along its front edge and a Pebble Gray base set in
-  1.2 mm, on four rubber feet 6 mm high. Pebble Gray is a light grey (PH inside.JPG shows the bare base), so
-  `createUnitMaterials().pebble` is now 0xb3b0a7.
-- On top, the turntable (PSM p.46, ST p.28): a 257 mm dish 3 mm deep with a sloped wall and a 130 mm well 9 mm
-  deeper with the interlock keyhole, centred where the display stands (`units.display.at`).
-- The power switch is the part photographed on the power supply (PH inside.JPG): a red rocker paddle in a black
-  housing, seen through a scoop cut into the bullnose at the front left (centre x = -157 mm, 66 mm wide, CSG p.37 and
-  p.40, ST p.28, BRO p.1). It rocks left and right about an axle running front to back: the CSG p.40 close-up and
-  front view draw the paddle as a wedge across the scoop with the I side on the right. It is a thick block with a
-  flat top and chamfered ends, as photographed, and the whole paddle rocks 0.16 rad either way; the I bar and O ring
-  are moulded on. `parts.setRocker(on)` sets `rocker.rotation.z` (on: -0.16, the right side down).
-  The old primitive put a grey slab at the front right.
-- A recessed vent panel on each side of both mouldings (CSG p.23 and p.37 draw the four panels), with vertical
-  slots in their rear two thirds (PSM p.46). A dark box inside shows through the slots and the keyhole.
-- The square badge at the front right (BRO p.18; CSG p.37 and p.40) is a plain dark plate: nothing on it is legible
-  in any source (hardware.md open question 12).
-- At the back, panel 1 (+x, left as seen from behind) and panel 2, positions from CSG p.27 and the sockets measured
-  on PH Displaywriter_back.JPG (a DE-9 flange as the scale): LEDs A-H, D-subs 0, 1, 2, 5, 7, the Memory Record
-  button 3, covers 4, 6A, 6B; on panel 2 the AC outlet 8, inlet 9, fuse, 10 and 11. The display cable runs from its
-  plug on socket 2 over the rear edge to the display's underside (CSG p.23, p.27). A groove under the base carries
-  the keyboard cable to the back (CSG p.27).
+- Shells (PH module_front_power_switch, module_side_vents_*, module_rear_panel): a one-piece Pearl White top cover
+  whose front edge rolls over with a 36 mm radius (the rear top edge 30 mm), sitting on a base tray of the same
+  colour (the photographs show no darker base; `wp_gray` is no longer used here). The parting line is 68 mm up,
+  about 0.38 of the height: the side photographs give 0.33 to 0.45, the rear 0.36, and the slot bands' heights agree.
+  Four rubber feet 6 mm high; the keyboard cable's groove underneath (CSG p.27).
+- Turntable: a rounded-square dish 274 mm across with 88 mm corners, 5.5 mm deep with a drafted wall, centred where the
+  display stands (`units.display.at`); in it a round boss 140 mm across, its top just under the cover's with a
+  narrow rim, the keyhole running front to back (8 mm wide, 60 mm long, a notch on its left), two small tabs at its
+  ends and a pin hole at the rear right (PH module_front_power_switch, mfront; PSM p.46). The old 130 mm well is gone.
+- Power switch (the owner's "chonky" note): a small red-orange rocker of the usual kind, 34 x 15 mm, in a slot in the
+  floor of a shallow well 66 x 36 mm with 10 mm corners and drafted walls, 9 mm deep, cut into the front left of the
+  top where it rolls over the front, so its front wall is lower than its back (PH module_front_power_switch,
+  desk_station_keyboard_diskette; CSG p.40); centre x = -157 mm. The paddle's top is two flats meeting over the axle,
+  each rising 0.16 rad toward its end, so the pressed half lies level and the other end stands about 6 mm proud of
+  the floor, as both photographs show; most of the paddle is below the floor in the switch's dark body, and only a
+  dark gap shows round it. O is a ring on the left half, I a bar on the right. `parts.setRocker(on)` sets
+  `rocker.rotation.z` (on: -0.16, the I end down). The small "1" written beside the well on the owner's unit is not
+  modelled.
+- Vents (PH module_side_vents_left_switch, _right): vertical slots straight through both side walls, no recessed
+  panel, in two bands split by the parting line: on the cover from 66 mm in from the rear to 49 mm short of the
+  front, 84 to 148 mm up; on the base from 75 mm in from the rear to 73 mm short of the front, 16 to 60 mm up.
+  2.4 mm wide at 6 mm pitch (the photographs show a little closer, about 5.5 mm: the pitch was opened to keep the
+  budget). A dark box inside shows through them.
+- Badge: a black plate 38 x 28 mm at the front right, just above the parting line (centre x = 196 mm), with IBM's
+  striped initials in silver and "Displaywriter System" drawn by the view (`moduleBadgeTexture`).
+- Rear (PH module_rear_panel, module_rear_led_column): panel 1 (x 24 to 214 mm, 18 to 136 mm up) and panel 2 (x -159
+  to -3 mm, 13 to 108 mm up) are set into recesses that cross the parting line; their sockets keep the layout
+  measured on PH Displaywriter_back.JPG, scaled to the panels' measured size. The LED column is 14 mm in from panel
+  1's edge: eight LEDs at 6.6 mm pitch behind a smoked window, the letters A-H and the machine type printed beside
+  it (`legendTexture`). The label plate (47 x 44 mm) stands beside panel 2. The display cable runs from socket 2 over
+  the rear edge to the display's underside (CSG p.23, p.27).
+- Nodes for the controls: `station_rocker` (origin on its axle, which runs front to back) and `station_led_a` to
+  `station_led_h` (each at its LED's centre). The view returns `parts.leds` (A to H, each with its own material) and
+  `parts.setLed(i, on)` (i is 0-7 or the letter): G lights while the station runs (module_rear_led_column_lit); no
+  code drives them yet.
 
 Display, 381 x 348 x 292 mm with the foot:
-- Front elevation measured on PSM p.7 (0.90 mm a pixel at 200 dpi), which agrees with the documented width and
-  with ST p.28's 245 x 170 mm visible screen: the frame's outline (top corners 16 mm, bottom 26 mm), the bezel panel
-  (x -157..160 mm), the tube opening (244 x 170 mm, centre 25 mm left of the cabinet's centre), the groove at
-  x = 111 mm, the strip with the badge (y = 224 mm) and the contrast (124 mm) and brightness (96 mm) knobs.
-- The bezel panel sits 32 mm back in the frame, a hood: BRO p.18 shows the frame's inner walls and its lower lip
-  from above. The panel (`wp_bezel`, a view material) is a charcoal grey: BRO p.18 shows it clearly darker than the
-  module's Pebble Gray base, though lighter than the tube.
-- The cabinet behind the frame keeps the outline and rounds its rear edges with 40 mm radii (ST p.28 fig. 1,
-  CSG p.23). The badge's artwork (the initials in striped letters) and the small label under it (CSG p.40) are
-  drawn on canvases in the view (architecture.md 13.2 lifted the no-marks rule); the GLB gives their faces uv 0..1.
-- Knobs: 17.6 mm, knurled, the contrast and brightness symbols moulded on their faces as CSG p.40 draws them; each
-  is its own node turning about z on its shaft.
-- Foot (ST p.28 fig. 2, CSG p.23): a 196 mm turntable disc in the module's dish, an oval swivel plate on it with a
-  pocket either side and the interlock tab at the front, and a cradle under the cabinet resting in the plate's seat.
-  Nodes: `display_swivel` (y, origin), under it `display_tilt` (x, at the cradle's axis, 93 mm up and 35 mm behind
-  the turntable centre). The documented 20 degree tilt needs room under the rear, so the underside rises at 20
-  degrees behind the cradle and lies level when tilted fully back (inferred; no source shows the underside's
-  profile). The builder exits 1 if the cabinet comes within 1.5 mm of the plate anywhere in the tilt range.
-  `parts.setTilt(rad)` (0 to 20 degrees, positive leans back) and `parts.setSwivel(rad)` clamp to the definition.
-- `face` is in the tilt node's frame, carried in the GLB as the tilt node's extras (`userData.face`), with
-  `parent`: the kit puts the glass and the screen's spill light in that node, so they tilt and turn with it. The
-  glass is `makeTubeFace(0.252, 0.178, 0.6)`, a little larger than the opening, its corners 3.5 mm plus its sag
-  behind the bezel so the edge stays hidden behind the opening's stepped surround; a dark mask behind the panel
-  hides the gap at the corners.
+- Front (PSM p.7 for the layout; PH display_front_close, display_three_quarter and the two desk photographs for the
+  form): the frame's outline as before (top corners 16 mm, bottom 26 mm), its opening (x -157..160 mm, y 54..257 mm:
+  equal borders top and bottom, desk_front_scott_peterson) filled by the bezel moulding. The bezel is a warm mid
+  grey, about two thirds as light as the frame (sampled from display_front_close; the old charcoal was wrong). It
+  has a 2.5 mm rim nearly flush with the frame's face, a recess 26 mm deep, and on its floor a 2.5 mm step 13 mm
+  round the tube's opening and a sloped reveal 11 mm down to the opening (244 x 170 mm, 15 mm corners, centre
+  x = -25 mm, y = 156 mm). On the right the control strip is a separate panel standing 6 mm proud of the floor, from
+  x = 113 mm to the rim.
+- Badge: a 19 mm square silver plate high on the strip (y = 229 mm), the striped initials in its upper half
+  (`badgeTexture`). The printed label that CSG p.40 draws under it is not on the photographed displays and is gone.
+- Knobs: 20 mm, knurled, 12 mm deep, at y = 135 mm (contrast) and 107.5 mm (brightness), where both photographs put
+  them (PSM p.7's drawing has them about 12 mm lower); contrast's face is a disc half light, half dark, brightness's a
+  sun. Each is its own node turning about z on its shaft, its origin at the strip's face.
+- Cabinet: as before, plus a band of 41 slots across the top just behind the frame (Z241 p.8), with a dark baffle
+  under them. The cabinet is 268 mm tall (BOT = 21 mm), which desk_front_scott_peterson gives (272 mm).
+- Foot (PH desk_*: a large light pedestal shows under the display): a Pearl White disc 224 mm across standing 12 mm
+  above the cover, its underside on the dish's floor and hollowed over the boss; the dark oval swivel plate on it
+  (12 to 19 mm); the cradle under the cabinet resting in the plate's seat (radius from the pivot to the plate's
+  top). The tab that keyed the plate into the old well is gone. Nodes and contract unchanged: `display_swivel` (y,
+  origin), under it `display_tilt` (x, at the cradle's axis, 93 mm up and 35 mm behind the turntable centre);
+  `parts.setTilt(rad)` (0 to 20 degrees, positive leans back) and `parts.setSwivel(rad)` clamp to the definition. The
+  builder exits 1 if the cabinet comes within 1.5 mm of the plate anywhere in the tilt range.
+- `face` is in the tilt node's frame, carried in the GLB as the tilt node's extras (`userData.face`), with `parent`.
+  The glass is `makeTubeFace(0.252, 0.178, 0.6)`; its corners sit 2 mm behind the opening's edge, so its centre stands
+  4 mm ahead of it, in the reveal; the dark mask behind the panel hides the gap at the corners.
+
+Comparison images (`tools/blender/previews/`, gitignored): `wp_station_cmp_mfront_m_off.png`, `_mleft_m_off`,
+`_mright_m_off`, `_mrear_m_off`, `_mleds_m`, `_switch_m_off` (module alone, against the owner's module photographs),
+`_dfront`, `_desk`, `_deskfront` (the station, against the display and desk photographs), `_st28side`; the renders
+alone are `wp_station_<view>.png`, and `previews/before/` holds the previous model from the same viewpoints.
 
 Size: `tools/blender/quantize_glb.py` (run by `wp_mould.export`) stores positions as 16-bit integers in 0.05 mm steps
-and normals as 8 bits (KHR_mesh_quantization, read natively by GLTFLoader and Blender); the dequantizing scale is on
-a child node, so named nodes keep their transforms. UVs stay float. Small parts get one UV and smooth shading
-(`finish_small`) so the export splits fewer vertices; the shells' unseen inner surfaces use chords for arcs.
-`wp_station.glb` is 375 KB and `wp_display.glb` 211 KB: 0.59 MB of the 1.1 MB for five units, more than a fair
-share. The rear panels' sockets (about 4000 vertices) are the first place to cut if the budget needs it.
+and normals as 8 bits (KHR_mesh_quantization); UVs stay float. `wp_station.glb` is 396 KB and `wp_display.glb` 233 KB:
+0.60 MB together (was 0.59). The side vents cost most (about 2400 vertices in the cover); the rear panels' sockets
+come next.
 
-Not yet: the white numbering and the part number printed on the rear panels, and the LED letters; the cable
-clips under the display that ST p.28 draws at its lower front corners; the display cable is in the module's GLB and
-does not follow the display when it turns.
+Not yet: the rear panels' socket layout is the earlier measurement scaled, not re-measured on module_rear_panel
+(connectors 4, 6(a) and 6(b) are card-edge openings there, and panel 2 carries a type switch the model lacks); the
+small red part on the top's rear edge at the right (module_rear_panel) and the underside's vents and centre hole
+(module_bottom_or_display_base) are not modelled; the white numbering on the rear panels; the sticker in the dish;
+the cable clips under the display that ST p.28 draws; the display cable is in the module's GLB and does not follow
+the display when it turns. The vent slots have square ends. The cameras of the comparison renders were placed by eye,
+so the pairs agree in form and proportion rather than pixel for pixel.
 
 ## Printer
 `tools/blender/build_wp_printer.py` -> `public/assets/models/wp_printer.glb`, viewed by `src/render/wp/printer-view.js`.

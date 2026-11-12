@@ -27,8 +27,10 @@ function canvas(w, h) {
   return c;
 }
 
+/** Canvas row 0 at v = 1, as a glTF texture: the exporter wrote v = 1 - v, so the canvas is not flipped. */
 function canvasTexture(c, srgb = true) {
   const t = new THREE.CanvasTexture(c);
+  t.flipY = false;
   t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   t.anisotropy = 4;
   return t;
@@ -137,7 +139,7 @@ function threadTexture() {
 /** The acoustic filter's perforation: a staggered field of 1.2 mm holes at 2.5 mm pitch over dark foam. */
 function perforationTexture() {
   const S = 128, c = canvas(S, S), g = c.getContext('2d');
-  g.fillStyle = '#6c6d70'; g.fillRect(0, 0, S, S);
+  g.fillStyle = '#505155'; g.fillRect(0, 0, S, S);
   g.fillStyle = '#0d0d0e';
   const n = 8, p = S / n;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {

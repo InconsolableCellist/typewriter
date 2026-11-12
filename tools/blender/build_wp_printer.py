@@ -293,7 +293,7 @@ def make_materials():
         "wp_metal": ((0.55, 0.55, 0.56), 0.35, 1), "wp_chrome": ((0.8, 0.8, 0.82), 0.15, 1), "wp_glass": ((0.06, 0.045, 0.04), 0.05, 0), "wp_foam": ((0.09, 0.08, 0.07), 0.95, 0),
         "wp_key_green": ((0.05, 0.42, 0.12), 0.4, 0), "wp_key_yellow": ((0.85, 0.55, 0.03), 0.4, 0), "wp_key_blue": ((0.22, 0.52, 0.80), 0.4, 0),
         "wp_led_red": ((0.25, 0.02, 0.02), 0.2, 0), "wp_led_green": ((0.03, 0.2, 0.05), 0.2, 0), "wp_led_amber": ((0.3, 0.17, 0.02), 0.2, 0),
-        "wp_display": ((0.12, 0.02, 0.02), 0.2, 0), "wp_red": ((0.75, 0.08, 0.04), 0.45, 0), "wp_filter": ((0.3, 0.3, 0.31), 0.5, 1),
+        "wp_display": ((0.12, 0.02, 0.02), 0.2, 0), "wp_red": ((0.75, 0.08, 0.04), 0.45, 0), "wp_filter": ((0.12, 0.12, 0.13), 0.5, 0.5),
         "wp_wheel": ((0.75, 0.75, 0.72), 0.45, 0), "wp_petal": ((0.75, 0.75, 0.72), 0.45, 0), "wp_cartridge": ((0.05, 0.25, 0.18), 0.45, 0),
         "wp_white": ((0.8, 0.79, 0.75), 0.5, 0), "wp_screw": ((0.6, 0.6, 0.62), 0.3, 1), "wp_motor": ((0.08, 0.08, 0.085), 0.45, 0.5),
         "wp_paper": ((0.85, 0.85, 0.82), 0.8, 0), "wp_cable": ((0.55, 0.62, 0.62), 0.6, 0),
@@ -348,7 +348,7 @@ LED_POS = [(LED_X[0], LED_Y[0]), (LED_X[0], LED_Y[1]), (LED_X[1], LED_Y[0]), (LE
 LED_MAT = ["wp_led_red", "wp_led_green"] + ["wp_led_amber", "wp_led_green"] + ["wp_led_amber"] * 6
 DISPLAY = (-0.085, -0.061, 0.0924, 0.1117)
 POWER = dict(x0=0.250, x1=0.296, y0=0.0465, y1=0.0899, rx=0.2760, ry=0.0653, rw=0.0186, rh=0.0226)
-REAR_PANEL = (-0.322, -0.213, 0.050, 0.163)        # attachment panel recess, printer's left rear (PH 5218_3)
+REAR_PANEL = (-0.322, -0.213, 0.016, 0.163)        # attachment panel recess down through the base band, printer's left rear (PH 5218_3)
 LATCH = [(-0.270, -0.240), (0.240, 0.270)]          # paper-handler latch openings beside the hinge (PH 5218_2)
 LATCH_Z = (0.058, 0.108)
 REAR_SQ = [(-0.241, -0.219), (0.219, 0.241)]
@@ -370,7 +370,7 @@ def build_top_cover():
     boolean(top, prism_ob(rrect(-0.034, 0.150, 0.034, LIP - GAP, 0.004), "z", FACE - 0.012, FACE + 0.01))
     boolean(top, prism_ob(rrect(PANEL["ix0"], SEAM + 0.001, PANEL["ix1"], PANEL["y0"] + 0.002, 0.001), "z", FACE - 0.006, FACE + 0.01))
     x0, x1, y0, y1 = REAR_PANEL
-    boolean(top, prism_ob(rrect(x0, y0, x1, y1, 0.004), "z", -HD - 0.01, -HD + 0.008))
+    boolean(top, prism_ob(rrect(x0, y0, x1, y1, 0.004), "z", -HD - 0.01, -HD + 0.016))
     for i in range(11):
         z = -0.272 + i * 0.0125
         boolean(top, box_ob(HW - 0.012, HW + 0.01, 0.078, 0.150, z - 0.003, z + 0.003))
@@ -392,6 +392,8 @@ def build_base():
     ob = solid(lambda bm: add_prism(bm, rrect(-x, -z, x, z, 0.022), "y", FOOT, SEAM + 0.006), "base")
     inner = solid(lambda bm: add_prism(bm, rrect(-x + T, -z + T, x - T, z - T, 0.019), "y", FOOT + T, SEAM + 0.02), "bi")
     boolean(ob, inner)
+    x0, x1, y0, y1 = REAR_PANEL
+    boolean(ob, box_ob(x0, x1, y0, SEAM + 0.02, -HD - 0.01, -HD + 0.016))
     bevel_finish(ob, 0.0016, 3)
     return ob
 
@@ -483,19 +485,22 @@ def build_power():
 def build_rear_panel():
     x0, x1, y0, y1 = REAR_PANEL
     bm = bmesh.new()
-    add_box(bm, x0 + 0.001, x1 - 0.001, y0 + 0.001, y1 - 0.001, -HD + 0.0055, -HD + 0.0085)
+    add_box(bm, x0 + 0.001, x1 - 0.001, y0 + 0.001, y1 - 0.001, -HD + 0.0130, -HD + 0.0160)
     rp = ob_from(bm, "rp")
     assign(rp, "wp_dark")
     # Round paper-handler socket, the DE-9 of the controller cable, the IEC inlet (PH 5218_3); seen from behind, x mirrors.
     bm = bmesh.new()
     cx = x0 + 0.020
-    add_cyl(bm, "z", (cx, 0.140, -HD + 0.003), 0.0135, 0.006, 32)
-    add_rbox(bm, cx - 0.0155, cx + 0.0155, 0.096, 0.108, -HD + 0.003, -HD + 0.0065, 0.001, 1)
-    add_rbox(bm, cx - 0.0110, cx + 0.0110, 0.060, 0.082, -HD + 0.002, -HD + 0.0065, 0.002, 1)
+    add_cyl(bm, "z", (cx, 0.140, -HD + 0.0100), 0.0135, 0.006, 32)
+    add_box(bm, cx - 0.004, cx + 0.004, 0.152, 0.156, -HD + 0.0085, -HD + 0.0130)
+    add_rbox(bm, cx - 0.0155, cx + 0.0155, 0.096, 0.108, -HD + 0.0100, -HD + 0.0135, 0.001, 1)
+    add_rbox(bm, cx - 0.0110, cx + 0.0110, 0.052, 0.076, -HD + 0.0090, -HD + 0.0135, 0.002, 1)
     con = ob_from(bm, "con")
     assign(con, "wp_dark")
     bm = bmesh.new()
-    add_rbox(bm, cx - 0.0085, cx + 0.0085, 0.0985, 0.1055, -HD + 0.0015, -HD + 0.0035, 0.002, 1)
+    add_rbox(bm, cx - 0.0085, cx + 0.0085, 0.0985, 0.1055, -HD + 0.0085, -HD + 0.0105, 0.002, 1)
+    for i in range(3):
+        add_box(bm, cx - 0.004 + i * 0.004 - 0.0008, cx - 0.004 + i * 0.004 + 0.0008, 0.060 + (i % 2) * 0.006, 0.066 + (i % 2) * 0.006, -HD + 0.0100, -HD + 0.0120)
     shell = ob_from(bm, "shell")
     assign(shell, "wp_metal")
     return [rp, con, shell]
@@ -954,12 +959,12 @@ def build_carrier():
     # beside the print point (MIM p.57; SET p.1-4).
     sx, sz = RIB["spoolX"], RIB["spoolZ"]
     cart = solid(lambda bm: [add_cyl(bm, "y", (s * sx, sum(LOBE_Y) / 2, sz), LOBE_R, LOBE_Y[1] - LOBE_Y[0], 36) for s in (-1, 1)], "cart")
-    bridge = box_ob(-0.04, 0.04, 0.1395 + DY, LOBE_Y[1], 0.150, 0.168)
+    bridge = box_ob(-0.05, 0.05, 0.1395 + DY, LOBE_Y[1], 0.140, 0.166)
     boolean(cart, bridge, "UNION")
-    boolean(cart, prism_ob(rrect(-0.088, 0.110, 0.088, 0.150, 0.01), "y", LOBE_Y[1] - 0.0008, LOBE_Y[1] + 0.01))   # label recess, blank
     gx, gz = RIB["guidePostX"], WC[2] - J["hammer"]["petalTravel"] + 0.0012 + 0.0022 + 0.0005 + 0.0065
     for s in (-1, 1):
-        arm = prism_ob(round_poly([(s * (gx - 0.0005), gz - 0.003), (s * (gx + 0.008), gz - 0.003), (s * 0.050, 0.112), (s * 0.036, 0.118)], [0.002] * 4), "y", LOBE_Y[0], LOBE_Y[0] + 0.004, "arm")
+        quad = [(s * (gx - 0.0005), gz - 0.003), (s * (gx + 0.008), gz - 0.003), (s * 0.050, 0.112), (s * 0.036, 0.118)]
+        arm = prism_ob(round_poly(quad if s > 0 else quad[::-1], [0.002] * 4), "y", LOBE_Y[0], LOBE_Y[0] + 0.004, "arm")
         boolean(cart, arm, "UNION")
     bevel_finish(cart, 0.0009, 1)
     assign(cart, "wp_dark")

@@ -55,7 +55,8 @@ export async function installPrinter({ stage, machine, geometry, mats, group, si
       setTimeout(() => sim.command({ dev: 'printer', words: w.slice(load) }), 400);
     },
   };
-  // The operator's controls: panel keys pressed for a moment, the cover and the power switch toggled by a hand.
+  // The operator's controls: panel keys pressed for a moment, the cover and the power switch toggled by a hand. The hand
+  // lifts the cover to its stop, past upright, and lets go there, so it rests open.
   const P = machine.printer, L = sim.layout;
   const NAMES = { start: 'START', stop: 'STOP', printTest: 'PRINT TEST', cancel: 'CANCEL', load: 'LOAD', release: 'RELEASE', paperUp: 'PAPER UP', paperDown: 'PAPER DOWN' };
   const hold = (dof, i, target, ms, opts = {}) => { const g = sim.grab(dof, i, { target, ...opts }); setTimeout(() => sim.release(g), ms); };
@@ -64,7 +65,7 @@ export async function installPrinter({ stage, machine, geometry, mats, group, si
     pickables.push({ object: mesh, part: () => ({ label: `Printer: ${NAMES[name]}`, onClick: () => hold('panelKey', i, P.panel.travel * 1.3, 160) }) });
   });
   const coverOpen = () => sim.state[L.cover] > P.cover.open / 2;
-  controls.cover.traverse((o) => { if (o.isMesh) pickables.push({ object: o, part: () => ({ label: coverOpen() ? 'Close the printer cover' : 'Open the printer cover', onClick: () => hold('printerCover', 0, coverOpen() ? -0.05 : P.cover.open * 1.05, 1200) }) }); });
+  controls.cover.traverse((o) => { if (o.isMesh) pickables.push({ object: o, part: () => ({ label: coverOpen() ? 'Close the printer cover' : 'Open the printer cover', onClick: () => hold('printerCover', 0, coverOpen() ? -0.05 : P.cover.open, 1200) }) }); });
   const powerOn = () => sim.state[L.printerPower] > P.power.travel / 2;
   pickables.push({ object: controls.power, part: () => ({ label: powerOn() ? 'Printer power: switch off' : 'Printer power: switch on', onClick: () => hold('printerPower', 0, powerOn() ? -0.1 : P.power.travel * 1.3, 400) }) });
 

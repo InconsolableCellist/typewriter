@@ -69,7 +69,9 @@ Measurements and decisions:
   (SET p.3-2; the fan is at the right rear, MIM p.17).
 - **Access cover** (`printer_cover`) hinges on its rear top edge: a pivot lower down swings the cover's rear corners into
   the slot's cheeks. Its rear is a recessed well holding the tinted window over the print line; the underside is lined
-  with acoustic foam (5218_2 shows both on the raised cover). At the mechanism's 75 degree stop it clears the feeder.
+  with acoustic foam (5218_2 shows both on the raised cover). Its open stop is 100 degrees (was 75): past upright, so
+  gravity holds it on the stop and the mechanism stays in view (the 5218 cover is lifted until it rests, SET p.1-3; with
+  the feeder fitted it cannot lie back on the top). At the stop it still clears the feeder.
 - **Panel** from 5218_1: 2 rows of 5 LEDs (bit order of the controller; Power On red, On Line and Ready green, the rest
   amber), the two-digit window, keys of 19.5 mm in two pairs of columns (Start green, Stop yellow, the rest blue), the
   divider and the blank right section. Legends, the key captions and the seven-segment digits are drawn at run time
@@ -93,8 +95,8 @@ Measurements and decisions:
   opening, a flat top and a lower rear box with two trays whose handle ends stand 75 mm past the printer's back (the
   printer moved 4 cm forward, `ROW_BACK` -0.44, so they stay on the desk). Its stacker plate is the paper table of the
   soft body (`printer-soft.js`): the sheet the feeder delivers is laid on it from under the exit rollers and fingers and
-  slides down into the slot, and a printed sheet leans back on it. The front leans back 0.30 so the cover's 75 degree
-  stop clears it. Its middle stands on the hood at the cover's height, its sides on the cabinet's top with latches in the
+  slides down into the slot, and a printed sheet leans back on it. The front leans back 0.30 so the opened cover clears
+  it. Its middle stands on the hood at the cover's height, its sides on the cabinet's top with latches in the
   openings. The upper tray shows its paper.
 - **Soft body** (`printer-soft.js`): the table runs to the top of the feeder's opening; the resting surfaces are the
   cover, the well round the platen, the stacker plate and the feeder's top, as a height field.

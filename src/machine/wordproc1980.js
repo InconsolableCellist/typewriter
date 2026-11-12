@@ -184,7 +184,7 @@ function printerBlock() {
     },
     paperFeed: { chunk: 16, loadMaxSteps: 96 * 5, ejectMaxSteps: 96 * 13 },
     cover: {
-      inertia: 0.012, gravityTorque: 0.35, latchTorque: 0.6, latchAngle: 2 * deg, open: 75 * deg,
+      inertia: 0.012, gravityTorque: 0.35, latchTorque: 0.6, latchAngle: 2 * deg, open: 100 * deg,   // past upright: it rests open on its stop
       viscous: 0.01, coulomb: 0.01, stopStiffness: 60, stopDamping: 0.5, interlockAngle: 3 * deg,
     },
     panel: {

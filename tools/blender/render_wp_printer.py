@@ -3,7 +3,7 @@ side-by-side review of docs/displaywriter/models.md.
 
   /root/bpyenv/bin/python tools/blender/render_wp_printer.py [--views front,open,...] [--samples N] [--size N]
 
-Views: front (PH 5218_1), open (PH 5218_2, cover raised, no feeder), feeder (brochure p.18, sheet-feed paper handler),
+Views: front (PH 5218_1), open (PH 5218_2, cover on its open stop, no feeder), feeder (brochure p.18, sheet-feed paper handler),
 rear (PH 5218_3), carrier (PH 5218_4, close over the carrier), three (a three-quarter view).
 """
 import argparse
@@ -21,11 +21,11 @@ OUT = os.path.join(HERE, "previews")
 
 # camera position and target in machine coordinates (x right, y up, z to the operator), lens mm, cover angle, feeder
 VIEWS = {
-    "front": ((0.0, 0.62, 2.5), (0.0, 0.10, 0.0), 85, 0, False),
-    "open": ((0.0, 1.05, 0.80), (0.0, 0.08, -0.03), 40, 75, False),
-    "feeder": ((0.0, 0.45, 3.0), (0.0, 0.25, 0.0), 85, 0, True),
+    "front": ((0.0, 0.62, 2.5), (0.0, 0.10, 0.0), 130, 0, False),
+    "open": ((0.0, 1.05, 0.80), (0.0, 0.08, -0.03), 40, 100, False),
+    "feeder": ((0.0, 0.62, 3.0), (0.0, 0.25, 0.0), 110, 0, True),
     "rear": ((-0.32, 0.22, -0.80), (-0.27, 0.10, -0.32), 50, 0, False),
-    "carrier": ((0.0, 0.60, 0.42), (0.0, 0.10, 0.13), 40, 75, False),
+    "carrier": ((0.0, 0.60, 0.42), (0.0, 0.10, 0.13), 40, 100, False),
     "three": ((1.1, 0.85, 1.3), (0.0, 0.17, -0.02), 55, 0, True),
 }
 

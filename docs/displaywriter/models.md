@@ -39,3 +39,43 @@ part the operator touches modelled and moving with the mechanism. This file is t
 Every unit is compared with its reference photographs before it is called done: render it from the photograph's
 viewpoint (Cycles on the CPU in the bpy module, small samples) and place the two side by side, then fix proportions
 and details until they match. Keep the comparison images; the final reply names them.
+
+## Keyboard
+`tools/blender/build_wp_keyboard.py` (case) and `src/render/wp/keyboard-view.js` (caps, legends), sharing the layout
+in `src/render/wp/keyboard-layout.js` through `tools/gen/export_wp_keyboard.mjs` -> `tools/blender/wp_keyboard.json`.
+Review renders: `tools/blender/render_wp_keyboard.py` (views kbd2, brochure, plan, csg, side), from a GLB of the live
+unit exported in the browser, since the caps and their atlas exist only at run time.
+
+- **Case.** The top runs at the documented 12 degrees and reaches the documented 101 mm at the rear edge, so the back
+  is the high side and the cap tops lean up toward the typist. The brochure (p.18) puts the key field in the middle of
+  the top with borders of about the same depth front and back; its front band reads as a rounded nose over a face
+  that leans back, which the setup guide's drawings (CSG p.18, p.22) also show, so the front is a 16 mm nose over a
+  face set back 13 mm at the base. Ends are flat, plan corners 12 mm. One opening per group (left, main with INDEX,
+  right upper, right lower): the brochure shows cover between them, and the left and right-upper openings rise a row
+  above the number row. The well round each opening is a dark wall down to the dark key plate (the contamination
+  shield of KBD_2.JPG), so the cover's hollow never shows. A pebble-grey base tray shows as a band above four rubber
+  feet. The cable leaves the rear at the left, where the logic card's connector is (KBD_3.JPG), through a strain-relief
+  bush, and runs back over the desk toward the electronics module (it passes under the module in its groove, HW 2.1).
+  The covers carry the `wp_pebble` grain (normal and roughness from `createUnitMaterials`; colour stays the
+  material's). 182 KB, about 5.5 k triangles; no images.
+- **Layout.** KBD_2.JPG is the authority where the drawings are schematic: BKSP 1.75 u; RETURN 1.25 u over a 1 u leg
+  (legend RET); right SHIFT 2.5 u; CODE 2 u starting under Z-X; space bar 5.5 u; ENTER 1.25 u; INDEX a narrow 0.8 u
+  cap standing a little apart; the right groups 0.4 u past it. The main block is then 14.75 u wide and the field 22.65
+  u, which matches the brochure's proportions. KeyboardMech treats RETURN as a wide key by its `tall` mark.
+- **Caps.** Built per key from the table: a straight tapered skirt (2.5 mm each side), a rolled shoulder, a crown with
+  a 1 mm cylindrical dish across the width, corner radii 0.9 mm at the base and 2.1 mm at the crown. Row profile (top
+  height, extra lean toward the typist): rows 0-1 12.8 mm, 9 degrees; tab 12.1, 5; home 11.6, 0; shift 11.8, -4;
+  space row 10.6, -7; ENTER 3 mm lower than the space bar (ST p.62). The caps stand 8.5 mm into their wells, tops a
+  few millimetres proud of the cover, as in the brochure. Each cap is one mesh in the tilted `deck` group, its rest at
+  the base centre, and moves along the deck's own down (`pressDir`), so keys travel along their stems.
+- **Legends.** One canvas atlas drawn at run time from `wp-keys.js` at 12 px/mm: each cap gets a top region (u, v over
+  the crown's box) and, if it has one, a front region on the front skirt just under the top edge, mapped in true
+  millimetres; sides and backs map to a blank texel. Letters alone 5 mm caps in a Helvetica-like face; shifted over
+  unshifted characters 3.3 over 3.7 mm; words in 1.9 mm bold capitals, shrunk to fit narrow caps (INDEX); front
+  legends 1.6 mm bold. Arrows, the boundary arrows of the cursor keys and the hollow arrows of ½⇧ / ½⇩ are drawn as
+  paths, as the photograph shows them. Cap colour #dcd8c8 and near-black ink from KBD_2.JPG; the caps' matte finish
+  (GIM p.104) with the `wp_keycap` grain on a second uv set.
+- **Not yet matched.** The case's side profile has no photograph: it is inferred from the brochure's front view and
+  the setup guide's line drawings. The face of the legends is a Helvetica stand-in for IBM's; the 92-character and
+  Dvorak variants are not modelled; the space bar's stabiliser and the key modules under the caps are not modelled
+  (hidden by the cover).

@@ -29,7 +29,7 @@ export class KeyboardMech {
     this.n = KEYS.length;
     this.pos = Int32Array.from(KEYS, (k) => k.pos);
     this.index = new Map(KEYS.map((k, i) => [k.pos, i]));
-    this.scale = Float64Array.from(KEYS, (k) => FORCE_CLASS[k.pos] ?? (k.w >= 1.5 ? 1.18 : 1));
+    this.scale = Float64Array.from(KEYS, (k) => FORCE_CLASS[k.pos] ?? (k.w >= 1.5 || k.tall ? 1.18 : 1));
     this.x = new Float64Array(this.n); this.v = new Float64Array(this.n);
     this.y = new Float64Array(this.n); this.vy = new Float64Array(this.n);
     this.force = new Float64Array(this.n);     // finger force on each stem, N, set by the host each substep

@@ -238,7 +238,8 @@ between 92 and 96 is not drawn in these sources (open question).
 Sources: key position numbers and typematic/make-break marks from PSM p.34; engraved legends from GIM p.22 and
 PH keyboard/KBD_2.JPG; Textpack 4 functions from the template, ORG p.35-44. "T" = typematic, "M" = make/break,
 "N-A" = not active. Unmarked keys are typematic at the keyboard but software treats them as single-action.
-Key widths are in key units (u, about 19 mm) and are **inferred** from the drawings and photo.
+Key widths are in key units (u, about 19 mm), measured on PH keyboard/KBD_2.JPG where the drawings are schematic
+(models.md, Keyboard).
 
 All keycaps are the same pearl white with dark legends: no colour-coded keys (GIM p.22; PH KBD_2.JPG). Keys with a
 CODE function have a second legend on the key front (shaded in ORG p.35's drawing).
@@ -270,11 +271,11 @@ the keyboard as first shipped (open question).
 
 | Row | Keys left to right (pos legend; front legend) |
 |---|---|
-| Number row | 9 °/± · 10 !/1 · 11 @/2 · 12 #/3 · 13 $/4 · 14 %/5 · 15 ¢/6 · 16 &/7 · 17 */8 (TP4 INSERT/REPLACE) · 18 (/9, STOP · 19 )/0 · 20 underscore/hyphen T · 21 +/= · 22 BKSP T, REQD (about 1.5-2 u) · gap · 84 INDEX T (isolated, 1 u) |
-| Tab row | 23 TAB, REQD (about 1.5 u) · 24-33 Q W E R T Y U I O P (fronts: Y ½↑, U BEGIN UND, I WORD UND) · 34 ¼/½ · 35 [/] · 36 RETURN T (tall inverted-L key spanning tab and lock rows; legend RET or RETURN) |
+| Number row | 9 °/± · 10 !/1 · 11 @/2 · 12 #/3 · 13 $/4 · 14 %/5 · 15 ¢/6 · 16 &/7 · 17 */8 (TP4 INSERT/REPLACE) · 18 (/9, STOP · 19 )/0 · 20 underscore/hyphen T · 21 +/= · 22 BKSP T, REQD (1.75 u) · gap · 84 INDEX T (isolated, a narrow cap about 0.8 u) |
+| Tab row | 23 TAB, REQD (about 1.5 u) · 24-33 Q W E R T Y U I O P (fronts: Y ½↑, U BEGIN UND, I WORD UND) · 34 ¼/½ · 35 [/] · 36 RETURN T (tall inverted-L key spanning tab and lock rows, 1.25 u over a 1 u leg; legend RET in the photo, RETURN in GIM p.22) |
 | Lock row | 37 LOCK M (about 1.75 u; drawings show a small square stub at its right) · 38-46 A S D F G H J K L (fronts: H ½↓, J END UND; TP4: K SWITCH, L NEXT VARIABL) · 47 :/; (TP4 VARIABL) · 48 "/' · 49 ³/² · (lower leg of RETURN) |
-| Shift row | 50 SHIFT M (about 1.25 u) · 51 ¶/§ · 52-58 Z X C V B N M (front: C CTR/CENTER; TP4: M comma separator) · 59 ,/, · 60 ./. · 61 ?// · 62 SHIFT M (about 2.25-2.5 u) |
-| Space row | 63 CODE M (about 1.5-2 u, under Z-X) · 64 space bar T, front REQUIRED (required space) · 65 ENTER (about 1.5 u, recessed 3 mm) |
+| Shift row | 50 SHIFT M (about 1.25 u) · 51 ¶/§ · 52-58 Z X C V B N M (front: C CTR/CENTER; TP4: M comma separator) · 59 ,/, · 60 ./. · 61 ?// · 62 SHIFT M (2.5 u) |
+| Space row | 63 CODE M (2 u, from under Z-X) · 64 space bar T (5.5 u), front REQUIRED (required space) · 65 ENTER (1.25 u, recessed 3 mm) |
 
 **Right upper: function control keys** (66-73)
 

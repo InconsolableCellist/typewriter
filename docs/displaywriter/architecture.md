@@ -198,7 +198,7 @@ Changes to shared scene code, all backward compatible:
 | `src/render/environment.js` | `deskLayout.lamp === false` builds no lamp. In the dark a room light with no visible fixture holds the key light at 35 % of its day level, so the CRT is the brightest thing in view |
 | `src/render/desk-props.js` | The ashtray group is parented to the unit named in `deskLayout.ashtray.on`; the ember position used for burning is taken from its world matrix |
 | `src/render/materials.js` | `loadStudioTextures(..., { only: machine.textures })` |
-| `src/interact/orbit.js` | `orbit.flyTo(preset)`; the panel shows one button per entry of `machine.cameras` |
+| `src/interact/orbit.js` | `orbit.flyTo(preset)`; `keepInView: false` drops the pull toward the home target; `rotate()` applies at once. The views are in 3.5 |
 | `src/interact/drag.js` | One generic part kind, `{ kind: 'dof', dof, index, mode: 'rotary' | 'linear' | 'toggle', axis, range, label }`, mapped to `sim.grab`. Every word-processor control uses it; keys keep the existing `key` kind |
 | `src/ui/panel.js` | `panel.setReadouts([{ label, get(state, layout) }])` supplied by the kit; the typewriter sliders are hidden when `machine.kind === 'system'` |
 
@@ -220,6 +220,83 @@ Print Point window works for the printer. The sheet's desk plane is still y = 0.
 
 Two small edits inside `src/soft`: `RibbonSim.weave()` returns 1 when `ribbon.film` is set, and the film uses
 its own `depletionPerStrike`. Nothing else in `src/soft` changes.
+
+### 3.5 Views: stations, focus items and the free view
+
+Five bodies across a desk are too much for the typewriters' orbit, and the owner found the camera hard to steer
+and given to jumping. The camera now moves only when the user asks it to, and the ways of asking are visible.
+
+| Piece | File | What it does |
+|---|---|---|
+| Model | `src/interact/wp-views.js` | `STATIONS`, `FOCUS`, the framing (`framePose`, `poseOf`) and `ViewNav`, the state machine. No DOM, no three.js; tested in Node |
+| Pointer | `src/interact/wp-pointer.js` | Picking (`makePicker`), the press, click, drag, wheel and pinch rules, and the hover highlight |
+| Controls | `src/ui/wp-nav.js` | The edge arrows, the bar, the hover label and the keyboard shortcuts |
+| Screen card | `src/ui/wp-screen-card.js` | The phosphor picture flat in the insets (9.4) |
+
+**Stations.** Desk (the overview), Printer, Computer (module, display and keyboard) and Diskettes (the unit and the
+desk file). Each is seen head-on from a fixed elevation at the nearest distance that holds its units with a margin,
+worked out for the window's shape, so a tall phone window stands back for the width. The three units form a row,
+printer to diskettes, walked by an arrow at each edge of the window (named on hover, always named on a touch
+screen); the row has no wrap-around. The desk is the overview above the row: Back goes up to it, and its arrows go
+down to the row's ends. The bar at the top lists the stations too.
+
+**Focus items** are closer looks within a station, chosen from the bar's second row or by clicking the object:
+
+| Station | Focus items |
+|---|---|
+| Desk | Paper (the fresh stack and the page pile) |
+| Computer | Screen, Keyboard, Controls (power switch and the display's knobs, from a little to the right), Rear (from behind) |
+| Diskettes | Slots, Levers, Desk file |
+| Printer | Panel, Mechanism (from above; the bar says to click the cover if it is closed), Paper path (from the left) |
+
+Each item frames a named box. The kit takes the boxes from the parts themselves (`Box3` of the face mesh, the
+rocker and knobs, the slots and drive fronts, the levers, the panel keys, the platen and carrier, and so on), once,
+after the units are built; `fallbackBoxes(geometry, machine)` derives the same names from the unit boxes alone, for
+the tests and for a part a model does not have. The camera never opens the cover or moves a part: a view is only a
+camera.
+
+**Clicks.** What is under the pointer is decided in this order: a key (held down for as long as the button is), a
+control (a pickable whose `part()` is not null, worked on release if the pointer moved less than 5 px), then, by
+where the ray meets the units, the smallest navigation box holding that point: a focus item of this station, or
+another station by its units. Only that last kind is highlighted on hover (an outline and a faint fill over its box,
+drawn over everything, and a label such as "Keyboard · look closer"), and only it moves the camera. A press on a key
+or a control never starts an orbit, whatever the pointer does next. There is no double-click reset.
+
+**Free view** is a mode, switched by the ◎ button or a shortcut. In it a drag on empty space orbits, a right or
+Shift drag pans, the wheel or a pinch zooms toward the pointer, a one-finger drag orbits; nothing is highlighted and
+nothing pulls the camera anywhere. Leaving it (the button, the shortcut or Back) glides to the station whose head-on
+view is nearest the camera, its target counting double. At a station a drag or the wheel does nothing but show a
+note naming the free view.
+
+**Touch and small windows.** The arrows, the bar's buttons and the ◎ toggle are ordinary buttons, so a tap works
+them; with no hover (`@media (hover: none)`) the arrows always show their station's name and the buttons grow to
+finger size. Below 640 px of width the bar moves down above the panel, clear of the Screen card, and the long hint
+line is hidden (only for this machine: `body.wp-views`). A tap on a highlighted object works as a click; a pinch
+zooms and a one-finger drag orbits only in the free view.
+
+**Glides.** Every move is `Orbit.flyTo` with smoothstep easing, 0.55 to 1.0 s by distance. A change of window shape
+frames the same view again at once.
+
+**Shortcuts.** The machine takes nearly every key of the PC keyboard (5.3), Escape included (CANCL), so the views
+use Ctrl+Shift chords, taken in the capture phase before the machine's keyboard handler sees them: Ctrl+Shift+←
+and → the neighbouring station, ↓ Back, ↑ the free view. The numeric keypad, which the machine does not use, has
+4 and 6, 2 (or 0) and 5 (or the decimal point) for the same. Ctrl and Shift go down on the machine first; Textpack
+gives CONTROL and SHIFT alone no function. Back is therefore not on Escape. The test checks that no shortcut
+shadows a key of `KEYMAP` or `CHORDS`.
+
+**What made the old camera jump.** The kit's own pointer code called `orbit.rotate()` on a drag, and `rotate()` only
+changed the angles: `Orbit.update()` does not apply them while a drag is held (`drag.js` calls `orbit.apply()`
+itself, the kit did not). The camera stood still through the drag and then leapt the whole way at release, or, if
+the pointer was held still before release, at the next pan, zoom or glide. A press on a control or a key that
+wobbled a pixel or two added to the same pending turn, and any double-click (two quick clicks on a key or a lever)
+sent the camera back to the overview. `rotate()` now applies at once (the typewriters already applied after it, so
+they are unchanged), the kit no longer has a double-click reset or turns on control presses, and the word processor
+builds its `Orbit` with `keepInView: false`, which drops `clampTarget`'s pull toward the home target. At the old
+presets that clamp never bit (the desk extent of 1.05 m is wider than any preset's offset), so it was not the cause,
+but in a free view it would hold the target near the desk's centre.
+
+`?view=computer/keyboard` starts at a view; the old `?cam=` names still work (`LEGACY_CAMERAS`), and
+`machine.cameras` is no longer read by the kit.
 
 ---
 
@@ -1142,9 +1219,16 @@ Fallback when half-float targets cannot be rendered to: RGBA8 with the two compo
 
 ### 9.4 Reading the screen
 
-The default camera is `operator`, which puts the raster at 640 pixels or more across a 1600-pixel window. A
-"Screen" card in the insets, beside Print Point, shows the phosphor target flat at 640 x 400 CSS pixels; it
-opens by itself when the raster on screen would be under 560 pixels wide.
+The "Screen" card (`src/ui/wp-screen-card.js`) sits in the insets where the typewriters show Print Point, and is
+on by default, so the screen can be read whatever the camera shows (3.5). It draws the CRT's phosphor target
+(`crt.texture`) flat on the main canvas into the card's rectangle after the frame, as `HeadView` does, through a
+shader that shares the glass's tube uniforms: the same scan lines (fading to their mean where a line is under two
+pixels), after-glow, halation from the target's mips, vignette, mains beat, grain, warm-up and switch-off spot, with
+a slight barrel and a dark faceplate instead of the room's reflections, tone-mapped and encoded by itself. Its
+header folds it; its corner resizes it, the height following the tube's shape (1.56:1) and never reaching down into
+the panel; the **screen card** button in the panel hides it. All three are remembered
+(`localStorage['typewriter.wp.screenCard']`). It replaces the plan of opening by itself when the raster on screen
+was small: the owner asked for it always there.
 
 ---
 

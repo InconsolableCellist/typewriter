@@ -28,6 +28,10 @@ import { buildKeyboard } from '../render/wp/keyboard-view.js';
 import { buildDiskette } from '../render/wp/diskette-view.js';
 import { buildStation, buildDisplay } from '../render/wp/station-view.js';
 import { buildPrinter } from '../render/wp/printer-view.js';
+import { ViewNav, viewSpec, poseOf, fallbackBoxes, LEGACY_CAMERAS } from '../interact/wp-views.js';
+import { makePicker, installWpPointer, makeHighlight } from '../interact/wp-pointer.js';
+import { installNavUi } from '../ui/wp-nav.js';
+import { ScreenCard } from '../ui/wp-screen-card.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -36,7 +40,6 @@ export async function mount(ctx) {
   const stage = createScene(canvas);
   const { mats } = createMaterials();
   document.title = machine.name;
-  const insets = document.getElementById('insets'); if (insets) insets.style.display = 'none';   // the Print Point window arrives with the printer
 
   const desk = new Desk({ scene: stage.scene, mats });
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
@@ -64,6 +67,7 @@ export async function mount(ctx) {
     if (!u.on) footprints.push(u.box);
   }
   desk.setFootprints(footprints);
+  const unitBoxes = Object.fromEntries(Object.entries(units).map(([n, g]) => [n, boxOf([g])]));   // before paper and diskettes join them
 
   // The software, on a clock that follows the wall clock; the work diskettes persist in IndexedDB.
   const store = await IdbStore.create();
@@ -126,15 +130,41 @@ export async function mount(ctx) {
   faceParent.add(spill);
   stage.fitShadow(machine.deskLayout.extent);
 
-  const preset = machine.cameras[params.get('cam') ?? machine.defaultCamera] ?? machine.cameras[machine.defaultCamera];
-  stage.camera.position.fromArray(preset.position);
-  const ext = machine.deskLayout.extent;
-  const orbit = new Orbit(stage.camera, canvas, preset.target, { extent: { across: ext.halfX, up: 0.4, depth: ext.halfZ } });
-  installOrbitInput(canvas, orbit, stage.camera, pickables, parts.keyboard, (i, f) => keyboard.press(i, f));
+  // Where the camera stands: stations, focus items and the free view (architecture 3.5). It moves only when asked.
+  const { camera } = stage;
+  const boxes = { ...fallbackBoxes(geometry, machine), ...unitBoxes };
+  const named = {
+    screen: [face], keyboard: [units.keyboard], controls: [parts.station.rocker, ...parts.display.knobs],
+    slots: [...parts.diskette.slots, ...parts.diskette.drives], levers: parts.diskette.levers, file: [parts.diskette.holder],
+    panel: [...parts.printer.panelKeys, ...parts.printer.leds, parts.printer.display], mechanism: [parts.printer.platen, parts.printer.carrier],
+    paperPath: [units.printer],
+  };
+  for (const [n, objs] of Object.entries(named)) boxes[n] = boxOf(objs) ?? boxes[n];
+  const startId = viewSpec(params.get('view'))?.id ?? LEGACY_CAMERAS[params.get('cam') ?? machine.defaultCamera] ?? 'desk';
+  const frame = (id) => poseOf(id, boxes, camera.aspect, camera.fov);
+  stage.resize(window.innerWidth, window.innerHeight);
+  const start = frame(startId);
+  camera.position.fromArray(start.position);
+  const orbit = new Orbit(camera, canvas, start.target, { keepInView: false });
+  const nav = new ViewNav({
+    start: startId, poseOf: frame,
+    glide: (pose) => orbit.flyTo(pose, 0.55 + 0.45 * Math.min(1, camera.position.distanceTo(new THREE.Vector3().fromArray(pose.position)) / 1.5)),
+    cameraPose: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
+    context: { coverOpen: () => sim.state[sim.layout.cover] > machine.printer.cover.open / 2 },
+  });
+  const highlight = makeHighlight(stage.scene);
+  const navUi = installNavUi({ nav, highlight });
+  const pickAt = makePicker({ camera, canvas, keys: parts.keyboard.keys, pickables, nav, boxes: () => boxes, solids: () => Object.values(units) });
+  installWpPointer({
+    canvas, orbit, nav, press: (i, f) => keyboard.press(i, f), hint: navUi.hint, show: navUi.show,
+    pick: (e) => { const h = pickAt(e); if (h?.kind === 'key') h.label = keyLabel(h.key); return h; },
+  });
+  const screenCard = new ScreenCard({ renderer: stage.renderer, crt, insets: document.getElementById('insets'), panel: document.getElementById('panel') });
 
-  const panel = buildPanel(ctx, machine, orbit, printer.feeder);
+  const panel = buildPanel(ctx, printer.feeder, screenCard);
 
-  const resize = () => stage.resize(window.innerWidth, window.innerHeight);
+  // A new window shape frames the same view again, at once: the station's head-on view depends on it.
+  const resize = () => { stage.resize(window.innerWidth, window.innerHeight); if (!nav.free) orbit.flyTo(frame(nav.id), 1e-3); };
   window.addEventListener('resize', resize); resize();
 
   let last = performance.now(), nFt = 0;
@@ -156,105 +186,58 @@ export async function mount(ctx) {
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();
+    screenCard.render();
     frameTimes[nFt++ % frameTimes.length] = performance.now() - t0;
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, panel, crt, screen, sys, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, sys, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft };
   return window.__tw;
 }
 
-/** The settings card for this kit: the machine picker and one button per camera preset. */
-function buildPanel(ctx, machine, orbit, feeder) {
+/** The settings card for this kit: the machine picker, the sheet feeder, the key list and the Screen card's switch. */
+function buildPanel(ctx, feeder, screenCard) {
   const el = document.getElementById('panel');
   el.innerHTML = `
-    <div class="actions">${Object.keys(machine.cameras).map((n) => `<button data-cam="${n}">${n}</button>`).join('')}</div>
-    <div class="actions"><button id="a-feeder" aria-pressed="true" title="the printer's sheet feeder lays each sheet in; off, click the fresh paper to lay one">sheet feeder</button><button id="a-keys" title="how the PC keyboard maps onto the machine's">keys</button></div>
+    <div class="actions"><button id="a-feeder" aria-pressed="true" title="the printer's sheet feeder lays each sheet in; off, click the fresh paper to lay one">sheet feeder</button><button id="a-screen" title="the Screen card: the display's picture, whatever the camera shows">screen card</button><button id="a-keys" title="how the PC keyboard maps onto the machine's">keys</button></div>
     <div class="note" id="keysNote" hidden>Letters, digits and punctuation: as marked · Alt: CODE · AltGr: ENTER · Enter: RETURN · Esc: CANCL ·
       F1 REQST · F2 PRINT · F3 FIND · F4 GO TO · F5 MOVE · F6 LINE ADJ · F7 SPELL · F8 CHG FMT · F9 GET · F10 PAGE END ·
-      Delete: DEL · End: END · Insert: MSG · PageDown / PageUp: screen down / up · keys with no PC match: click them</div>
+      Delete: DEL · End: END · Insert: MSG · PageDown / PageUp: screen down / up · keys with no PC match: click them ·
+      Views (the machine never sees these): Ctrl+Shift+← / → next station · Ctrl+Shift+↓ back · Ctrl+Shift+↑ free view · or keypad 4 / 6, 2, 5</div>
     <div class="actions"><select id="a-machine" title="machine" aria-label="machine"></select></div>`;
   const fb = el.querySelector('#a-feeder');
   fb.addEventListener('click', () => { feeder.on = !feeder.on; fb.setAttribute('aria-pressed', String(feeder.on)); });
+  const sb = el.querySelector('#a-screen');
+  sb.setAttribute('aria-pressed', String(screenCard.visible));
+  sb.addEventListener('click', () => { screenCard.setVisible(!screenCard.visible); sb.setAttribute('aria-pressed', String(screenCard.visible)); sb.blur(); });
   el.querySelector('#a-keys').addEventListener('click', () => { const n = el.querySelector('#keysNote'); n.hidden = !n.hidden; });
-  for (const b of el.querySelectorAll('[data-cam]')) b.addEventListener('click', () => orbit.flyTo(machine.cameras[b.dataset.cam]));
   const picker = el.querySelector('#a-machine');
   for (const m of ctx.machines) picker.add(new Option(m.name, m.id));
-  picker.value = machine.id;
+  picker.value = ctx.machine.id;
   picker.addEventListener('change', () => ctx.onPick(picker.value));
   const hint = document.getElementById('hint');
-  if (hint) hint.textContent = 'type on your keyboard · Alt = CODE, AltGr = ENTER, F1-F10 = function keys, Esc = CANCL · drag to orbit · wheel to zoom · buttons move the camera';
+  if (hint) hint.textContent = 'type on your keyboard · Alt = CODE, AltGr = ENTER, Esc = CANCL · the edge arrows and the bar move the view · ◎ free view';
   return el;
 }
 
-/**
- * Pointer input: a click on something pickable (the page pile, the fresh paper) acts on it; a press on a key holds
- * that key down with a finger until release; anything else orbits (left), pans (right or shift) and zooms (wheel).
- */
+/** The world box of some objects as { min, max }, or null. An object with no geometry (a marker) counts as a point. */
+const _box = new THREE.Box3(), _one = new THREE.Box3(), _p = new THREE.Vector3(), MARK = new THREE.Vector3(0.04, 0.04, 0.04);
+function boxOf(objs) {
+  _box.makeEmpty();
+  for (const o of objs) {
+    if (!o) continue;
+    o.updateWorldMatrix(true, true);
+    _one.makeEmpty().expandByObject(o);
+    if (_one.isEmpty()) _one.setFromCenterAndSize(o.getWorldPosition(_p), MARK);
+    _box.union(_one);
+  }
+  return _box.isEmpty() ? null : { min: _box.min.toArray(), max: _box.max.toArray() };
+}
+
+/** A key's legend for the hover label. */
 function keyLabel(i) {
   const k = KEYS[i];
   const top = k.top.includes('\n') && [...k.top].length === 3 ? k.top.replace('\n', ' / ') : k.top.replace(/\n/g, ' ') || 'blank';
   return k.front ? `${top}  (CODE: ${k.front.replace(/\n/g, ' ')})` : top;
-}
-
-function installOrbitInput(canvas, orbit, camera, pickables, keyboardParts, press) {
-  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-  const hitAt = (e) => {
-    const r = canvas.getBoundingClientRect();
-    ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-    ray.setFromCamera(ndc, camera);
-    const live = pickables.filter((p) => p.enabled?.() ?? true);
-    const hit = ray.intersectObjects([...keyboardParts.keys, ...live.map((p) => p.object)], true)[0];
-    if (!hit) return null;
-    const key = keyboardParts.keys.indexOf(hit.object);
-    if (key >= 0) return { key };
-    let o = hit.object, entry = null;
-    while (o && !entry) { entry = live.find((p) => p.object === o); o = o.parent; }
-    return entry ? { entry } : null;
-  };
-  let mode = null, lx = 0, ly = 0, moved = 0, held = null, click = null;
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  canvas.addEventListener('pointerdown', (e) => {
-    lx = e.clientX; ly = e.clientY; moved = 0;
-    canvas.setPointerCapture(e.pointerId);
-    const hit = e.button === 0 ? hitAt(e) : null;
-    if (hit?.key !== undefined) { held = hit.key; press(held, 1.2); mode = 'key'; return; }
-    click = hit?.entry ?? null;
-    mode = e.button === 2 || e.shiftKey ? 'pan' : 'rotate';
-    orbit.dragging = true;
-  });
-  // Hovering names what is under the pointer: a key's legend, or what a click will do.
-  const tip = document.getElementById('labelTip');
-  let tipAt = 0;
-  const hover = (e) => {
-    if (!tip || performance.now() - tipAt < 60) return;
-    tipAt = performance.now();
-    const hit = hitAt(e);
-    const label = hit?.key !== undefined ? keyLabel(hit.key) : hit?.entry?.part()?.label;
-    tip.style.display = label ? 'block' : 'none';
-    if (label) { tip.textContent = label; tip.style.left = `${e.clientX + 14}px`; tip.style.top = `${e.clientY + 12}px`; }
-    canvas.style.cursor = label ? 'pointer' : '';
-  };
-  canvas.addEventListener('pointerleave', () => { if (tip) tip.style.display = 'none'; });
-  canvas.addEventListener('pointermove', (e) => {
-    if (!mode) { hover(e); return; }
-    if (mode === 'key') return;
-    const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
-    moved += Math.abs(dx) + Math.abs(dy);
-    if (mode === 'pan') orbit.pan(dx, dy); else orbit.rotate(dx, dy);
-  });
-  const end = () => {
-    if (mode === 'key' && held !== null) { const k = held; setTimeout(() => press(k, 0), 40); held = null; }
-    if (click && moved < 4) click.part()?.onClick?.();
-    click = null; mode = null; orbit.dragging = false;
-  };
-  canvas.addEventListener('pointerup', end);
-  canvas.addEventListener('pointercancel', end);
-  canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const r = canvas.getBoundingClientRect();
-    orbit.zoom(Math.exp(e.deltaY * 0.0012), ((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  }, { passive: false });
-  canvas.addEventListener('dblclick', () => orbit.reset());
 }

@@ -1,7 +1,8 @@
-// Procedural models of the word processor's five units, built in code to the documented sizes (no download). Shapes
-// follow the 1982 brochure's product photos (BRO p.18) and the setup guide's drawings: pearl-white covers, darker
-// bezels and panels, rounded edges. Each builder returns a THREE.Group in the unit's local frame (origin on the
-// surface it stands on, under its centre; x right, y up, z toward the typist) plus the parts other code drives.
+// Procedural models of the word processor's units not yet built in Blender (the display station is, in
+// station-view.js), built in code to the documented sizes (no download). Shapes follow the 1982 brochure's product
+// photos (BRO p.18) and the setup guide's drawings: pearl-white covers, darker bezels and panels, rounded edges.
+// Each builder returns a THREE.Group in the unit's local frame (origin on the surface it stands on, under its centre;
+// x right, y up, z toward the typist) plus the parts other code drives.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { KEYS, KEY_UNIT, KEY_FIELD } from '../../machine/wp-keys.js';
@@ -10,12 +11,58 @@ export function createUnitMaterials() {
   const plastic = (color, roughness = 0.62) => new THREE.MeshPhysicalMaterial({ color, roughness, metalness: 0, clearcoat: 0.08, clearcoatRoughness: 0.5, sheen: 0.15, sheenRoughness: 0.8, sheenColor: new THREE.Color(0.9, 0.9, 0.85) });
   return {
     pearl: plastic(0xe2dccb),                         // "Pearl White" covers
-    pebble: plastic(0x8f8c84, 0.7),                   // "Pebble Gray" bases and trim
+    pebble: plastic(0xb3b0a7, 0.7),                   // "Pebble Gray" bases and trim: light grey (PH inside.JPG, BRO p.18)
     dark: plastic(0x1f1e1c, 0.55),                    // bezels, panels, slots
     keycap: plastic(0xe8e3d4, 0.45),
     rubber: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }),
     led: new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0x000000, roughness: 0.4 }),
   };
+}
+
+/**
+ * The materials the units' GLBs name (docs/displaywriter/models.md), made once per material set: the cover plastics
+ * carry the pebble grain (`wp_pebble`) and the keycaps theirs (`wp_keycap`), at GLB UVs (one unit = 0.2 m). They are
+ * clones, so the primitive units built in code keep their own untextured materials. Textures arrive asynchronously;
+ * the materials work before they do.
+ */
+export function glbUnitMaterials(mats) {
+  if (mats.glb) return mats.glb;
+  const phys = (color, roughness, extra = {}) => new THREE.MeshPhysicalMaterial({ color, roughness, metalness: 0, ...extra });
+  const g = {
+    wp_pearl: mats.pearl.clone(),
+    wp_gray: mats.pebble.clone(),
+    wp_dark: mats.dark.clone(),
+    wp_keycap: mats.keycap.clone(),
+    wp_rubber: mats.rubber,
+    wp_metal: new THREE.MeshStandardMaterial({ color: 0xb8b8b2, roughness: 0.38, metalness: 1 }),
+    wp_chrome: new THREE.MeshPhysicalMaterial({ color: 0xd0d0d0, roughness: 0.12, metalness: 1 }),
+    wp_label: phys(0xe6e4dc, 0.55),
+    wp_led: phys(0x3a0604, 0.3, { clearcoat: 0.8, clearcoatRoughness: 0.1 }),
+  };
+  mats.glb = g;
+  const tiles = { wp_pebble: 0.05, wp_keycap: 0.03 };
+  const load = async (name, kind, srgb) => {
+    const res = await fetch(`/assets/textures/${name}_${kind}.avif`);
+    if (!res.ok || !(res.headers.get('content-type') ?? '').startsWith('image/')) return null;
+    const t = new THREE.Texture(await createImageBitmap(await res.blob(), { imageOrientation: 'flipY' }));
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.flipY = false; t.anisotropy = 8;
+    t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    t.repeat.setScalar(0.2 / tiles[name]); t.needsUpdate = true;
+    return t;
+  };
+  g.ready = (async () => {
+    for (const [set, list] of [['wp_pebble', [g.wp_pearl, g.wp_gray, g.wp_dark]], ['wp_keycap', [g.wp_keycap]]]) {
+      try {
+        const [n, r] = await Promise.all([load(set, 'normal', false), load(set, 'roughness', false)]);
+        for (const m of list) {
+          if (n) { m.normalMap = n; m.normalScale.set(1, 1); }
+          if (r) { m.roughnessMap = r; m.roughness = 1; }
+          m.needsUpdate = true;
+        }
+      } catch (e) { console.info('texture skipped', set, e); }
+    }
+  })();
+  return g;
 }
 
 const box = (w, h, d, r, mat, segs = 3) => {
@@ -24,47 +71,6 @@ const box = (w, h, d, r, mat, segs = 3) => {
   return m;
 };
 const at = (mesh, x, y, z) => { mesh.position.set(x, y, z); return mesh; };
-const cyl = (r, h, mat, segs = 32) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, segs), mat); m.castShadow = m.receiveShadow = true; return m; };
-
-/** Electronics module: a flat slab with a plinth, the display's turntable recess on top, the power rocker at front right. */
-export function buildStation(size, mats) {
-  const [w, h, d] = size, g = new THREE.Group();
-  const plinth = 0.014;
-  g.add(at(box(w - 0.016, plinth, d - 0.016, 0.004, mats.pebble), 0, plinth / 2, 0));
-  g.add(at(box(w, h - plinth, d, 0.014, mats.pearl), 0, plinth + (h - plinth) / 2, 0));
-  g.add(at(cyl(0.118, 0.004, mats.pebble, 48), 0, h + 0.001, -0.004));
-  // Power switch in its recess at the front right (CSG p.23).
-  const recess = at(box(0.034, 0.03, 0.006, 0.003, mats.dark), w / 2 - 0.05, h * 0.55, d / 2 - 0.001);
-  const rocker = at(box(0.018, 0.022, 0.008, 0.002, mats.pebble), w / 2 - 0.05, h * 0.55, d / 2 + 0.002);
-  rocker.name = 'powerRocker';
-  g.add(recess, rocker);
-  return { group: g, parts: { rocker } };
-}
-
-/**
- * Display: a deep moulded cabinet narrowing to the rear, a dark bezel round the tube, contrast and brightness knobs at
- * the front right (PSM p.7). `face` is where the CRT's tube face goes, in the group's frame.
- */
-export function buildDisplay(size, mats) {
-  const [w, h, d] = size, g = new THREE.Group();
-  const foot = 0.018;
-  g.add(at(cyl(0.1, foot, mats.pebble, 48), 0, foot / 2, 0));
-  const front = 0.14;
-  g.add(at(box(w, h - foot, front, 0.02, mats.pearl), 0, foot + (h - foot) / 2, d / 2 - front / 2));
-  g.add(at(box(w * 0.86, (h - foot) * 0.86, d - front + 0.02, 0.03, mats.pearl), 0, foot + (h - foot) * 0.47, -front / 2 + 0.01));
-  const faceY = foot + (h - foot) * 0.53, faceX = -0.022;
-  g.add(at(box(0.29, 0.21, 0.012, 0.008, mats.dark), faceX, faceY, d / 2 - 0.004));
-  const knobs = [];
-  for (const [i, y] of [[0, faceY - 0.02], [1, faceY - 0.055]]) {
-    const knob = cyl(0.009, 0.012, mats.dark, 24);
-    knob.rotation.x = Math.PI / 2;
-    knob.position.set(w / 2 - 0.035, y, d / 2 + 0.004);
-    knob.name = i === 0 ? 'contrast' : 'brightness';
-    g.add(knob); knobs.push(knob);
-  }
-  g.add(at(box(0.026, 0.012, 0.004, 0.001, mats.dark), w / 2 - 0.035, faceY + 0.06, d / 2 + 0.001));   // badge
-  return { group: g, parts: { knobs }, face: { x: faceX, y: faceY, z: d / 2 + 0.002 } };
-}
 
 /**
  * Keyboard: a low wedge at the documented 12 degree slope, the stepped key field on top. Each key is its own mesh in

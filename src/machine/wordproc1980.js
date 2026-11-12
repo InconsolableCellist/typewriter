@@ -3,8 +3,8 @@
 // axes as the typewriters (x right, y up, z toward the typist, origin at the desk reference point). Each unit has
 // local axes the same way round with its origin on the surface it stands on, under its centre.
 // Sources: docs/displaywriter/hardware.md (HW) and printer.md (PR); design in docs/displaywriter/architecture.md.
-// Units, placements and the desk layout (M0); the printer's mechanism (M5); the diskette unit's drives (M7). The
-// station's mechanisms arrive later.
+// Units, placements and the desk layout (M0); the printer's mechanism (M5); the diskette unit's drives (M7); the
+// station's power and fan (sound). The station's other mechanisms arrive later.
 import base from './frontstrike1926.js';
 import calibration from './wp-printer-cal.js';
 
@@ -68,6 +68,12 @@ export default {
 
   printer: printerBlock(),
   diskettes: disketteBlock(),
+  station: {
+    // The power supply's fan (HW 1.9): a shaded-pole motor on the 60 Hz line (two poles, 3600 rpm synchronous)
+    // turning a seven-blade 80 mm impeller, about 3000 rpm against its drag. Assumed but the line frequency.
+    mainsHz: 60,
+    fan: { inertia: 6e-5, stallTorque: 0.04, syncOmega: 2 * Math.PI * 60, drag: 6.7e-8, coulomb: 1e-4, blades: 7 },
+  },
 };
 
 // ---- printer (architecture.md 6; research in printer.md, cited PR) ----------------------------------------------
@@ -174,7 +180,7 @@ function printerBlock() {
       printTestPitch: 20,
     },
     power: { travel: 20 * deg, inertia: 2e-6, snapTorque: 0.02, viscous: 1e-5, stopStiffness: 5, stopDamping: 5e-3, checksTime: 14.8 },
-    fan: { inertia: 4e-5, stallTorque: 0.03, syncOmega: 2 * Math.PI * 50, drag: 1e-7, coulomb: 1e-4 },
+    fan: { inertia: 4e-5, stallTorque: 0.03, syncOmega: 2 * Math.PI * 50, drag: 1e-7, coulomb: 1e-4, blades: 5 },   // blades: assumed
   };
 }
 

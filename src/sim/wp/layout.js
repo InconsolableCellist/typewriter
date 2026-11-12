@@ -1,6 +1,6 @@
 // Flat Float32Array snapshot of the word processor's mechanism host (architecture.md 4.3). Names shared with
 // src/sim/layout.js mean the same thing, which is what lets SoftWorld read the printer unchanged. Each body adds its
-// group when it exists; the keyboard and station groups arrive with their milestones.
+// group when it exists; the keyboard group and the rest of the station's arrive with their milestones.
 export function makeWpLayout(geo) {
   let o = 0;
   const scalar = () => o++;
@@ -16,6 +16,8 @@ export function makeWpLayout(geo) {
       panelKeyX: arr(8), leds: scalar(), digits: scalar(), fifo: scalar(), printerFan: scalar(),
     });
   }
+  // The station: its power (0 or 1) and the power supply's fan speed (rad/s).
+  if (geo.units?.station) Object.assign(L, { power: scalar(), fanOmega: scalar() });
   if (geo.diskettes) {
     // Per drive, two entries each: lever angle (rad), slide depth (m, -1 with no diskette), clamp force (N), diskette
     // and motor speeds (rad/s), diskette angle from the index hole (rad), head position (tracks), head load (0 lifted,

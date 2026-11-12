@@ -1,6 +1,7 @@
 // WordprocSim: the word processor's mechanism host (architecture.md 4). It owns time, hand inputs, the bodies and
 // their controllers, the snapshot and the events, behind the same interface LocalHost and the worklet drive
-// MechanicalSim through. It hosts the printer (M5) and the diskette unit (M7); the keyboard and station join it later.
+// MechanicalSim through. It hosts the printer (M5), the diskette unit (M7) and the station's power and fan; the keyboard
+// and the rest of the station join it later.
 import { SUBSTEP_HZ } from '../mechanics.js';
 import { makeWpLayout } from './layout.js';
 import { WP_PORT } from './ports.js';
@@ -9,6 +10,7 @@ import { PrinterMech } from './printer-mech.js';
 import { PrinterCtl } from './printer-ctl.js';
 import { DisketteMech } from './diskette-mech.js';
 import { DisketteCtl } from './diskette-ctl.js';
+import { StationMech, fanSteadyOmega } from './station-mech.js';
 
 /** What the printer's controller may touch: drive commands and sensor reads, nothing else. */
 function printerIO(mech) {
@@ -53,6 +55,7 @@ export class WordprocSim {
     this.printer = new PrinterMech(this, P, geometry.printer, glyphs);
     this.printer.registerDofs(this.inputs);
     if (cold) this.printer.power = 0;     // the rocker as the operator left it
+    else this.printer.fan = fanSteadyOmega(P.fan);   // warm start: the fan at its running speed, computed
     this.printerCtl = new PrinterCtl(P, printerIO(this.printer), (e) => this.emitEvent({ type: 'device', dev: 'printer', ...e }), { warm: !cold });
     this.printer.irq = this.printerCtl;
     if (machine.diskettes) {
@@ -64,7 +67,11 @@ export class WordprocSim {
       this.diskCtl = new DisketteCtl(D, disketteIO(this.diskette), (e) => this.emitEvent(this.diskEvent(e)), { loaded });
       this.diskette.irq = this.diskCtl;
     }
+    if (machine.station) this.station = new StationMech(this, machine.station, { warm: !cold });
   }
+
+  /** The station's power: its fan and both diskette motors run whenever it is on. */
+  setStationPower(on) { this.station?.setPower(on); this.diskette?.setPower(!!on); }
 
   /** A device event from the adapter, with the identity of the diskette the kit put in that drive. */
   diskEvent(e) {
@@ -92,19 +99,21 @@ export class WordprocSim {
       if (this.t >= dc.nextT) dc.service(this.t);
       this.diskette.step(h);
     }
+    if (this.station) this.station.step(h);
   }
 
   /**
    * Device commands from the software (7.6): { dev: 'printer', words: [16-bit commands] };
    * { dev: 'disk', op: 'transfer' | 'recalibrate', id, drive, ... }; and from the kit, a diskette put into a guide's
-   * mouth or taken from it: { dev: 'disk', op: 'media', drive, mediaId, type } (mediaId null takes it away).
+   * mouth or taken from it: { dev: 'disk', op: 'media', drive, mediaId, type } (mediaId null takes it away); and the
+   * station's power: { dev: 'station', op: 'power', on }.
    */
   command(msg) {
     if (msg?.dev === 'printer' && Array.isArray(msg.words)) this.printerCtl.command(msg.words, this.t);
     else if (msg?.dev === 'disk' && this.diskCtl) {
       if (msg.op === 'media') this.diskette.setMedia(msg.drive, msg.mediaId != null ? { mediaId: msg.mediaId, type: msg.type ?? '2D' } : null);
       else this.diskCtl.command(msg, this.t);
-    }
+    } else if (msg?.dev === 'station' && msg.op === 'power') this.setStationPower(!!msg.on);
   }
 
   /** Exercise the hot paths once (the worklet runs this on a scratch instance): one character from rest. */
@@ -149,6 +158,7 @@ export class WordprocSim {
     s[L.wheelTheta] = p.sel.th; s[L.wheelOmega] = p.sel.w; s[L.hammerX] = p.xa; s[L.cam] = p.camTh / this.m.printer.cam.ratio;
     for (let i = 0; i < p.kx.length; i++) s[L.panelKeyX + i] = p.kx[i];
     s[L.leds] = c.leds; s[L.digits] = typeof c.err === 'number' ? c.err : 0; s[L.fifo] = c.fifo.length; s[L.printerFan] = p.fan;
+    if (this.station && L.fanOmega !== undefined) { s[L.power] = this.station.power; s[L.fanOmega] = this.station.fan; }
     if (this.diskette) {
       const D = this.diskette;
       for (let i = 0; i < 2; i++) {
@@ -164,6 +174,7 @@ export class WordprocSim {
     return {
       t: this.t, env: { ...this.env }, lastForce: this.lastForce, printer: this.printer.exportState(), printerCtl: this.printerCtl.exportState(),
       ...(this.diskette ? { diskette: this.diskette.exportState(), diskCtl: this.diskCtl.exportState() } : null),
+      ...(this.station ? { station: this.station.exportState() } : null),
     };
   }
 
@@ -173,5 +184,6 @@ export class WordprocSim {
     this.printer.importState(s.printer);
     this.printerCtl.importState(s.printerCtl);
     if (this.diskette && s.diskette) { this.diskette.importState(s.diskette); this.diskCtl.importState(s.diskCtl); }
+    if (this.station && s.station) this.station.importState(s.station);
   }
 }

@@ -107,7 +107,9 @@ export class CRT {
     this.passScene = new THREE.Scene(); this.passScene.add(this.quad);
     this.passCamera = new THREE.Camera();
     this.lastVersion = -1; this.quiet = 0; this.blinkT = 0;
-    this.gain = 1;                  // contrast knob and the tube's warm-up multiply this
+    this.gain = 1;                  // the video gain the phosphor pass applies: the contrast knob
+    this.contrast = 1;
+    this.powered = true; this.heat = 1; this.hv = 1; this.dot = 0;
     this.litFraction = 0;           // for the green spill light
     this.material = this.makeGlass();
   }
@@ -130,6 +132,7 @@ export class CRT {
 
   /** Runs the phosphor pass if the picture is changing, blinking or still fading. */
   update(dt) {
+    this._tube(dt);
     const s = this.screen;
     let changed = false;
     if (s.version !== this.lastVersion) { this._upload(); changed = true; }
@@ -171,12 +174,19 @@ export class CRT {
    * spans the lit raster; the mesh's uv outside 0..1 is the unlit border of the tube face.
    */
   makeGlass() {
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0x0b0d0c, roughness: 0.32, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.08, envMapIntensity: 0.55 });
+    // The faceplate: the phosphor coat behind it is a grey-green, not black, and the glass reflects the room.
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0x1a1e1c, roughness: 0.3, metalness: 0, clearcoat: 0.7, clearcoatRoughness: 0.06, envMapIntensity: 0.6 });
     const uniforms = {
       uPhosphor: { value: this.texture },
-      uGreen: { value: new THREE.Color(0.18, 1.0, 0.36) },
-      uRaster: { value: 0.0 },          // brightness knob: the raster's own glow when turned fully up
-      uEmission: { value: 2.2 },
+      uGreen: { value: new THREE.Color(0.2, 1.0, 0.38) },
+      uRaster: { value: 0.012 },        // the unlit raster's glow: the brightness knob (HW 1.4), set just visible
+      uEmission: { value: 2.4 },
+      uBright: { value: 1 },            // cathode emission from the heater's warmth
+      uScale: { value: new THREE.Vector2(1, 1) },   // the raster's size as the deflection comes up or collapses
+      uDot: { value: 0 },               // the spot left in the centre at switch-off
+      uTime: { value: 0 },
+      uFlicker: { value: 1 },
+      uAspect: { value: RASTER_MM.w / RASTER_MM.h },
     };
     mat.userData.uniforms = uniforms;
     mat.onBeforeCompile = (sh) => {
@@ -185,23 +195,66 @@ export class CRT {
         .replace('#include <common>', '#include <common>\nvarying vec2 vCrtUv;')
         .replace('#include <uv_vertex>', '#include <uv_vertex>\n vCrtUv = uv;');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec2 vCrtUv; uniform sampler2D uPhosphor; uniform vec3 uGreen; uniform float uRaster, uEmission;')
+        .replace('#include <common>', `#include <common>
+varying vec2 vCrtUv;
+uniform sampler2D uPhosphor; uniform vec3 uGreen; uniform vec2 uScale;
+uniform float uRaster, uEmission, uBright, uDot, uTime, uFlicker, uAspect;
+float crtHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }`)
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         {
           vec2 uv = vCrtUv;
-          if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-            vec2 ph = texture(uPhosphor, uv).rg;
-            // Scan lines: 400 rows; fade to their mean where they would alias (under two pixels a row on screen).
-            float rows = uv.y * 400.0;
-            float w = fwidth(rows);
-            float line = mix(0.72 + 0.28 * cos(6.2831853 * rows), 1.0, smoothstep(0.35, 0.6, w));
-            float core = (0.8 * ph.r + 0.2 * ph.g) * line;
-            vec3 halo = textureLod(uPhosphor, uv, 4.0).rgb * 0.18 + textureLod(uPhosphor, uv, 6.0).rgb * 0.12;
-            totalEmissiveRadiance += uGreen * (uEmission * core + 1.6 * (halo.r * 0.8 + halo.g * 0.2) + uRaster * 0.04);
-          }
+          vec2 c = (uv - 0.5) / max(uScale, vec2(1e-3)) + 0.5;            // raster coordinates
+          // The raster's outline: a rectangle with rounded corners and a soft edge, no light outside it.
+          vec2 q = abs(c - 0.5) * vec2(uAspect, 1.0) - (vec2(uAspect, 1.0) * 0.5 - 0.035);
+          float edge = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.035;
+          float inside = 1.0 - smoothstep(-0.004, 0.003, edge);
+          vec2 d = (c - 0.5) * vec2(uAspect, 1.0);
+          float r2 = dot(d, d);
+          // The spot defocuses toward the corners: read the phosphor from a blurrier level there.
+          vec2 ph = textureLod(uPhosphor, c, 1.6 * r2).rg;
+          // 400 scan lines with dark gaps; where a line is under two pixels on screen they fade to their mean (no moire).
+          float rows = c.y * 400.0;
+          float w = fwidth(rows);
+          float line = mix(0.5 + 0.5 * pow(0.5 + 0.5 * cos(6.2831853 * rows), 0.7), 0.82, smoothstep(0.3, 0.6, w));
+          float vign = 1.0 - 0.32 * r2 * 2.2;
+          // Life: a slow mains beat rolling up the screen, the frame-to-frame shimmer, and the phosphor's grain.
+          float hum = 1.0 + 0.03 * sin(6.2831853 * (c.y - uTime * 0.21));
+          float grain = 0.94 + 0.12 * crtHash(floor(uv * vec2(1100.0, 760.0)));
+          float core = (0.78 * ph.r + 0.22 * ph.g) * line * grain;
+          vec3 halo = textureLod(uPhosphor, c, 3.0).rgb * 0.16 + textureLod(uPhosphor, c, 5.0).rgb * 0.14 + textureLod(uPhosphor, c, 7.0).rgb * 0.1;
+          float glow = (halo.r * 0.8 + halo.g * 0.2);
+          float raster = uRaster * line * (0.85 + 0.3 * grain - 0.25);
+          float near = 1.0 - smoothstep(-0.01, 0.05, edge);                   // the halo spreads a little past the raster
+          float e = inside * uBright * hum * uFlicker * vign * (uEmission * core + raster) + 1.8 * uBright * glow * near;
+          // Switched off, the deflection collapses first and leaves a bright spot in the centre that fades.
+          vec2 s = (uv - 0.5) * vec2(uAspect, 1.0);
+          e += uDot * (exp(-dot(s, s) / 0.00012) * 6.0 + exp(-dot(s, s) / 0.004) * 0.4);
+          totalEmissiveRadiance += uGreen * e;
         }`);
     };
     return mat;
+  }
+
+  /** The station's power: the heater warms over seconds, the deflection follows the high voltage in a fraction. */
+  setPower(on) {
+    if (on === this.powered) return;
+    if (this.powered && !on) this.dot = 1;
+    this.powered = on;
+  }
+
+  _tube(dt) {
+    const on = this.powered ? 1 : 0;
+    this.heat += (on - this.heat) * (1 - Math.exp(-dt / (on ? 2.2 : 12)));          // cathode: about 6 s to full
+    this.hv += (on - this.hv) * (1 - Math.exp(-dt / (on ? 0.25 : 0.06)));
+    this.dot *= Math.exp(-dt / 0.9);
+    const u = this.material.userData.uniforms;
+    const bright = Math.pow(this.heat, 2.2);
+    u.uBright.value = bright;
+    u.uScale.value.set(Math.max(0.002, Math.min(1, this.hv * 1.08)), Math.max(0.002, Math.min(1, this.hv * 1.15)));
+    u.uDot.value = this.dot * this.heat;
+    u.uTime.value += dt;
+    u.uFlicker.value = 1 + (Math.random() - 0.5) * 0.02;
+    this.gain = this.contrast;
   }
 }
 

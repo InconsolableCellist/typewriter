@@ -146,7 +146,7 @@ export async function mount(ctx) {
     printer.update();
     diskettes.update();
     pages.update(dt);
-    crt.gain = devices.power.on ? 1 : 0;
+    crt.setPower(devices.power.on);
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();

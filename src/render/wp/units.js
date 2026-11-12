@@ -31,6 +31,8 @@ export function createUnitMaterials({ aniso = 8 } = {}) {
     applyTextureSet('wp_keycap', [{ mat: mats.keycap, repeat: [0.2 / 0.03, 0.2 / 0.03] }], aniso),
   ]).catch((e) => console.info('unit textures', e));
   /** By the GLB's material name (docs/displaywriter/models.md). */
+  // The GLB views ask for these names; every plastic is textured, so they are the same materials.
+  mats.pearlGlb = mats.pearl; mats.pebbleGlb = mats.pebble; mats.darkGlb = mats.dark;
   mats.byName = { wp_pearl: mats.pearl, wp_gray: mats.pebble, wp_dark: mats.dark, wp_keycap: mats.keycap, wp_rubber: mats.rubber, wp_metal: mats.metal, wp_chrome: mats.chrome, wp_glass: mats.glass, wp_label: mats.label };
   return mats;
 }
@@ -81,27 +83,6 @@ export function buildDisplay(size, mats) {
   }
   g.add(at(box(0.026, 0.012, 0.004, 0.001, mats.dark), w / 2 - 0.035, faceY + 0.06, d / 2 + 0.001));   // badge
   return { group: g, parts: { knobs }, face: { x: faceX, y: faceY, z: d / 2 + 0.002 } };
-}
-
-/** Diskette unit: an upright cabinet on a plinth, two vertical drive slots each with its lever (ORG p.54, BRO p.18). */
-export function buildDiskette(size, mats) {
-  const [w, h, d] = size, g = new THREE.Group();
-  const plinth = 0.016;
-  g.add(at(box(w - 0.012, plinth, d - 0.012, 0.004, mats.pebble), 0, plinth / 2, 0));
-  g.add(at(box(w, h - plinth, d, 0.012, mats.pearl), 0, plinth + (h - plinth) / 2, 0));
-  const levers = [], slots = [];
-  for (const [i, x] of [[0, -0.05], [1, 0.05]]) {
-    const slot = at(box(0.008, 0.215, 0.01, 0.002, mats.dark), x, plinth + 0.035 + 0.1075, d / 2 - 0.002);
-    // The lever pivots at its top, beside the slot's lower half: hanging straight down is open, turned a quarter to
-    // lie across the slot is closed (CSG p.42).
-    const lever = new THREE.Group();
-    lever.position.set(x, plinth + 0.13, d / 2 + 0.006);
-    lever.add(at(box(0.011, 0.075, 0.008, 0.003, mats.dark), 0, -0.0375, 0));
-    lever.add(at(box(0.03, 0.014, 0.012, 0.003, mats.dark), 0, -0.07, 0.004));
-    lever.name = `lever${i}`;
-    g.add(slot, lever); levers.push(lever); slots.push(slot);
-  }
-  return { group: g, parts: { levers, slots } };
 }
 
 /**

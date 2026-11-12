@@ -23,8 +23,9 @@ import { KEYS } from '../machine/wp-keys.js';
 import { loadGlyphs } from '../machine/glyphs.js';
 import { loadWordList } from './wp/wordlist.js';
 import { installPages } from '../pages/index.js';
-import { createUnitMaterials, buildStation, buildDisplay, buildDiskette, buildPrinter } from '../render/wp/units.js';
+import { createUnitMaterials, buildStation, buildDisplay, buildPrinter } from '../render/wp/units.js';
 import { buildKeyboard } from '../render/wp/keyboard-view.js';
+import { buildDiskette } from '../render/wp/diskette-view.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {

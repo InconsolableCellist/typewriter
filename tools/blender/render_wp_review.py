@@ -1,7 +1,7 @@
 """Review renders of the display station (models.md, Review): the module and the display assembled as on the desk,
 seen from a reference photograph's viewpoint, Cycles on the CPU at small samples.
 
-  /root/bpyenv/bin/python tools/blender/render_wp_review.py -- VIEW [VIEW ...] [--tilt DEG] [--swivel DEG] [--off]
+  /root/bpyenv/bin/python tools/blender/render_wp_review.py -- VIEW [VIEW ...] [--tilt DEG] [--swivel DEG] [--off] [--nodisplay]
 
 Writes tools/blender/previews/wp_station_<VIEW>.png (gitignored). The CRT's glass, which the browser builds, is stood
 in for here by makeTubeFace's shape at the display's face position.
@@ -33,19 +33,30 @@ VIEWS = {
     "psm7": ((0.0, 0.33, 1.6), (0.0, 0.33, 0.0), 120, (560, 420)),             # PSM p.7 display front
     "st28side": ((1.8, 0.33, 0.0), (0.0, 0.27, 0.0), 120, (560, 480)),        # ST p.28 right side
     "back": ((0.07, 0.11, -0.80), (0.07, 0.105, -0.18), 70, (900, 360)),       # PH Displaywriter_back.JPG
-    "switch": ((-0.10, 0.32, 0.42), (-0.157, 0.165, 0.15), 90, (520, 420)),     # CSG p.40 close-up of the switch
+    "switch": ((-0.12, 0.36, 0.45), (-0.157, 0.170, 0.152), 90, (520, 340)),     # PH module_front_power_switch, close-up
+    # The owner's photographs (docs/displaywriter/refs/owner/), module alone with --nodisplay:
+    "mfront": ((0.0, 0.44, 0.50), (0.0, 0.03, -0.03), 30, (640, 480)),          # module_front_power_switch
+    "mleft": ((-0.62, 0.55, 0.10), (0.0, 0.05, 0.02), 27, (640, 480)),          # module_side_vents_left_switch
+    "mright": ((0.62, 0.62, 0.30), (0.0, 0.05, -0.04), 27, (640, 480)),        # module_side_vents_right
+    "mrear": ((0.0, 0.55, -0.72), (0.0, 0.05, 0.0), 30, (640, 480)),         # module_rear_panel
+    "mleds": ((0.15, 0.10, -0.42), (0.17, 0.075, -0.18), 50, (360, 480)),      # module_rear_led_column
+    "dfront": ((0.0, 0.335, 0.62), (0.0, 0.335, 0.0), 40, (640, 480)),         # display_front_close
+    "desk": ((-0.42, 0.52, 0.80), (0.0, 0.20, 0.0), 32, (600, 560)),          # desk_station_keyboard_diskette
+    "deskfront": ((0.0, 0.45, 1.9), (0.0, 0.21, 0.0), 95, (640, 480)),       # desk_front_scott_peterson
 }
 
 
 def args():
     a = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    out = {"views": [], "tilt": 0.0, "swivel": 0.0, "on": True}
+    out = {"views": [], "tilt": 0.0, "swivel": 0.0, "on": True, "display": True}
     i = 0
     while i < len(a):
         if a[i] == "--tilt":
             out["tilt"] = float(a[i + 1]); i += 2
         elif a[i] == "--swivel":
             out["swivel"] = float(a[i + 1]); i += 2
+        elif a[i] == "--nodisplay":
+            out["display"] = False; i += 1
         elif a[i] == "--off":
             out["on"] = False; i += 1
         else:
@@ -94,7 +105,7 @@ def main():
     bpy.ops.import_scene.gltf(filepath=os.path.join(MODELS, "wp_station.glb"))
     st = {o.name: o for o in s.objects}
     disp_path = os.path.join(MODELS, "wp_display.glb")
-    if os.path.exists(disp_path):
+    if a["display"] and os.path.exists(disp_path):
         before = set(s.objects)
         bpy.ops.import_scene.gltf(filepath=disp_path)
         new = [o for o in s.objects if o not in before]
@@ -146,6 +157,7 @@ def main():
     s.cycles.use_denoising = True
     s.cycles.max_bounces = 4
     s.view_settings.view_transform = "Standard"
+    s.view_settings.exposure = -0.6
     cam = bpy.data.cameras.new("c")
     co = bpy.data.objects.new("c", cam)
     s.collection.objects.link(co)
@@ -157,7 +169,7 @@ def main():
         co.location = unit(pos)
         co.rotation_euler = (unit(tgt) - co.location).to_track_quat("-Z", "Y").to_euler()
         s.render.resolution_x, s.render.resolution_y = res
-        tag = v + (f"_t{a['tilt']:g}" if a["tilt"] else "") + (f"_s{a['swivel']:g}" if a["swivel"] else "") + ("" if a["on"] else "_off")
+        tag = v + ("" if a["display"] else "_m") + (f"_t{a['tilt']:g}" if a["tilt"] else "") + (f"_s{a['swivel']:g}" if a["swivel"] else "") + ("" if a["on"] else "_off")
         s.render.filepath = os.path.join(OUTDIR, f"wp_station_{tag}.png")
         bpy.ops.render.render(write_still=True)
         print("wrote", s.render.filepath)

@@ -3,13 +3,24 @@
 // The camera stays on the print point, so the carriage carries the typed line past it.
 import * as THREE from 'three';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { CameraWatch, PassCache } from './motion.js';
 
 const DISTANCE = 0.205, TILT = 0.029, NEAR = 0.16;
 const REF_HEIGHT_PX = 440, REF_FOV = 20, LINE_ABOVE_BOTTOM_PX = 124, BAIL_BELOW_TOP_PX = 24;
+const REFRESH_FRAMES = 30;   // redrawn at least this often even when nothing seems to have changed
 
 export class HeadView {
-  constructor({ renderer, scene, geometry: g, rig, element, lamp }) {
+  /**
+   * stage (optional): createScene()'s, for its motion tracking and device tier; without it the view is drawn every
+   * frame. invalidate() asks for a redraw (ink that arrived with nothing moving).
+   */
+  constructor({ renderer, scene, geometry: g, rig, element, lamp, stage = null }) {
     this.renderer = renderer; this.scene = scene; this.el = element; this.lamp = lamp;
+    this.motion = stage?.motion ?? null;
+    this.maxScale = stage?.tierSettings?.headScale ?? 2;
+    this.cache = new PassCache(REFRESH_FRAMES);
+    this.cameraWatch = new CameraWatch();
+    this.draws = 0;
     this.rt = new THREE.WebGLRenderTarget(4, 4, { samples: 4, type: THREE.HalfFloatType, depthBuffer: true });
     this.camera = new THREE.PerspectiveCamera(20, 1.45, 0.02, 0.9);
     this.camera.layers.set(0);    // looks past the enclosure
@@ -60,13 +71,35 @@ export class HeadView {
     const { renderer, el, camera, rt } = this;
     const r = el.getBoundingClientRect();
     if (r.width < 8 || r.height < 8) return;
-    const scale = Math.min(2, Math.sqrt(1.2e6 / (r.width * r.height)));   // a pixel budget, so a very wide window stays sharp
+    // A pixel budget, so a very wide window stays sharp, and no more than the display's own pixels or 1.5 (2 at most,
+    // 1.5 on a phone): 4x MSAA on top of that is enough for the ink.
+    const dpr = typeof devicePixelRatio === 'number' && devicePixelRatio > 0 ? devicePixelRatio : 1;
+    const scale = Math.min(this.maxScale, Math.max(dpr, 1.5), Math.sqrt(1.2e6 / (r.width * r.height)));
     const w = Math.round(r.width * scale), h = Math.round(r.height * scale);
+    let resized = false;
     if (rt.width !== w || rt.height !== h) {
       rt.setSize(w, h);
       camera.aspect = w / h;
       this.frameView(r.height);
+      resized = true;
     }
+    camera.position.x = this.P.x + (this.followX?.() ?? 0);
+    camera.updateMatrixWorld();
+    const m = this.motion;
+    const moved = this.cameraWatch.changed(camera);
+    if (!m || this.cache.stale(m.lookGen, m.frame, moved || resized)) {
+      this.drawScene();
+      this.draws++;
+      if (m) this.cache.drawn(m.lookGen, m.frame);
+    }
+    this.composite(r);
+  }
+
+  /** Something it shows changed without moving (ink on the sheet): draw it again next frame. */
+  invalidate() { this.cache.invalidate(); }
+
+  drawScene() {
+    const { renderer, camera, rt } = this;
     const auto = renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate = false;
     this.beforeRender?.(camera);   // view-space uniforms are set for the main camera
@@ -75,14 +108,16 @@ export class HeadView {
     lamp.position.copy(this.lampDir).multiplyScalar(2).add(lamp.target.position);
     lamp.intensity = 1.6;
     lamp.updateMatrixWorld();
-    camera.position.x = this.P.x + (this.followX?.() ?? 0);
-    camera.updateMatrixWorld();
     renderer.setRenderTarget(rt);
     renderer.clear();
     renderer.render(this.scene, camera);
     lamp.position.copy(lampPos); lamp.intensity = lampI; lamp.updateMatrixWorld();
     renderer.shadowMap.autoUpdate = auto;
+  }
 
+  /** The kept image, tone mapped into its rectangle of the canvas: every frame, as the canvas is drawn afresh. */
+  composite(r) {
+    const { renderer, rt } = this;
     renderer.getSize(this._size);
     const y = this._size.y - r.bottom;
     renderer.setRenderTarget(null);

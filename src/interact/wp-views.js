@@ -15,7 +15,7 @@ export const STATIONS = {
   desk: { label: 'Desk', boxes: ['printer', 'station', 'display', 'keyboard', 'diskette'], view: { azim: 0, elev: 30 * deg, margin: 1.1 }, left: 'printer', right: 'diskettes', items: ['paper'] },
   printer: { label: 'Printer', boxes: ['printer'], view: { azim: 0, elev: 26 * deg, margin: 1.1 }, left: null, right: 'computer', items: ['panel', 'mechanism', 'paperPath'] },
   computer: { label: 'Computer', boxes: ['station', 'display', 'keyboard'], view: { azim: 0, elev: 14 * deg, margin: 1.08 }, left: 'printer', right: 'diskettes', items: ['screen', 'keyboard', 'notes', 'controls', 'rear'] },
-  diskettes: { label: 'Diskettes', boxes: ['diskette', 'file'], view: { azim: 0, elev: 16 * deg, margin: 1.1 }, left: 'computer', right: null, items: ['slots', 'levers', 'file'] },
+  diskettes: { label: 'Diskettes', boxes: ['diskette', 'file'], view: { azim: 0, elev: 16 * deg, margin: 1.1 }, left: 'computer', right: null, items: ['slots', 'levers', 'file', 'manual'] },
 };
 
 /** Focus items: a closer look at part of a station. `note(ctx)` may add a word, such as how to open the cover. */
@@ -27,6 +27,7 @@ export const FOCUS = {
   rear: { label: 'Rear', boxes: ['station', 'display'], view: { azim: 180 * deg, elev: 20 * deg, margin: 1.12 } },
   slots: { label: 'Slots', boxes: ['slots'], view: { azim: 0, elev: 8 * deg, margin: 1.25, minDistance: 0.3 } },
   levers: { label: 'Levers', boxes: ['levers'], view: { azim: -14 * deg, elev: 22 * deg, margin: 1.5, minDistance: 0.3 } },
+  manual: { label: 'Manual', boxes: ['manual'], view: { azim: 0, elev: 62 * deg, margin: 1.45, minDistance: 0.4 } },
   file: { label: 'Desk file', boxes: ['file'], view: { azim: -20 * deg, elev: 34 * deg, margin: 1.3, minDistance: 0.3 } },
   panel: { label: 'Panel', boxes: ['panel'], view: { azim: 0, elev: 34 * deg, margin: 1.35, minDistance: 0.3 } },
   mechanism: { label: 'Mechanism', boxes: ['mechanism'], view: { azim: 0, elev: 58 * deg, margin: 1.15 }, note: (c) => (c?.coverOpen?.() === false ? 'click the cover to open it' : '') },
@@ -84,8 +85,16 @@ export function fallbackBoxes(geometry, machine) {
     paperPath: unionBox([u.printer, part(u.printer, [0.1, 0.9], [1, 2.3], [0, 0.4])]),
     // The sticky notes right of the keyboard (src/render/wp/postits.js; the kit replaces this with their own box).
     notes: box([Math.max(u.keyboard.max[0], u.diskette.min[0]) + 0.01, 0, u.diskette.max[2] + 0.04], [Math.max(u.keyboard.max[0], u.diskette.min[0]) + 0.3, 0.012, u.diskette.max[2] + 0.2]),
+    // The operator's manual on the diskette unit (src/render/wp/manual.js; the kit replaces this with its own box).
+    manual: L.manual ? onUnit(u, L.manual, 0.125, 0.16, 0.035) : part(u.diskette, [0, 1], [1, 1.1], [0, 1]),
     paper: L.freshStack && L.pagePile ? unionBox([around(L.freshStack, 0.15, 0.05), around(L.pagePile, 0.15, 0.05)]) : part(u.printer, [0, 1], [0, 0.1], [1, 1.4]),
   };
+}
+
+/** The box of a thing lying on a unit's top: `spot` { on, at } in the unit's frame, half extents hx, hz, height h. */
+function onUnit(u, spot, hx, hz, h) {
+  const b = u[spot.on], cx = (b.min[0] + b.max[0]) / 2 + spot.at[0], cz = (b.min[2] + b.max[2]) / 2 + spot.at[2], y = b.min[1] + spot.at[1];
+  return box([cx - hx, y, cz - hz], [cx + hx, y + h, cz + hz]);
 }
 
 // ---- framing ------------------------------------------------------------------------------------------------------

@@ -30,7 +30,8 @@ import { buildDiskette } from '../render/wp/diskette-view.js';
 import { buildStation, buildDisplay } from '../render/wp/station-view.js';
 import { buildPrinter } from '../render/wp/printer-view.js';
 import { ViewNav, viewSpec, poseOf, fallbackBoxes, LEGACY_CAMERAS } from '../interact/wp-views.js';
-import { makePicker, installWpPointer, makeHighlight } from '../interact/wp-pointer.js';
+import { makePicker, installWpPointer } from '../interact/wp-pointer.js';
+import { WayMarkers } from '../ui/wp-markers.js';
 import { installNavUi } from '../ui/wp-nav.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 import { ROW } from '../wp/screen.js';
@@ -159,9 +160,10 @@ export async function mount(ctx) {
     cameraPose: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
     context: { coverOpen: () => sim.state[sim.layout.cover] > machine.printer.cover.open / 2 },
   });
-  const highlight = makeHighlight(stage.scene);
-  const navUi = installNavUi({ nav, highlight });
-  const pickAt = makePicker({ camera, canvas, keys: parts.keyboard.keys, pickables, nav, boxes: () => boxes, solids: () => Object.values(units) });
+  // The camera moves only by the way markers, the bar and the edge arrows: a click on an object works it or nothing.
+  const markers = new WayMarkers({ nav, boxes: () => boxes, camera, canvas });
+  const navUi = installNavUi({ nav, highlight: null, markers });
+  const pickAt = makePicker({ camera, canvas, keys: parts.keyboard.keys, pickables, nav: { targets: () => [] }, boxes: () => boxes, solids: () => Object.values(units) });
   installWpPointer({
     canvas, orbit, nav, press: (i, f) => keyboard.press(i, f), hint: navUi.hint, show: navUi.show,
     pick: (e) => { const h = pickAt(e); if (h?.kind === 'key') h.label = keyLabel(h.key); return h; },
@@ -193,6 +195,7 @@ export async function mount(ctx) {
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();
+    markers.update();
     screenCard.render();
     frameTimes[nFt++ % frameTimes.length] = performance.now() - t0;
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
@@ -224,7 +227,7 @@ function buildPanel(ctx, feeder, screenCard) {
   picker.value = ctx.machine.id;
   picker.addEventListener('change', () => ctx.onPick(picker.value));
   const hint = document.getElementById('hint');
-  if (hint) hint.textContent = 'type on your keyboard · Enter answers prompts · Alt = CODE, Esc = CANCL · the edge arrows and the bar move the view · ◎ free view';
+  if (hint) hint.textContent = 'type on your keyboard · Enter answers prompts · Alt = CODE, Esc = CANCL · the circles, the edge arrows and the bar move the view · ◉ hides the circles · ◎ free view';
   return el;
 }
 

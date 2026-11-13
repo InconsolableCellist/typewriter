@@ -3,6 +3,7 @@
 // focus items: a closer look at one part. The camera moves only when the user asks: an edge arrow, a station's or a
 // focus item's name, a click on a highlighted object, Back, or the free view the user switches on. Pure data and
 // arithmetic, no DOM and no three.js, so the graph and the framing are tested in Node.
+import { CASE, BINDER, caseBox } from '../render/wp/shelf-items.js';
 
 const deg = Math.PI / 180;
 
@@ -15,7 +16,9 @@ export const STATIONS = {
   desk: { label: 'Desk', boxes: ['printer', 'station', 'display', 'keyboard', 'diskette'], view: { azim: 0, elev: 30 * deg, margin: 1.1 }, left: 'printer', right: 'diskettes', items: ['paper'] },
   printer: { label: 'Printer', boxes: ['printer'], view: { azim: 0, elev: 26 * deg, margin: 1.1 }, left: null, right: 'computer', items: ['panel', 'mechanism', 'paperPath'] },
   computer: { label: 'Computer', boxes: ['station', 'display', 'keyboard'], view: { azim: 0, elev: 14 * deg, margin: 1.08 }, left: 'printer', right: 'diskettes', items: ['screen', 'keyboard', 'notes', 'controls', 'rear'] },
-  diskettes: { label: 'Diskettes', boxes: ['diskette', 'file'], view: { azim: 0, elev: 16 * deg, margin: 1.1 }, left: 'computer', right: null, items: ['slots', 'levers', 'file', 'manual', 'quickstart'] },
+  diskettes: { label: 'Diskettes', boxes: ['diskette', 'file'], view: { azim: 0, elev: 16 * deg, margin: 1.1 }, left: 'computer', right: 'shelf', items: ['slots', 'levers', 'file', 'manual', 'quickstart'] },
+  // IBM's training materials on the bookcase right of the desk (src/render/wp/shelf.js), seen from the operator's side.
+  shelf: { label: 'Shelf', boxes: ['shelf', 'shelfTop'], view: { azim: -14 * deg, elev: 14 * deg, margin: 1.08 }, left: 'diskettes', right: null, items: ['binders', 'shelfTop'] },
 };
 
 /** Focus items: a closer look at part of a station. `note(ctx)` may add a word, such as how to open the cover. */
@@ -33,10 +36,12 @@ export const FOCUS = {
   panel: { label: 'Panel', boxes: ['panel'], view: { azim: 0, elev: 34 * deg, margin: 1.35, minDistance: 0.3 } },
   mechanism: { label: 'Mechanism', boxes: ['mechanism'], view: { azim: 0, elev: 58 * deg, margin: 1.15 }, note: (c) => (c?.coverOpen?.() === false ? 'click the cover to open it' : '') },
   paperPath: { label: 'Paper path', boxes: ['paperPath'], view: { azim: -90 * deg, elev: 14 * deg, margin: 1.1 } },
+  binders: { label: 'Binders', boxes: ['shelfBinders'], view: { azim: -10 * deg, elev: 6 * deg, margin: 1.08, minDistance: 0.5 } },
+  shelfTop: { label: 'Top', boxes: ['shelfTop'], view: { azim: -10 * deg, elev: 52 * deg, margin: 1.15, minDistance: 0.45 } },
   paper: { label: 'Paper', boxes: ['paper'], view: { azim: 0, elev: 42 * deg, margin: 1.2, minDistance: 0.4 } },
 };
 
-const STATION_ORDER = ['desk', 'printer', 'computer', 'diskettes'];
+const STATION_ORDER = ['desk', 'printer', 'computer', 'diskettes', 'shelf'];
 
 /** The station or focus item named `id` ("computer", or "computer/keyboard"), or null. */
 export function viewSpec(id) {
@@ -90,7 +95,20 @@ export function fallbackBoxes(geometry, machine) {
     manual: L.manual ? onUnit(u, L.manual, 0.125, 0.16, 0.035) : part(u.diskette, [0, 1], [1, 1.1], [0, 1]),
     // Our quick-start packet on the desk (src/render/wp/packet.js).
     packet: L.quickStart ? around(L.quickStart, 0.15, 0.004) : part(u.diskette, [1, 1.6], [0, 0.02], [1, 1.6]),
+    ...shelfBoxes(L.shelf),
     paper: L.freshStack && L.pagePile ? unionBox([around(L.freshStack, 0.15, 0.05), around(L.pagePile, 0.15, 0.05)]) : part(u.printer, [0, 1], [0, 0.1], [1, 1.4]),
+  };
+}
+
+/** The bookcase, its binders and its top (src/render/wp/shelf.js; the kit replaces them with the boxes of its parts). */
+function shelfBoxes(spot) {
+  if (!spot) return {};
+  const shelf = caseBox(spot), y = spot.floor;
+  const cut = (y0, y1) => box([shelf.min[0], y0, shelf.min[2]], [shelf.max[0], y1, shelf.max[2]]);
+  return {
+    shelf: box(shelf.min, [shelf.max[0], y + CASE.h, shelf.max[2]]),
+    shelfBinders: cut(y + CASE.bays[0], y + CASE.bays[1] + BINDER.h),
+    shelfTop: cut(y + CASE.h, y + CASE.h + 0.05),
   };
 }
 

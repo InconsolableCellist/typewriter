@@ -1,8 +1,10 @@
 // IBM's own manual, S544-2036-0 Operator Reference Guide, Textpack 4 / Reportpack (Feb 1982): a closed ring binder
 // lying on top of the diskette unit, a little askew. Built here, no model file: two covered boards with rounded
-// corners, a rounded spine over the rings, and the page block between them. The cover and spine are drawn on a canvas
-// by us after the scan (no scanned image is used). Clicking it opens the scan on bitsavers in a new tab (MANUAL_URL);
-// our own quick-start packet is src/render/wp/packet.js.
+// corners, a rounded spine over the rings, and the page block between them. Like the rest of the set (the list on
+// pp. 1-3 and 1-4, and the shelf, src/render/wp/shelf.js) it came in a grey vinyl 3-ring binder; the blue design is its
+// cover sheet, showing through the binder's clear front pocket. Cover and spine are drawn on a canvas by us after the
+// scan (no scanned image is used). Clicking it opens the scan from bitsavers in the in-app viewer (MANUAL_URL); our
+// own quick-start packet is src/render/wp/packet.js.
 import * as THREE from 'three';
 
 const MM = 1e-3;
@@ -13,7 +15,9 @@ const CORNER = 7 * MM;               // the boards' rounded corners
 const SPINE_R = MANUAL_SIZE.h / 2;   // the spine's round over the rings
 const INSET = 3.5 * MM;              // the page block stands back from the boards' open edges
 
-const BLUE = '#1a1fa6';     // the cover's IBM blue, from the scan
+const BLUE = '#1a1fa6';     // the cover sheet's IBM blue, from the scan
+const GREY = '#c4c0b5';     // the binder's vinyl: IBM's pebble grey
+const POCKET = { x0: 0.055, x1: 0.975, y0: 0.022, y1: 0.978 };   // the clear front pocket, as fractions of the cover
 /** The scanned manual on bitsavers: IBM's copyright, so we link to it rather than host it. */
 export const MANUAL_URL = 'https://bitsavers.org/pdf/ibm/6580_Displaywriter/S544-2036-0_IBM_Displaywriter_Operator_Reference_Guide_Textpack_4_Reportpack_Feb82.pdf';
 
@@ -43,7 +47,7 @@ function board(w, d, top) {
 }
 
 /** Vinyl grain, as a bump map and a matching roughness: fine noise with a faint pebble. */
-function grainCanvas(S = 512, seed = 7) {
+export function grainCanvas(S = 512, seed = 7) {
   const c = document.createElement('canvas'); c.width = c.height = S;
   const g = c.getContext('2d'), img = g.createImageData(S, S);
   let x = seed >>> 0;
@@ -111,7 +115,7 @@ export function drawIbmLogo(g, x, y, h, color = '#f2f2ee') {
  * block set bold and flush right beside it, and below them three staggered rows of three chevron blocks, each a
  * nest of lavender chevrons standing up off the page on dark sides. Proportions are fractions of the scanned cover.
  */
-function drawCover(canvas) {
+function drawCoverSheet(canvas) {
   const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
   g.fillStyle = BLUE; g.fillRect(0, 0, W, H);
   const sheen = g.createLinearGradient(0, 0, W, H);
@@ -145,24 +149,45 @@ function drawCover(canvas) {
   fit('Textpack 4/Reportpack', 700, 15, 748, 199, 220, 1.4);
   if ('letterSpacing' in g) g.letterSpacing = '0px';
   g.textAlign = 'left';
-  // A trace of the hinge where the board bends by the spine.
-  g.fillStyle = 'rgba(0,0,20,0.35)'; g.fillRect(W * 0.012, 0, W * 0.006, H);
 }
 
-/** The spine, along its length: the title and the form number set sideways, and the logo at its foot. */
+/**
+ * The front board: grey vinyl, the hinge groove by the spine, and the cover sheet under the clear pocket, which is
+ * welded round its edge and catches a little light across its face.
+ */
+function drawCover(canvas) {
+  const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  g.fillStyle = GREY; g.fillRect(0, 0, W, H);
+  const x0 = W * POCKET.x0, x1 = W * POCKET.x1, y0 = H * POCKET.y0, y1 = H * POCKET.y1;
+  const sheet = document.createElement('canvas');
+  sheet.width = Math.round(x1 - x0 - W * 0.008); sheet.height = Math.round(y1 - y0 - H * 0.006);
+  drawCoverSheet(sheet);
+  g.drawImage(sheet, x0 + W * 0.004, y0 + H * 0.003);
+  // The pocket's weld, a slightly darker seam just outside the sheet, and the vinyl's sheen over the sheet.
+  g.strokeStyle = 'rgba(70,66,58,0.55)'; g.lineWidth = Math.max(2, W * 0.004); g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  const sheen = g.createLinearGradient(x0, y0, x1, y1);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.10)'); sheen.addColorStop(0.35, 'rgba(255,255,255,0.02)'); sheen.addColorStop(0.5, 'rgba(255,255,255,0.09)'); sheen.addColorStop(0.62, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(255,255,255,0.05)');
+  g.fillStyle = sheen; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+  // The hinge groove where the board bends by the spine.
+  g.fillStyle = 'rgba(40,36,30,0.35)'; g.fillRect(W * 0.018, 0, W * 0.007, H);
+}
+
+/** The spine: grey vinyl with its insert, the title and the form number set sideways, and the logo at its foot. */
 function drawSpine(canvas) {
   const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
-  g.fillStyle = BLUE; g.fillRect(0, 0, W, H);
+  g.fillStyle = GREY; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#efece4'; g.fillRect(W * 0.3, H * 0.03, W * 0.4, H * 0.94);
+  g.strokeStyle = 'rgba(70,66,58,0.5)'; g.lineWidth = 2; g.strokeRect(W * 0.28, H * 0.025, W * 0.44, H * 0.95);
   g.save();
   g.translate(W / 2, H); g.rotate(-Math.PI / 2);     // the text runs from the canvas's foot to its head
-  g.fillStyle = '#f0f0f6'; g.textBaseline = 'middle';
+  g.fillStyle = '#1d1d1f'; g.textBaseline = 'middle';
   g.font = `700 ${Math.round(W * 0.16)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
   g.fillText('IBM Displaywriter System   Operator Reference Guide   Textpack 4/Reportpack', H * 0.2, 0, H * 0.62);
   g.font = `400 ${Math.round(W * 0.12)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
   g.fillText('S544-2036-0', H * 0.86, 0, H * 0.12);
   g.restore();
   g.save(); g.translate(W / 2, H * 0.1); g.rotate(-Math.PI / 2);
-  drawIbmLogo(g, -W * 0.33, -W * 0.11, W * 0.22, '#e9e9f2');
+  drawIbmLogo(g, -W * 0.33, -W * 0.11, W * 0.22, '#1d1d1f');
   g.restore();
 }
 
@@ -195,15 +220,18 @@ export function createManual({ scene, renderer, at, yaw = 0 }) {
   grain.wrapS = grain.wrapT = THREE.RepeatWrapping; grain.repeat.set(5, 6); grain.anisotropy = aniso;
 
   const vinyl = (map) => new THREE.MeshPhysicalMaterial({
-    color: map ? 0xffffff : BLUE, map: map ?? null, roughness: 0.62, roughnessMap: grain, bumpMap: grain, bumpScale: 0.6,
-    metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.55, sheen: 0.2, sheenColor: new THREE.Color(0x8090b0),
+    color: map ? 0xffffff : GREY, map: map ?? null, roughness: 0.66, roughnessMap: grain, bumpMap: grain, bumpScale: 0.6,
+    metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.55, sheen: 0.2, sheenColor: new THREE.Color(0x9098a8),
   });
   const plain = vinyl(null);
+  // The front: the clear pocket is smooth and glossy over the sheet, so its coat is smoother and the grain fainter.
+  const pocket = vinyl(coverTex);
+  Object.assign(pocket, { roughness: 0.42, bumpScale: 0.15, clearcoat: 0.85, clearcoatRoughness: 0.12 });
   const solid = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = m.receiveShadow = true; group.add(m); return m; };
 
   // The boards stop short of the spine's round, which wraps their left edges.
   const bw = w - SPINE_R, bx = SPINE_R / 2;
-  const front = solid(board(bw, d, h), [vinyl(coverTex), plain]);
+  const front = solid(board(bw, d, h), [pocket, plain]);
   front.position.x = bx;
   const back = solid(board(bw, d, BOARD + 1 * MM), plain);
   back.position.x = bx;

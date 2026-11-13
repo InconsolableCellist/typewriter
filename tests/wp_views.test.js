@@ -26,9 +26,9 @@ function makeNav(start = 'desk', aspect = 1.6) {
   return { nav, glides, setCamera: (p) => { cam = p; } };
 }
 
-test('stations: a row of three units under the desk, the arrows walk it and undo each other', () => {
-  assert.deepEqual(Object.keys(STATIONS).sort(), ['computer', 'desk', 'diskettes', 'printer']);
-  const row = ['printer', 'computer', 'diskettes'];
+test('stations: a row of three units and the shelf under the desk, the arrows walk it and undo each other', () => {
+  assert.deepEqual(Object.keys(STATIONS).sort(), ['computer', 'desk', 'diskettes', 'printer', 'shelf']);
+  const row = ['printer', 'computer', 'diskettes', 'shelf'];
   // The row is in the units' order along the desk, left to right.
   const x = (s) => { const b = unionBox(STATIONS[s].boxes.map((n) => boxes[n])); return (b.min[0] + b.max[0]) / 2; };
   for (let i = 1; i < row.length; i++) assert.ok(x(row[i]) > x(row[i - 1]), row[i]);
@@ -57,6 +57,7 @@ test('focus items: each station has its own, Back returns to the station, and th
   assert.deepEqual(STATIONS.computer.items, ['screen', 'keyboard', 'notes', 'controls', 'rear']);
   assert.deepEqual(STATIONS.diskettes.items, ['slots', 'levers', 'file', 'manual', 'quickstart']);
   assert.deepEqual(STATIONS.printer.items, ['panel', 'mechanism', 'paperPath']);
+  assert.deepEqual(STATIONS.shelf.items, ['binders', 'shelfTop']);
   for (const [s, st] of Object.entries(STATIONS)) {
     for (const f of st.items) {
       assert.ok(FOCUS[f], f);
@@ -132,7 +133,7 @@ test('click targets: the smallest box under the click, focus items before statio
   const { nav } = makeNav('computer');
   const targets = nav.targets();
   assert.deepEqual(targets.filter((t) => t.kind === 'focus').map((t) => t.id), ['computer/screen', 'computer/keyboard', 'computer/notes', 'computer/controls', 'computer/rear']);
-  assert.deepEqual(targets.filter((t) => t.kind === 'station').map((t) => t.id), ['printer', 'diskettes']);
+  assert.deepEqual(targets.filter((t) => t.kind === 'station').map((t) => t.id), ['printer', 'diskettes', 'shelf']);
   const centre = (b) => b.min.map((v, i) => (v + b.max[i]) / 2);
   assert.equal(targetAt(centre(boxes.screen), targets, boxes).id, 'computer/screen');
   assert.equal(targetAt(centre(boxes.keyboard), targets, boxes).id, 'computer/keyboard');

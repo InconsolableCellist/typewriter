@@ -64,6 +64,11 @@ export default {
     manual: { on: 'diskette', at: [0.002, SIZE.diskette[1], 0.055], yaw: 0.035 },
     ashtray: { on: 'diskette', at: [0, SIZE.diskette[1], -0.16] },
     disketteHolder: { x: 0.80, z: -0.05 },
+    // The desk itself (public/assets/models/desk.glb's bounds): 2 m by 1.2 m, its top 0.74 m off the floor.
+    desk: { min: [-1, -0.74, -0.56], max: [1, 0, 0.64] },
+    // IBM's training materials on a low two-shelf bookcase on the floor right of the desk, back to the same wall
+    // (src/render/wp/shelf.js; tests/wp_shelf.test.js keeps it clear of the desk).
+    shelf: { x: 1.46, z: -0.395, floor: -0.74, yaw: 0 },
     lamp: false,                                // no room for the desk lamp
     cablesOut: 'back',
   },

@@ -1,12 +1,12 @@
-// The last step of every model export: EXT_meshopt_compression on a GLB, in place (docs/assets.md, Models).
+// EXT_meshopt_compression for a GLB (docs/assets.md, Models). The build applies it to every model as it copies
+// public/assets/ into dist/ (vite/assets.js); the repository keeps the plain files, which Blender and the tests read.
 //
-//   node tools/gen/compress_glb.mjs [--strip TEXCOORD_1] [--no-meshopt] path/to/model.glb ...
+//   node tools/gen/compress_glb.mjs [--strip TEXCOORD_1] [--no-meshopt] path/to/model.glb ...   # in place, by hand
 //
 // Lossless: the vertex and index streams are meshopt-encoded as they are (no filters, no further quantization), so a
 // quantized file (KHR_mesh_quantization, tools/blender/quantize_glb.py) keeps its integers and a float one its floats.
-// Node names, transforms, extras and materials are untouched. `--strip` drops an attribute no material reads (frame.glb's
-// second UV set). Three's GLTFLoader decodes it with MeshoptDecoder (src/render/gltf.js), Blender's importer natively.
-// Running it again on a compressed file decodes and re-encodes it to the same bytes.
+// Node names, transforms, extras and materials are untouched. `--strip` drops a vertex attribute; `--no-meshopt` decodes
+// a compressed file back to a plain one. Three's GLTFLoader decodes the result with MeshoptDecoder (src/render/gltf.js).
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';

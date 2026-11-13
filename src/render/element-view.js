@@ -53,8 +53,8 @@ export class ElementEnclosure {
   }
 
   async load(url = ELEMENT_ENCLOSURE_URL) {
-    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-    const gltf = await new GLTFLoader().loadAsync(url);
+    const { loadGLTF } = await import('./gltf.js');
+    const gltf = await loadGLTF(url);
     const byName = { element_paint: this.mats.paint, element_black: this.mats.black, element_rubber: this.mats.rubberFoot };
     gltf.scene.traverse((o) => {
       o.layers.set(1);

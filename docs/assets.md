@@ -7,9 +7,38 @@ the machine centre. No text, logos or manufacturer names appear in any asset or 
 ## Licence caveat (check before any commercial use)
 The pinstripe decal and the source image of the `element_crinkle` paint textures come from **Qwen-Image 2.1**. 
 
+## Models: size and compression
+- **Quantization**, on export (KHR_mesh_quantization, `tools/blender/quantize_glb.py`, which the builders run;
+  `gltf_quantize.py` for the printer): positions 16-bit in 0.05 mm steps, normals 8-bit (16-bit for the typewriters'
+  frame and housings, whose polished trim would show normal error in reflections), UVs float. Each mesh moves onto a
+  child node `<name>_mesh` that holds the dequantizing scale, so a named node keeps its own transform and pivot.
+  `desk.glb` and `wp_diskette.glb` stay float: the tests read the desk's exact bounds, and the diskette view addresses
+  its named nodes as meshes.
+- **EXT_meshopt_compression**, at build time: `vite/assets.js` runs `tools/gen/compress_glb.mjs` (gltf-transform and
+  meshoptimizer, dev dependencies) on every model as it goes into `dist/`, lossless on the streams as they are, no
+  filters, and serves it gzipped as `.glb.gz.bin`, since no CDN compresses `model/gltf-binary`. The repository keeps the
+  plain files because Blender's importer needs a meshopt library the `bpy` wheel does not ship. Every view loads models
+  through `src/render/gltf.js`, which registers three's `MeshoptDecoder` and unpacks the gzip.
+
+| | Exported (float) | In the repository | Shipped, meshopt | Shipped, then gzip |
+|---|---|---|---|---|
+| `frame.glb` | 1524 KB | 1014 KB | 485 KB | 171 KB |
+| `enclosure.glb` | 1263 KB | 1021 KB | 540 KB | 242 KB |
+| `element_enclosure.glb` | 415 KB | 334 KB | 202 KB | 132 KB |
+| `desk.glb` | 16 KB | 16 KB | 12 KB | 6 KB |
+| five `wp_*.glb` | | 1715 KB | 1043 KB | 487 KB |
+
+`tests/models.test.js` compresses every file as the build does, decodes it with three's loader and compares node names,
+transforms, extras, materials, triangle counts and bounds (to 0.1 mm) with `tests/fixtures/models.json`, taken from the
+float exports. `frame.glb` drops its second UV set on export (`drop=("TEXCOORD_1",)`): the builder's primitives bring
+their own UV layer, which Blender exports as TEXCOORD_0, so the box projection described below lands in TEXCOORD_1,
+which no material reads. (So the frame's textures are placed by the primitives' UVs, not by the box projection; making
+the projection TEXCOORD_0 would change the look and wants a visual check.)
+
 ## Frame: `public/assets/models/frame.glb`
-A procedural black japanned open frame, 41 k triangles, 1.5 MB, metres, Y-up glTF. Node transforms are all
-identity, so vertices are already in machine coordinates.
+A procedural black japanned open frame, 41 k triangles, 1.0 MB (485 KB shipped), metres, Y-up glTF. Node transforms are all
+identity, so vertices are in machine coordinates once the quantizer's scale (on each node's `<name>_mesh` child, see
+Models: size and compression, above) is applied.
 
 | Node | Contents |
 |---|---|
@@ -61,7 +90,8 @@ end plates beyond the sampled knobs. The frame has no fulcrum wire, type guide, 
 renderer's placeholder drew some of these and would need to keep them or add its own.
 
 ## Enclosure: `public/assets/models/enclosure.glb`
-A formed sheet-steel shell, 47.8 k tris, 1.2 mm sheet with real thickness, all nodes identity, in machine coordinates.
+A formed sheet-steel shell, 47.8 k tris, 1.2 mm sheet with real thickness, all nodes identity, in machine coordinates
+(the meshes on `_mesh` children with the dequantizing scale).
 Nodes (remove any of them independently):
 
 | Node | Contents |

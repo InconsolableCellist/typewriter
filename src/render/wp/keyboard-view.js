@@ -368,8 +368,8 @@ export async function buildKeyboard(size, slope, mats, { url = KEYBOARD_URL, max
 
   const caseParts = {};
   try {
-    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-    const gltf = await new GLTFLoader().loadAsync(url);
+    const { loadGLTF } = await import('../gltf.js');
+    const gltf = await loadGLTF(url);
     const byName = { wp_pearl: mats.pearl, wp_gray: mats.pebble, wp_dark: mats.dark, wp_rubber: mats.rubber, wp_kbd_card: cardMaterial(maxAniso), wp_kbd_window: windowMaterial() };
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;

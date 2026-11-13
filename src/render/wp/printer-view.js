@@ -196,8 +196,8 @@ function perforationTexture() {
  * stacker plate's normal), trays[0..1] (slide along z).
  */
 export async function buildPrinter(size, mats, opts = {}) {
-  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const gltf = await new GLTFLoader().loadAsync(opts.url ?? PRINTER_URL);
+  const { loadGLTF } = await import('../gltf.js');
+  const gltf = await loadGLTF(opts.url ?? PRINTER_URL);
   const P = opts.printer;
   const pearl = texturedUnitMaterial(mats.pearl), gray = texturedUnitMaterial(mats.pebble), dark = texturedUnitMaterial(mats.dark);
   // The panel's frame, the strip under it and the power switch's bezel: a pale pearl a shade greyer than the covers

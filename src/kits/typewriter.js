@@ -89,7 +89,9 @@ export async function mount(ctx) {
   const keyWorld = stage.key.position.clone().sub(stage.key.target.position).normalize();
   const ribbon = new RibbonView({ soft, machine, mats, renderer: stage.renderer });
   ribbon.printPointWorld = geometry.printPoint;
-  loadStudioTextures(mats, paper.material, maxAniso, { lowTier: params.has('lowtex') || stage.renderer.capabilities.maxTextureSize < 4096 }).catch((e) => console.info('textures', e));
+  // The element machine draws only the steels, rubber, desk and paper of the shared sets (src/render/element-view.js).
+  const only = isElement ? ['chrome_steel', 'vulcanised_rubber', 'walnut_desk', 'paper_fibre'] : null;
+  loadStudioTextures(mats, paper.material, maxAniso, { only, lowTier: params.has('lowtex') || stage.renderer.capabilities.maxTextureSize < 4096 }).catch((e) => console.info('textures', e));
   stage.scene.add(paper.mesh, ribbon.mesh);
 
   stage.camera.layers.enable(1);   // the enclosure, which the print-point view looks past

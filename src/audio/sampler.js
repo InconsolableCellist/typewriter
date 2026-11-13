@@ -28,7 +28,7 @@ export class Sampler {
     this.lastBottom = new Float64Array(sim.nKeys + 8).fill(-1e9);
     this.lastTop = new Float64Array(sim.nKeys + 8).fill(-1e9);
     this.clashHold = 0; this.clashMax = 0; this.clashGuard = 0;
-    this.paperV = 0; this.vFilt = 0; this.loops = {};
+    this.paperV = 0; this.vFilt = 0; this.loops = {}; this.loopList = [];
     this.electric = sim.m.action?.type === 'single-element';   // key touches are synthesised there, the recorded ones are of a manual
   }
 
@@ -66,6 +66,7 @@ export class Sampler {
       const it = this.sets[name]?.[0];
       if (it) this.loops[name] = { o: it.o, n: it.n, base: it.base, pos: 0, g: 0, tg: 0 };
     }
+    this.loopList = Object.values(this.loops);   // tick walks this every sample; no for-in there
     this.radius = this.sim.m.platen.radius;
     this.cycleCut = this.electric && !!this.sets.el_cycle?.length;
     this.loaded = true;
@@ -258,8 +259,9 @@ export class Sampler {
       if (np >= end[v]) active[v] = 0; else pos[v] = np;
     }
     const smooth = 0.0015;
-    for (const key in this.loops) {
-      const L = this.loops[key];
+    const loops = this.loopList;
+    for (let li = 0; li < loops.length; li++) {
+      const L = loops[li];
       if (L.tg === 0 && L.g < 1e-4) { L.g = 0; continue; }
       L.g += (L.tg - L.g) * smooth;
       out += pcm[L.o + (L.pos | 0)] * L.g * L.base;

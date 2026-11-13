@@ -86,7 +86,7 @@ export class CRT {
     this.fontTex = makeFontTexture();
     const halfFloat = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
     const mk = () => new THREE.WebGLRenderTarget(RASTER.w * SAMPLES, RASTER.h * SAMPLES, {
-      type: halfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType, format: THREE.RGBAFormat,
+      type: halfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType, format: THREE.RGFormat,   // only R and G are used
       minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: true, depthBuffer: false,
     });
     this.targets = [mk(), mk()];

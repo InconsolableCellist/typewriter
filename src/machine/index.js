@@ -8,8 +8,9 @@ import { deriveWordprocGeometry } from './wp-geometry.js';
 export const MACHINES = { frontstrike1926, element1971, wordproc1980 };
 export const DEFAULT_MACHINE = 'frontstrike1926';
 
-// Machines still being built: selectable by ?machine=<id>, and listed in the picker only with ?wp.
-export const UNLISTED = new Set(['wordproc1980']);
+// Machines still being built: selectable by ?machine=<id>, and listed in the picker only with ?wp. None now: the
+// word processor is listed with the typewriters.
+export const UNLISTED = new Set();
 
 // The code that puts a machine family on the desk, by action.type. Loaded on demand, so a visit downloads one family.
 export const KITS = {

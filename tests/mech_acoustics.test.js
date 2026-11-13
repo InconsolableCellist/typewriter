@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import machine from '../src/machine/frontstrike1926.js';
+import element from '../src/machine/element1971.js';
 import up, { deriveUpstrikeGeometry } from '../src/machine/upstrike1889.js';
 import { deriveGeometry } from '../src/machine/geometry.js';
 import { MechanicalSim, SUBSTEP_HZ } from '../src/sim/mechanics.js';
@@ -57,6 +58,37 @@ test('no clipping, DC or denormal residue: after silence every modal state is ex
     assert.equal(b.awake, false, `${k} bank still awake after silence`);
     for (const v of b.y1) assert.equal(v, 0, 'residual modal state');
   }
+});
+
+test('element1971: idle after typing costs what a fresh idle does, with no subnormal state left behind', () => {
+  const eg = deriveGeometry(element);
+  const sim = new MechanicalSim({ machine: element, geometry: eg, glyphs });
+  const eng = new AudioEngine(sim, 48000);
+  const buf = new Float32Array(128);
+  const blocks = (s) => Math.round((s * 48000) / 128);
+  const run = (s) => { for (let i = blocks(s); i > 0; i--) eng.process(buf, 128); };
+  // Best of a few short runs: the least disturbed by whatever else this machine is doing.
+  const cost = () => {
+    let best = Infinity;
+    for (let r = 0; r < 4; r++) {
+      const t0 = performance.now();
+      run(0.5);
+      best = Math.min(best, (performance.now() - t0) / (blocks(0.5) * 128 / 48));
+    }
+    return best;
+  };
+  run(1);
+  const fresh = cost();
+  for (const ch of 'thequick') { sim.pressKey(eg.keys.findIndex((k) => k.kind === 'print' && k.lower === ch), 12, 0.05); run(0.25); }
+  run(13);
+  const after = cost();
+  console.log(`  element idle: fresh ${(fresh * 100).toFixed(1)} %, after typing ${(after * 100).toFixed(1)} % of real time`);
+  // The decaying states are flushed to zero, not left to crawl through the subnormal range (many times slower on x86).
+  const a = sim.action;
+  const states = { tilt: a.tilt, tiltV: a.tiltV, rot: a.rot, rotV: a.rotV, radY1: eng.rad.y1, radLp: eng.rad.lp, ...Object.fromEntries([...eng.room.fbState].map((v, i) => [`fb${i}`, v])) };
+  for (const [k, v] of Object.entries(states)) assert.ok(v === 0 || Math.abs(v) > 1e-20, `${k} = ${v}`);
+  // Before the flush this was three times the fresh cost and never recovered.
+  assert.ok(after < fresh * 1.5 + 0.01, `after typing ${after} against fresh ${fresh}`);
 });
 
 function renderKeys(presses, seconds, { bypass = false } = {}) {

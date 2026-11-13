@@ -20,7 +20,8 @@ const FLOOR = Math.floor;
 const V_KEY = 8, V_CAR = 8, V_PSI = 160, V_LL = 90, V_DOG = 40, V_AUX = 160, V_HAMMER = 400;
 const SHIFT_V = 8;
 
-export const SUBSTEP_HZ = 384000;
+import { SUBSTEP_HZ } from './rate.js';
+export { SUBSTEP_HZ };
 
 export class MechanicalSim {
   constructor({ machine, geometry, glyphs } = {}) {
@@ -88,7 +89,7 @@ export class MechanicalSim {
     // Bell
     this.hammer = 0; this.hammerV = 0; this.bellArmed = true; this.bellAwake = false; this.bellSleep = 0;
     this.bellContact = false; this.bellPeak = 0; this.bellF = 0; this.hammerT = 0;
-    this.llF = 0; this.toothFy = 0; this.toothFs = 0;
+    this.llF = 0; this.toothFy = 0; this.toothFs = 0; this.toothFq = 0; this.vibrLiftNow = 0;
     // Vibrator and ribbon pawl
     this.vibr = 0; this.vibrV = 0; this.vibrF = 0; this.vibrAwake = false; this.vibrSleep = 0;
     this.rp = 0; this.rpV = 0;
@@ -445,19 +446,20 @@ export class MechanicalSim {
     }
 
     if ((++this.guardTick & 255) === 0) this.guard();
-    this.stepKeys(h);
-    if (this.escAwake) this.stepEsc(h);
-    if (this.shiftAwake) this.stepShift(h);
-    if (this.platenAwake) this.stepPlaten(h);
-    if (this.bellAwake) this.stepBell(h);
-    if (this.vibrAwake) this.stepVibrator(h);
-    this.stepAux(h);
-    this.action.step(h);
+    // The groups read the step from this.h themselves: a double passed to a call that is not inlined is boxed, and
+    // that was a fresh heap number per call, 384 000 times a second (docs/perf-review.md 25).
+    this.stepKeys();
+    if (this.escAwake) this.stepEsc();
+    if (this.shiftAwake) this.stepShift();
+    if (this.platenAwake) this.stepPlaten();
+    if (this.bellAwake) this.stepBell();
+    if (this.vibrAwake) this.stepVibrator();
+    this.stepAux();
+    this.action.step();
   }
 
   /** Last resort: if a value is ever not finite, return that element to rest instead of poisoning the sim. */
   guard() {
-    const bad = (x) => !(x - x === 0);
     let tripped = false;
     for (let k = 0; k < this.nKeys; k++) if (bad(this.kx[k]) || bad(this.kv[k]) || bad(this.kF[k])) { this.kx[k] = 0; this.kv[k] = 0; this.kF[k] = 0; tripped = true; }
     if (bad(this.q) || bad(this.qV)) { this.q = 0; this.qV = 0; this.cZ = 0; tripped = true; }
@@ -473,7 +475,8 @@ export class MechanicalSim {
     if (tripped) this.guardTrips = (this.guardTrips | 0) + 1;
   }
 
-  stepKeys(h) {
+  stepKeys() {
+    const h = this.h;
     const list = this.kActive;
     let n = this.nActiveK;
     const kx = this.kx, kv = this.kv, kF = this.kF;
@@ -513,13 +516,13 @@ export class MechanicalSim {
       // Coupling to the mechanism
       switch (type) {
         case KEY_PRINT: {
-          F += action.keyForce(k, x, v);
+          action.keyForce(k); F += action.keyF;
           if (this.powered) break;
           F += this.ubarContact(k, x, v);
           F += this.vibratorContact(k, x, v);
           break;
         }
-        case KEY_ACTION: F += action.keyForce(k, x, v); break;
+        case KEY_ACTION: action.keyForce(k); F += action.keyF; break;
         case KEY_SPACE: F += this.ubarContact(k, x, v); break;
         case KEY_SHIFT: F += this.shiftContact(k, x, v, 0); break;
         case KEY_LOCK: F += this.shiftContact(k, x, v, 1); break;
@@ -575,6 +578,9 @@ export class MechanicalSim {
     this.vibrAwake = true; this.vibrSleep = 0;
     return -Fc * ratio;
   }
+
+  /** vibrLiftTarget() into this.vibrLiftNow, for the hot loops: there a returned double would be boxed on each call. */
+  updateVibrLift() { this.vibrLiftNow = this.vibrLiftTarget(); }
 
   vibrLiftTarget() {
     // Ribbon selector: 0 = upper band, 1 = lower band (full lift), 2 = stencil (no lift).
@@ -644,7 +650,8 @@ export class MechanicalSim {
   camFixedD(r) { const r0 = this.rFix - 0.28; return r <= r0 ? 0 : (this.D * 1.08 - this.yBot) / (this.rFix - r0); }
   camLooseD() { const span = 0.32; return -(this.D * 1.08 - this.yBot) / span; }
 
-  stepEsc(h) {
+  stepEsc() {
+    const h = this.h;
     const ports = this.ports;
     // Universal bar and rocker (rocker is a rigid extension of the ubar: r = u / uFull).
     const uFull = this.uFull;
@@ -672,13 +679,15 @@ export class MechanicalSim {
       Fyf += Fs; ports[PORT.DOG] += Fs;
     }
     const rd = this.unlimited ? 0 : r;   // unlimited typing: the rocker no longer works the dogs
-    const rawCamF = this.camFixed(rd), reliefT = this.yBot + (this.D * 1.45 - this.yBot) * dogLift;
+    // The rocker cams (camFixed, camLoose and their slopes) written out here: called, each returned double is boxed.
+    const yBot = this.yBot, camRise = this.D * 1.08 - yBot, rF0 = this.rFix - 0.28;
+    const rawCamF = rd <= rF0 ? yBot : yBot + camRise * (rd - rF0) / (this.rFix - rF0), reliefT = this.yBot + (this.D * 1.45 - this.yBot) * dogLift;
     const camF = rawCamF > reliefT ? rawCamF : reliefT;
     const penF = camF - this.yf;
     if (penF > 0) {
       let Fc = this.kCam * penF;
       Fyf += Fc;
-      if (rawCamF >= reliefT) uf -= (Fc * this.camFixedD(rd)) / uFull;
+      if (rawCamF >= reliefT) uf -= (Fc * (rd <= rF0 ? 0 : camRise / (this.rFix - rF0))) / uFull;
     }
     // Loose dog: held clear by the rocker cam at rest, moved in as r increases, slides on slack
     let Fyl = -(this.Fdog0 + this.kDogSpring * (this.yl - this.yBot));
@@ -688,13 +697,13 @@ export class MechanicalSim {
       if (Fs < 0) Fs = 0;
       Fyl += Fs; ports[PORT.DOG] += Fs;
     }
-    const rawCamL = this.camLoose(rd);
+    const rawCamL = yBot + camRise * ((this.rLoose + 0.32 - rd) / 0.32);
     const camL = rawCamL > reliefT ? rawCamL : reliefT;
     const penL = camL - this.yl;
     if (penL > 0) {
       const Fc = this.kCam * penL;
       Fyl += Fc;
-      if (rawCamL >= reliefT) uf -= (Fc * this.camLooseD()) / uFull;
+      if (rawCamL >= reliefT) uf -= (Fc * (-camRise / 0.32)) / uFull;
     }
     // Slack DOF of the loose dog: spring pulls s back, end stops at 0 and sMax (rocker slot)
     let Fs = -this.kSlack * this.sl - 0.4 * this.slV;
@@ -704,9 +713,11 @@ export class MechanicalSim {
     // Tooth contacts
     let Fq = this.cF;
     this.cF = 0;
-    Fq += this.toothContact(0, this.yf, 0);
+    this.toothContact(0);
+    Fq += this.toothFq;
     const fy1 = this.toothFy;
-    Fq += this.toothContact(this.qLoose + this.sl, this.yl, 1);
+    this.toothContact(1);
+    Fq += this.toothFq;
     const fy2 = this.toothFy;
     Fs += this.toothFs;
     Fyf += fy1; Fyl += fy2;
@@ -787,8 +798,10 @@ export class MechanicalSim {
     return false;
   }
 
-  /** Dog against sawtooth rack. Stores toothFy, toothFs and returns the force on the carriage (+q). */
-  toothContact(qDog, y, loose) {
+  /** Fixed (loose 0) or loose dog against the sawtooth rack. Stores the force on the carriage (+q) in toothFq, and toothFy,
+   * toothFs; nothing passes as a double argument or result, which would be boxed on every substep. */
+  toothContact(loose) {
+    const qDog = loose ? this.qLoose + this.sl : 0, y = loose ? this.yl : this.yf;
     const ports = this.ports;
     const p = this.p, D = this.D;
     const rho = qDog - this.q;
@@ -830,8 +843,7 @@ export class MechanicalSim {
         ports[PORT.DOG] += Fn;
       }
     }
-    this.toothFy = Fy; this.toothFs = Fs;
-    return Fq;
+    this.toothFy = Fy; this.toothFs = Fs; this.toothFq = Fq;
   }
 
   stepBellTrip() {
@@ -855,7 +867,8 @@ export class MechanicalSim {
     }
   }
 
-  stepBell(h) {
+  stepBell() {
+    const h = this.h;
     const ports = this.ports;
     let T = this.hammerT;
     this.hammerT = 0;
@@ -887,7 +900,8 @@ export class MechanicalSim {
     } else this.bellSleep = 0;
   }
 
-  stepShift(h) {
+  stepShift() {
+    const h = this.h;
     const ports = this.ports;
     let F = this.shiftF;
     this.shiftF = 0;
@@ -909,7 +923,8 @@ export class MechanicalSim {
     } else this.shiftSleep = 0;
   }
 
-  stepPlaten(h) {
+  stepPlaten() {
+    const h = this.h;
     const ports = this.ports;
     let T = this.psiT, TL = this.llT;
     this.psiT = 0; this.llT = 0;
@@ -984,7 +999,8 @@ export class MechanicalSim {
     } else this.platenSleep = 0;
   }
 
-  stepVibrator(h) {
+  stepVibrator() {
+    const h = this.h;
     let F = this.vibrF;
     this.vibrF = 0;
     F -= this.vibrSpring0 + this.vibrRate * (this.vibr > 0 ? this.vibr : 0);
@@ -999,7 +1015,8 @@ export class MechanicalSim {
     } else this.vibrSleep = 0;
   }
 
-  stepAux(h) {
+  stepAux() {
+    const h = this.h;
     for (let i = 0; i < AUX_N; i++) {
       if (!this.aAwake[i]) continue;
       const p = this.auxParams[i];
@@ -1191,6 +1208,8 @@ export class MechanicalSim {
   }
 }
 
+/** Not a finite number. Module level: guard() runs every 256 substeps and a closure there would be a new object each time. */
+function bad(x) { return !(x - x === 0); }
 function clampMag(v, m) { return v > m ? m : v < -m ? -m : v; }
 function finiteOr(v, d) { return Number.isFinite(v) ? v : d; }
 function clampFinite(v, lo, hi) { return !Number.isFinite(v) ? lo : v < lo ? lo : v > hi ? hi : v; }

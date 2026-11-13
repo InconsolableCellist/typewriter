@@ -1,5 +1,5 @@
 // The word processor's mechanism runs on the audio thread once the page hands it over. An AudioWorkletGlobalScope has
-// no structuredClone, setTimeout or DOM; this runs the real processor (src/audio/worklet.js) with those taken away, after
+// no structuredClone, setTimeout or DOM; this runs the real processor (src/audio/worklet-wordproc.js) with those taken away, after
 // a warm start's state is handed over as the page does it, and checks a disk read completes and the machine hums.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ test('the worklet takes over a warm-started machine: no structuredClone there, a
   globalThis.sampleRate = 48000;
   globalThis.AudioWorkletProcessor = class { constructor() { this.port = { postMessage: (m) => msgs.push(m), onmessage: null }; } };
   let Proc; globalThis.registerProcessor = (n, c) => { Proc = c; };
-  await import('../src/audio/worklet.js');
+  await import('../src/audio/worklet-wordproc.js');
   const machine = MACHINES.wordproc1980, geometry = await geometryFor(machine);
   const local = createMechanism({ machine, geometry, cold: false, drives: [{ mediaId: 'CMBDSK', type: '2D' }, { mediaId: 'WORK01', type: '2D' }] });
   for (let i = 0; i < Math.round(1 / local.h); i++) local.step();

@@ -34,9 +34,9 @@ export async function prefetchAudio(machine, { worklet = true } = {}) {
     await (await fetch(`${AUDIO}${dir}/${manifest.sprite}`)).arrayBuffer();
   });
   // The worklet chunk by a prefetch link: addModule requests the bare URL, which fetch() would version (asset-version.js).
-  // This must name the same entry as unlockAudio's addModule (follow it if the worklet is split per family).
+  // The same family's entry as unlockAudio's addModule, through the same helper.
   if (worklet) {
-    jobs.push(import('../audio/worklet.js?worker&url').then(({ default: url }) => {
+    jobs.push(import('../sim/worklet-url.js').then(({ workletUrl }) => workletUrl(machine)).then((url) => {
       const link = document.createElement('link');
       link.rel = 'prefetch'; link.href = url;
       document.head.appendChild(link);

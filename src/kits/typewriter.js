@@ -97,7 +97,7 @@ export async function mount(ctx) {
   if (machine.defaultCamera) stage.camera.position.fromArray(machine.defaultCamera.position);
   const orbit = new Orbit(stage.camera, canvas, machine.defaultCamera?.target);
 
-  const head = new HeadView({ renderer: stage.renderer, scene: stage.scene, geometry, rig, element: document.getElementById('insetFront'), lamp: stage.rim });
+  const head = new HeadView({ renderer: stage.renderer, scene: stage.scene, geometry, rig, element: document.getElementById('insetFront'), lamp: stage.rim, stage });
   for (const b of document.querySelectorAll('#insets .fold')) b.addEventListener('click', () => b.closest('.card').classList.toggle('folded'));
 
   const enclosure = isElement ? new ElementEnclosure({ scene: stage.scene, mats: view.emats }) : new Enclosure({ scene: stage.scene, mats });
@@ -187,19 +187,6 @@ export async function mount(ctx) {
   const frameTimes = new Float32Array(240);
   let ft = 0, nFt = 0, last = performance.now();
   let lastEnv = '';
-  // Lower the supersampling if frames persistently miss 60 Hz; never raises it again, to avoid hunting.
-  let govLast = 0, govN = 0, govSum = 0, govSlow = 0;
-  const govStart = performance.now();
-  function govern(now) {
-    const d = now - govLast; govLast = now;
-    if (d > 120 || d <= 0) { govN = 0; govSum = 0; return; }
-    govSum += d; govN++;
-    if (govN < 120) return;
-    const mean = govSum / govN; govN = 0; govSum = 0;
-    if (now < govStart + 15000) return;         // loading and first compiles do not count
-    govSlow = mean > 24 ? govSlow + 1 : 0;
-    if (govSlow >= 3 && stage.getQuality() > 0.62) { govSlow = 0; stage.setQuality(stage.getQuality() * 0.85); console.info('render quality', stage.getQuality().toFixed(2)); }
-  }
 
   let hintJam = false;
   const jamTheta = new Float32Array(geometry.nPrint);
@@ -229,12 +216,16 @@ export async function mount(ctx) {
     const jammed = stuck;
     if (jammed !== hintJam) { hintJam = jammed; hintEl.textContent = jammed ? 'typebars jammed \u00b7 drag a raised bar back down to clear it' : hintDefault; hintEl.classList.toggle('alert', jammed); }
     paper.keyDir.copy(keyWorld).transformDirection(stage.camera.matrixWorldInverse);
+    // Ink that arrives with nothing moving (a sheet laid in already typed) still has to reach the Print Point view.
+    if (soft.inkTexture?.dirty?.length || soft.colorMask?.dirty?.length || soft.ribbonTexture?.dirty?.length || deskProps.burn?.active) head.invalidate();
     paper.update(); ribbon.update();
     pages.update(dt);
     deskProps.update(dt);
     environment.update(dt, keyWorld);
     interaction.update();
     orbit.update(dt);
+    // What moved, for the shadow maps, the AO and the Print Point view (the scene's own check catches the rest).
+    stage.motion.observe({ state: sim.state, layout: sim.layout, soft, grabbing: sim.grabs?.size > 0 || !!interaction.drag, easing: environment.easing });
     if (timer) timer.begin();
     const shake = deskSway?.x ?? 0;
     stage.camera.position.x -= shake;   // everything on the table moves with it; shifting the viewer instead leaves the distant room still
@@ -243,7 +234,7 @@ export async function mount(ctx) {
     head.beforeRender = (cam) => paper.keyDir.copy(keyWorld).transformDirection(cam.matrixWorldInverse);
     head.render();
     if (timer) timer.end();
-    govern(now);
+    stage.govern(now);
     const elapsed = performance.now() - t0;
     frameTimes[ft++ % frameTimes.length] = elapsed; nFt++;
     if (nFt % 6 === 0) {

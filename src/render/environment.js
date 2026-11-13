@@ -155,7 +155,7 @@ export function installEnvironment({ stage, interaction = null, panel = null, ma
   const cur = mkState(TIME.day);
   const target = mkState(TIME.day);
   let timeValue = PRESET_T.day, weather = 'clear', wasDark = isDark(timeValue);
-  let lampOn = false, frame = 0;
+  let lampOn = false, frame = 0, easing = true;
   const listeners = new Set();
   const nearestTime = () => KEYS.reduce((best, k) => (Math.abs(k[0] - timeValue) < Math.abs(best[0] - timeValue) ? k : best))[1];
   const emit = () => { const s = { time: nearestTime(), weather, lamp: lampOn }; for (const f of listeners) { try { f(s); } catch (e) { console.warn(e); } } };
@@ -251,6 +251,8 @@ export function installEnvironment({ stage, interaction = null, panel = null, ma
     get weather() { return weather; },
     get lampOn() { return lampOn; },
     get flashValue() { return flashV; },
+    /** True while the room is still changing: easing to a new time or weather, a flash, the lamp fading, the chain swinging. */
+    get easing() { return easing; },
     times: TIMES,
     weathers: WEATHERS,
     /** One frame: eases the state, sets every light, and keeps the paper shader's key direction current (keyWorld). */
@@ -281,6 +283,15 @@ export function installEnvironment({ stage, interaction = null, panel = null, ma
       c.dark = lerp(c.dark, Math.max(sstep(0.72, 0.88, timeValue), 1 - sstep(0.08, 0.2, timeValue)), k);
       c.lamp = lerp(c.lamp, lampOn ? 1 : 0, 1 - Math.exp(-dt / (lampOn ? 0.09 : 0.18)));
       if (Math.abs(c.lamp) < 1e-3) c.lamp = 0;
+      {
+        const far = (a, b) => Math.abs(a - b) > 1e-4 * Math.max(1, Math.abs(b));
+        const farV = (a, b) => far(a.x ?? a.r, b.x ?? b.r) || far(a.y ?? a.g, b.y ?? b.g) || far(a.z ?? a.b, b.z ?? b.b);
+        const lampT = lampOn ? 1 : 0;
+        easing = far(c.env, t.env) || far(c.bg, t.bg) || far(c.key, t.key) || far(c.rim, t.rim) || far(c.exposure, t.exposure)
+          || farV(c.envTint, t.envTint) || farV(c.bgTint, t.bgTint) || farV(c.keyPos, t.keyPos) || farV(c.keyColor, t.keyColor) || farV(c.rimColor, t.rimColor)
+          || Math.abs(c.lamp - lampT) > 1e-3 || pulses.length > 0 || flashV > 0
+          || swing.x !== 0 || swing.z !== 0 || swing.vx !== 0 || swing.vz !== 0;
+      }
 
       // The flash value: sum of decayed strokes; expired ones drop off.
       let v = 0;
@@ -314,6 +325,7 @@ export function installEnvironment({ stage, interaction = null, panel = null, ma
       if (!hasLamp) return;
       const l = c.lamp;
       spot.intensity = l * SPOT_INTENSITY;
+      spot.shadow.intensity = l > 0.004 ? 1 : 0;   // off, the lamp's light stays in the count but skips the shadow search
       overhead.intensity = c.dark * OVERHEAD_INTENSITY;
       if (l > 0.004 && frame % SPOT_SHADOW_EVERY === 0) spot.shadow.needsUpdate = true;
       glass.emissiveIntensity = l * 0.24;

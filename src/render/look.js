@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { isDrawnOpaque, CameraWatch, PassCache, SceneMotion } from './motion.js';
 
 export const LOOK = {
   ao: {
@@ -82,6 +83,14 @@ export function setContactDisc(x, z, r) { uniforms.uLookDisc.value.set(x, z, r);
 
 /** Tints all image-based light (the HDRI, in the lit materials). */
 export function setEnvTint(r, g, b) { uniforms.uLookEnvTint.value.set(r, g, b); }
+
+/** The uniforms that change how the scene is lit, onto a tape (SceneWatch's appearance check). */
+export function pushLookState(t) {
+  for (const k of ['uLookEnvTint', 'uLookCav', 'uLookCavP', 'uLookCavS', 'uLookDisc']) {
+    const v = uniforms[k].value;
+    t.push(v.x); t.push(v.y); t.push(v.z); if (v.w !== undefined) t.push(v.w);
+  }
+}
 
 /** Sets the cavity box from LOOK; a disabled cavity collapses its plan to nothing. */
 export function applyCavity(c) {
@@ -200,13 +209,14 @@ function patchMaterial(mat) {
   mat.needsUpdate = true;
 }
 
-function isDrawnOpaque(o) {
-  if (o.isPoints || o.isLine || o.isSprite || o.userData.noAO) return false;
+function patchMaterialsOf(o) {
   const m = o.material;
-  if (!m) return true;
-  const one = (x) => x.visible && !x.transparent && x.depthWrite !== false;
-  return Array.isArray(m) ? m.some(one) : one(m);
+  if (!m) return;
+  if (Array.isArray(m)) for (const x of m) patchMaterial(x); else patchMaterial(m);
 }
+
+/** Patches every material in a scene, drawn or hidden (before compiling its programs ahead of the first frame). */
+export function patchSceneMaterials(scene) { scene.traverse(patchMaterialsOf); }
 
 // Resolution scale and sample count per tier; the render-quality governor walks down these before it touches resolution.
 const AO_TIERS = [{ scale: 0.5, samples: 16 }, { scale: 0.34, samples: 12 }, null];
@@ -217,6 +227,8 @@ class AOPrepass extends GTAOPass {
     this.look = look;
     this.output = GTAOPass.OUTPUT.Off;
     this.tier = 0;
+    this.stale = true;          // the AO map no longer matches the settings or the size: redraw it whatever moved
+    this._hidden = [];
     this.fullW = 4; this.fullH = 4;
     this.normalMaterial.side = THREE.DoubleSide;   // the sheet and the ribbon are drawn from both sides
     this.applyLook();
@@ -231,6 +243,9 @@ class AOPrepass extends GTAOPass {
 
   get active() { return this.look.ao.enabled && AO_TIERS[this.tier] !== null; }
 
+  /** Starts at a cheaper tier (a phone). */
+  setTier(t) { this.tier = Math.max(0, Math.min(AO_TIERS.length - 1, t)); this.applyLook(); }
+
   /** One step down in cost; false once there is nothing left to give. */
   dropTier() {
     if (!this.look.ao.enabled || this.tier >= AO_TIERS.length - 1) return false;
@@ -240,6 +255,7 @@ class AOPrepass extends GTAOPass {
   }
 
   resize() {
+    this.stale = true;
     const t = AO_TIERS[this.tier];
     if (!t) return;
     const w = Math.max(2, Math.round(this.fullW * t.scale)), h = Math.max(2, Math.round(this.fullH * t.scale));
@@ -249,21 +265,33 @@ class AOPrepass extends GTAOPass {
 
   setSize(w, h) { this.fullW = w; this.fullH = h; this.resize(); }
 
-  // The G-buffer holds opaque surfaces only, and the prepass neither re-renders the shadow map nor draws the backdrop.
+  // The G-buffer holds opaque surfaces only (no points or lines either, as GTAOPass's own hides). One walk over the
+  // visible objects, hiding what is not drawn opaque; restored from the list of what was hidden.
   overrideVisibility() {
-    super.overrideVisibility();
-    this.scene.traverse((o) => {
-      if ((o.isMesh || o.isSprite || o.isPoints || o.isLine) && !isDrawnOpaque(o)) o.visible = false;
-    });
+    const hidden = this._hidden;
+    hidden.length = 0;
+    const walk = (o) => {
+      if (!o.visible) return;
+      if ((o.isMesh || o.isSprite || o.isPoints || o.isLine) && !isDrawnOpaque(o)) { o.visible = false; hidden.push(o); return; }
+      const ch = o.children;
+      for (let i = 0; i < ch.length; i++) walk(ch[i]);
+    };
+    walk(this.scene);
   }
 
+  restoreVisibility() {
+    for (const o of this._hidden) o.visible = true;
+    this._hidden.length = 0;
+  }
+
+  // The prepass neither re-renders the shadow maps nor draws the backdrop.
   renderOverride(renderer, overrideMaterial, renderTarget, clearColor, clearAlpha) {
-    const scene = this.scene, bg = scene.background, auto = renderer.shadowMap.autoUpdate;
+    const scene = this.scene, bg = scene.background, sm = renderer.shadowMap, auto = sm.autoUpdate, need = sm.needsUpdate;
     scene.background = null;
-    renderer.shadowMap.autoUpdate = false;
+    sm.autoUpdate = false; sm.needsUpdate = false;
     super.renderOverride(renderer, overrideMaterial, renderTarget, clearColor, clearAlpha);
     scene.background = bg;
-    renderer.shadowMap.autoUpdate = auto;
+    sm.autoUpdate = auto; sm.needsUpdate = need;
   }
 
   publish() {
@@ -277,30 +305,55 @@ class AOPrepass extends GTAOPass {
 }
 
 /**
- * The scene render, preceded by the AO prepass and with the AO armed only for its duration.
- * Keeping it one pass means the frame loop's composer.render() needs no change.
+ * The scene render, preceded by the AO prepass and with the AO armed only for its duration. The frame's one walk over
+ * the scene (SceneMotion.update) patches each material before its first use and says what moved; the AO is redrawn
+ * only when the camera or the geometry moved, and the shadow maps only when a caster or a light did.
+ * `counts` keeps how many times each was drawn (window.__tw.stage.ao.counts, for checking at rest).
  */
 export class LookRenderPass extends RenderPass {
-  constructor(scene, camera, look) {
+  constructor(scene, camera, look, motion = new SceneMotion(scene)) {
     super(scene, camera);
     this.look = look;
+    this.motion = motion;
     this.ao = new AOPrepass(scene, camera, look);
+    this.aoCache = new PassCache();
+    this.cameraWatch = new CameraWatch();
+    this.held = null;   // () => true while a pointer is down on the canvas
+    this.counts = { frames: 0, ao: 0, shadow: 0 };
+    this.ao.counts = this.counts;
   }
 
   setSize(w, h) { this.ao.setSize(w, h); }
 
   render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
-    const ao = this.ao;
-    // Materials appear late (loaded models); each is patched before its first use.
-    this.scene.traverse((o) => {
-      const m = o.material;
-      if (m) for (const x of Array.isArray(m) ? m : [m]) patchMaterial(x);
-    });
-    if (ao.active) {
-      ao.render(renderer, null, null);
-      ao.publish();
+    const { ao, motion, scene, camera, counts } = this;
+    if (this.held?.()) motion.mark();
+    motion.update(patchMaterialsOf);
+    counts.frames++;
+    // The walk has just brought every world matrix up to date; the two renders below need not do it again.
+    const autoMatrices = scene.matrixWorldAutoUpdate;
+    scene.matrixWorldAutoUpdate = false;
+    try {
+      if (ao.active) {
+        camera.updateMatrixWorld();
+        const cameraMoved = this.cameraWatch.changed(camera);
+        if (this.aoCache.stale(motion.geomGen, motion.frame, cameraMoved || ao.stale)) {
+          ao.render(renderer, null, null);
+          ao.stale = false;
+          this.aoCache.drawn(motion.geomGen, motion.frame);
+          counts.ao++;
+        }
+        ao.publish();
+      }
+      const sm = renderer.shadowMap;
+      sm.autoUpdate = false;
+      sm.needsUpdate = motion.scheduleShadows();
+      if (sm.needsUpdate) counts.shadow++;
+      super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+      motion.shadowsDrawn();
+    } finally {
+      scene.matrixWorldAutoUpdate = autoMatrices;
     }
-    super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
     uniforms.uLookAO.value = 0;
   }
 }

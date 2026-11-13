@@ -244,11 +244,13 @@ export async function mount(ctx) {
     crt.setPower(devices.power.on);
     crt.update(dt);
     atmosphere.update(dt);
+    stage.motion.observe({ state: sim.state, layout: sim.layout, soft: printer.soft, easing: atmosphere.environment.easing, glow: atmosphere.glow });
     stage.composer.render();
     markers.update();
     screenCard.render();
     frameTimes[nFt++ % frameTimes.length] = performance.now() - t0;
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
+    stage.govern(now);
   }
   requestAnimationFrame(loop);
   // The first sound's downloads (worklet chunk, sprites), at idle after the first frame.

@@ -92,8 +92,8 @@ export class MachineView {
 
   async tryLoadGLB(url) {
     try {
-      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-      const gltf = await new GLTFLoader().loadAsync(url);
+      const { loadGLTF } = await import('./gltf.js');
+      const gltf = await loadGLTF(url);
       const matByName = { japanned: this.mats.japanGlb, rubber: this.mats.rubber, nickel: this.mats.nickelGlb };
       gltf.scene.traverse((o) => {
         if (!o.isMesh) return;

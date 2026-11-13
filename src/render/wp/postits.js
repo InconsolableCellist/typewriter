@@ -2,6 +2,7 @@
 // Each is a 3 x 3 in note drawn on a canvas, lying on the desk a little askew with its top edge curling up off it.
 // The steps are the real Textpack 4 keystrokes, checked against the software (tests/wp_notes.test.js).
 import * as THREE from 'three';
+import { versioned } from '../../asset-version.js';
 
 const INCH = 0.0254;
 export const NOTE_SIZE = 3 * INCH;
@@ -26,7 +27,7 @@ const FONT_URL = '/assets/fonts/caveat-600.woff2';
 let fontReady = null;
 function loadFont() {
   if (typeof FontFace === 'undefined') return Promise.resolve(false);
-  fontReady ??= new FontFace('WpHand', `url(${FONT_URL})`).load().then((f) => { document.fonts.add(f); return true; }).catch(() => false);
+  fontReady ??= new FontFace('WpHand', `url(${versioned(FONT_URL)})`).load().then((f) => { document.fonts.add(f); return true; }).catch(() => false);
   return fontReady;
 }
 

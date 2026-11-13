@@ -1,4 +1,8 @@
-# Cloudflare Pages / Workers static assets. Big assets are cached for a day and revalidated in the background
-# for a week after that, so a returning visitor does not re-request ~30 files on every load.
+# Cloudflare Workers static assets. Everything under these two folders is named by its content: Vite's chunks by
+# Vite (build.assetsDir), and the files from public/assets/ by vite/assets.js, which hashes each one and maps the
+# plain path to the hashed name in the code (src/asset-version.js). A name never changes meaning, so a browser keeps
+# each file for a year without asking again, and a deploy re-downloads only what changed.
+/_app/*
+  Cache-Control: public, max-age=31536000, immutable
 /assets/*
-  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Cache-Control: public, max-age=31536000, immutable

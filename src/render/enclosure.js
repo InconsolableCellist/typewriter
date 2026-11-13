@@ -13,10 +13,8 @@ export class Enclosure {
 
   async load(url) {
     try {
-      // One request: a missing file (or a dev server's HTML fallback for it) is told from the GET itself.
-      const [res, { GLTFLoader }] = await Promise.all([fetch(url), import('three/examples/jsm/loaders/GLTFLoader.js')]);
-      if (!res.ok || (res.headers.get('content-type') ?? '').includes('text/html')) return false;
-      const gltf = await new GLTFLoader().parseAsync(await res.arrayBuffer(), url.slice(0, url.lastIndexOf('/') + 1));
+      const { loadGLTF } = await import('./gltf.js');
+      const gltf = await loadGLTF(url);
       const byName = { enclosure_paint: this.mats.japanGlb, enclosure_trim: this.mats.nickelGlb };
       gltf.scene.traverse((o) => {
         o.layers.set(1);

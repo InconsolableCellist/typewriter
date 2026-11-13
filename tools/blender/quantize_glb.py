@@ -1,9 +1,11 @@
 """Quantizes a GLB in place with KHR_mesh_quantization (read natively by three.js's GLTFLoader and by Blender):
-positions become 16-bit integers in steps of STEP metres, normals 8-bit normalized. UVs stay float, so one UV unit is
-still 0.2 m (models.md); a primitive whose UVs are all zero (small parts) loses them. Each mesh moves onto a child node that carries the dequantizing scale, so the named node
-keeps its own transform and anything that rotates it about its origin is unaffected.
+positions become 16-bit integers in steps of STEP metres, normals 8-bit normalized (16-bit with normal_bits=16). UVs
+stay float, so one UV unit is still 0.2 m (models.md); a primitive whose UVs are all zero (small parts) loses them, and
+attributes named in `drop` go too. Each mesh moves onto a child node that carries the dequantizing scale, so the named
+node keeps its own transform and anything that rotates it about its origin is unaffected. (The deploy adds meshopt
+compression on top at build time: docs/assets.md, Models.)
 
-  python3 tools/blender/quantize_glb.py public/assets/models/wp_station.glb
+  python3 tools/blender/quantize_glb.py [--normal-bits 16] [--drop TEXCOORD_1] public/assets/models/wp_station.glb
 """
 import json
 import struct
@@ -16,7 +18,7 @@ def pad4(b):
     return b + b"\0" * (-len(b) % 4)
 
 
-def quantize(path):
+def quantize(path, normal_bits=8, drop=()):
     raw = open(path, "rb").read()
     jlen = struct.unpack_from("<I", raw, 12)[0]
     gltf = json.loads(raw[20:20 + jlen])
@@ -63,7 +65,7 @@ def quantize(path):
         for prim in mesh["primitives"]:
             at = prim["attributes"]
             for key, ai in list(at.items()):
-                if key.startswith("TEXCOORD") and all(c == 0 for p in read(ai) for c in p):
+                if key in drop or (key.startswith("TEXCOORD") and all(c == 0 for p in read(ai) for c in p)):
                     del at[key]            # a small part with one UV (wp_mould.finish_small): no texture detail to place
                     continue
                 if (key, ai) in remap:
@@ -76,6 +78,9 @@ def quantize(path):
                     mn = [min(p[i] for p in q) for i in range(3)]
                     mx = [max(p[i] for p in q) for i in range(3)]
                     na = acc(add(data, 34962, 8), 5122, len(q), "VEC3", False, mn, mx)
+                elif key == "NORMAL" and normal_bits == 16:
+                    data = b"".join(struct.pack("<hhhh", *(max(-32767, min(32767, round(c * 32767))) for c in p), 0) for p in vals)
+                    na = acc(add(data, 34962, 8), 5122, len(vals), "VEC3", True)
                 elif key == "NORMAL":
                     data = b"".join(struct.pack("<bbbb", *(max(-127, min(127, round(c * 127))) for c in p), 0) for p in vals)
                     na = acc(add(data, 34962, 4), 5120, len(vals), "VEC3", True)
@@ -118,5 +123,14 @@ def quantize(path):
 
 
 if __name__ == "__main__":
-    for p in sys.argv[1:]:
-        quantize(p)
+    bits, drop, paths, argv = 8, [], [], sys.argv[1:]
+    while argv:
+        a = argv.pop(0)
+        if a == "--normal-bits":
+            bits = int(argv.pop(0))
+        elif a == "--drop":
+            drop.append(argv.pop(0))
+        else:
+            paths.append(a)
+    for p in paths:
+        quantize(p, normal_bits=bits, drop=drop)

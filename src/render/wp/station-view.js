@@ -3,7 +3,7 @@
 // frame (origin on the surface it stands on, under its centre; x right, y up, z toward the typist) and the parts other
 // code drives, as the primitive builders in units.js did. See docs/displaywriter/models.md, "Display station".
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadGLTF } from '../gltf.js';
 import { glbUnitMaterials } from './units.js';
 import { mergeStaticMeshes, partObjects } from './merge-static.js';
 
@@ -12,7 +12,7 @@ export const DISPLAY_URL = '/assets/models/wp_display.glb';
 const ROCK = 0.16;            // rad: the rocker's throw either side of centre (build_wp_station.py ROCK)
 
 async function load(url, mats) {
-  const gltf = await new GLTFLoader().loadAsync(url);
+  const gltf = await loadGLTF(url);
   const g = glbUnitMaterials(mats);
   const own = unitOwnMaterials(mats, g);
   const nodes = {};

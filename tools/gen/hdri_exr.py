@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Convert the downloaded Radiance HDRI to the half-float, DWAB-compressed OpenEXR the renderer loads.
 
-  python3 tools/gen/hdri_exr.py path/to/combination_room_2k.hdr
+  python3 tools/gen/hdri_exr.py path/to/combination_room_2k.hdr     # or a 2k .exr (the one this script wrote before)
 
-Writes public/assets/hdri/combination_room_2k.exr. DWAB at its default level (45) is about 40 % of the RGBE file's
-size; after the renderer's exposure and a tone curve the error is about 57 dB PSNR, under one 8-bit display step.
-See docs/assets.md. Needs numpy and the OpenEXR bindings (pip install OpenEXR).
+Box-filters the 2048 x 1024 source to 1024 x 512 and writes public/assets/hdri/combination_room_1k.exr. The renderer
+only ever samples the HDRI through its prefiltered cube map (image light, and the backdrop at backgroundBlurriness
+0.06), whose face is a quarter of the image's width: 256 px from a 1k image, the size of the studio environment it
+replaces, so the lit programs are not relinked when it arrives. DWAB at its default level (45); after the renderer's
+exposure and a tone curve the error is under one 8-bit display step. See docs/assets.md. Needs numpy and the OpenEXR
+bindings (pip install OpenEXR).
 """
 import os
 import sys
@@ -14,7 +17,8 @@ import numpy as np
 import OpenEXR
 
 OUT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "public", "assets", "hdri",
-                                   "combination_room_2k.exr"))
+                                   "combination_room_1k.exr"))
+WIDTH = 1024
 
 
 def read_rgbe(path):
@@ -54,8 +58,20 @@ def read_rgbe(path):
     return rgbe[..., :3].astype(np.float32) * scale[..., None]
 
 
+def read_exr(path):
+    with OpenEXR.File(path) as f:
+        return np.asarray(f.channels()["RGB"].pixels, np.float32)
+
+
+def box_halve(rgb):
+    """Mean of each 2 x 2 block, in linear light (rows and columns even)."""
+    return 0.25 * (rgb[0::2, 0::2] + rgb[1::2, 0::2] + rgb[0::2, 1::2] + rgb[1::2, 1::2])
+
+
 def main():
-    rgb = read_rgbe(sys.argv[1])
+    rgb = read_exr(sys.argv[1]) if sys.argv[1].endswith(".exr") else read_rgbe(sys.argv[1])
+    while rgb.shape[1] > WIDTH:
+        rgb = box_halve(rgb)
     header = {"compression": OpenEXR.DWAB_COMPRESSION, "type": OpenEXR.scanlineimage, "dwaCompressionLevel": 45.0}
     with OpenEXR.File(header, {"RGB": np.ascontiguousarray(rgb.astype(np.float16))}) as f:
         f.write(OUT)

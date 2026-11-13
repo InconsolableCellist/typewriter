@@ -2,6 +2,7 @@
 import './asset-version.js';
 import './ui/loader.js';
 import { MACHINES, DEFAULT_MACHINE, UNLISTED, KITS } from './machine/index.js';
+import { loadGlyphs } from './machine/glyphs.js';
 
 const params = new URLSearchParams(location.search);
 
@@ -24,8 +25,11 @@ async function main() {
   const canvas = document.getElementById('c');
   canvas.addEventListener('webglcontextlost', () => console.warn('webgl context lost'));
   const machines = Object.values(MACHINES).filter((m) => !UNLISTED.has(m.id) || params.has('wp') || m.id === machine.id);
+  // The glyph faces are needed before the first frame by every kit: fetched while the kit's chunks load.
+  const glyphs = loadGlyphs(machine.glyphs);
+  glyphs.catch(() => {});   // the kit awaits it and reports a failure
   const kit = await KITS[machine.action.type]();
-  await kit.mount({ canvas, params, machine, machines, onPick: pick });
+  await kit.mount({ canvas, params, machine, machines, onPick: pick, glyphs });
 }
 
 main().catch((e) => {

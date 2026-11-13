@@ -1,7 +1,7 @@
 // The word processor's unit materials: the textured plastics the Blender-built units (src/render/wp/*-view.js) take by
 // name, with the pebble grain on the covers and the satin grain on the keycaps (docs/displaywriter/models.md).
 import * as THREE from 'three';
-import { applyTextureSet } from '../materials.js';
+import { applyTextureSet, setTile } from '../materials.js';
 
 /**
  * The units' materials. The moulded plastics carry the pebble grain (wp_pebble), the key caps their satin plastic
@@ -42,41 +42,15 @@ export function glbUnitMaterials(mats) {
   return mats.glb;
 }
 
-// The authored plastic sets (tools/gen/materials.py): neutral albedo, normal and roughness, loaded once and shared.
-const TEX = '/assets/textures/';
-const sets = new Map();
-function loadSet(name) {
-  if (!sets.has(name)) {
-    const one = async (kind, srgb) => {
-      const r = await fetch(`${TEX}${name}_${kind}.avif`);
-      if (!r.ok) return null;
-      const t = new THREE.Texture(await createImageBitmap(await r.blob(), { imageOrientation: 'flipY' }));
-      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.flipY = false; t.anisotropy = 8;
-      t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.needsUpdate = true;
-      return t;
-    };
-    sets.set(name, Promise.all([
-      fetch(`${TEX}materials.json`).then((r) => r.json()).then((j) => j[name]?.tile ?? 0.05).catch(() => 0.05),
-      one('albedo', true), one('normal', false), one('roughness', false),
-    ]));
-  }
-  return sets.get(name);
-}
-
 /**
  * A copy of a unit material with a textured plastic set on it, for models whose UVs are box projected at one UV unit
- * = 0.2 m (the Blender-built units). The colour stays the material's; the maps arrive asynchronously.
+ * = 0.2 m (the Blender-built units). The colour stays the material's; the maps arrive asynchronously, from the same
+ * download and decode as the units' own materials (applyTextureSet).
  */
 export function texturedUnitMaterial(base, set = 'wp_pebble') {
   const m = base.clone();
   if (typeof document === 'undefined') return m;
-  loadSet(set).then(([tile, a, n, r]) => {
-    const rep = 0.2 / tile;
-    const use = (t) => { if (!t) return null; const c = t.clone(); c.repeat.set(rep, rep); c.needsUpdate = true; return c; };
-    if (a) m.map = use(a);
-    if (n) { m.normalMap = use(n); m.normalScale = new THREE.Vector2(1, 1); }
-    if (r) { m.roughnessMap = use(r); m.roughness = 1; }
-    m.needsUpdate = true;
-  }).catch((e) => console.info('texture', set, e));
+  const rep = 0.2 / setTile(set, 0.05);
+  applyTextureSet(set, [{ mat: m, repeat: [rep, rep] }]).catch((e) => console.info('texture', set, e));
   return m;
 }

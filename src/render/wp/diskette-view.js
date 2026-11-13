@@ -144,8 +144,8 @@ function leverTexture(mark) {
  * whose result poses itself with `inSlot(i, depth)` and `inPlace(k)`.
  */
 export async function buildDiskette(size, mats, { url = DISKETTE_URL, driveMark = '1/2D' } = {}) {
-  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const gltf = await new GLTFLoader().loadAsync(url);
+  const { loadGLTF } = await import('../gltf.js');
+  const gltf = await loadGLTF(url);
   const root = gltf.scene;
   const node = (name, within = root) => {
     const o = within.getObjectByName(name);

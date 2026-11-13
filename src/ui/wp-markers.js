@@ -46,9 +46,10 @@ export class WayMarkers {
       const b = unionBox(t.boxes.map((n) => this.boxes()[n]).filter(Boolean));
       if (!Number.isFinite(b.min[0])) continue;
       const rear = t.id.endsWith('/rear');
-      // The marker sits on the near face of its box, at its middle; the view around the back on its right side.
+      // The marker sits at the bottom of its box's near face, so it never covers the thing itself (the screen's text);
+      // the view around the back on the box's right side.
       const at = rear ? [b.max[0], (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2]
-        : [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, b.max[2]];
+        : [(b.min[0] + b.max[0]) / 2, b.min[1], b.max[2]];
       const el = document.createElement('button');
       el.type = 'button'; el.tabIndex = -1; el.className = 'way';
       el.innerHTML = `<span class="ring">${rear ? TURN : ARROW}</span><span class="name">${t.label}</span>`;

@@ -32,10 +32,10 @@ import { buildPrinter } from '../render/wp/printer-view.js';
 import { ViewNav, viewSpec, poseOf, fallbackBoxes, LEGACY_CAMERAS } from '../interact/wp-views.js';
 import { makePicker, installWpPointer } from '../interact/wp-pointer.js';
 import { WayMarkers } from '../ui/wp-markers.js';
+import { createPostits } from '../render/wp/postits.js';
 import { installNavUi } from '../ui/wp-nav.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 import { installStationControls, addHitProxy } from './wp/station.js';
-import { ROW } from '../wp/screen.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -128,7 +128,7 @@ export async function mount(ctx) {
      unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
   const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
   keyboard.onSound = (e) => keySounds.play(e, simNow());
-  new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => unlockAudio(), enterIsEnter: () => sys?.screen.cursor.on && sys.screen.cursor.row === ROW.PROMPT });
+  new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => unlockAudio() });
   window.addEventListener('pointerdown', () => unlockAudio(), { once: true });
   window.addEventListener('beforeunload', (e) => { if (sys.doc) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -158,6 +158,13 @@ export async function mount(ctx) {
     paperPath: [units.printer],
   };
   for (const [n, objs] of Object.entries(named)) boxes[n] = boxOf(objs) ?? boxes[n];
+  // The operator's sticky notes, on the desk right of the keyboard, in front of the diskette unit.
+  const kb = boxes.keyboard, dk = boxes.diskette, deskY = kb.min[1];
+  const nx = Math.max(kb.max[0], dk.min[0]) + 0.055, nz = Math.max(dk.max[2], kb.min[2]) + 0.075;
+  const notes = createPostits({ scene: stage.scene, renderer: stage.renderer, spots: [
+    [nx, deskY, nz + 0.07, 0.10], [nx + 0.09, deskY, nz + 0.035, -0.06], [nx + 0.18, deskY, nz + 0.075, 0.07],
+  ] });
+  boxes.notes = notes.box;
   const startId = viewSpec(params.get('view'))?.id ?? LEGACY_CAMERAS[params.get('cam') ?? machine.defaultCamera] ?? 'desk';
   const frame = (id) => poseOf(id, boxes, camera.aspect, camera.fov);
   stage.resize(window.innerWidth, window.innerHeight);
@@ -226,7 +233,7 @@ function buildPanel(ctx, feeder, screenCard) {
   const el = document.getElementById('panel');
   el.innerHTML = `
     <div class="actions"><button id="a-feeder" aria-pressed="true" title="the printer's sheet feeder lays each sheet in; off, click the fresh paper to lay one">sheet feeder</button><button id="a-screen" title="the Screen card: the display's picture, whatever the camera shows">screen card</button><button id="a-keys" title="how the PC keyboard maps onto the machine's">keys</button></div>
-    <div class="note" id="keysNote" hidden>Letters, digits and punctuation: as marked · Alt: CODE · Enter: ENTER at a prompt, RETURN in a document · AltGr or keypad Enter: ENTER · Esc: CANCL ·
+    <div class="note" id="keysNote" hidden>Letters, digits and punctuation: as marked · Alt: CODE · AltGr (right Alt) or keypad Enter: ENTER · Enter: RET · Esc: CANCL ·
       F1 REQST · F2 PRINT · F3 FIND · F4 GO TO · F5 MOVE · F6 LINE ADJ · F7 SPELL · F8 CHG FMT · F9 GET · F10 PAGE END ·
       Delete: DEL · End: END · Insert: MSG · PageDown / PageUp: screen down / up · keys with no PC match: click them ·
       Views (the machine never sees these): Ctrl+Shift+← / → next station · Ctrl+Shift+↓ back · Ctrl+Shift+↑ free view · or keypad 4 / 6, 2, 5</div>
@@ -245,7 +252,7 @@ function buildPanel(ctx, feeder, screenCard) {
   picker.value = ctx.machine.id;
   picker.addEventListener('change', () => ctx.onPick(picker.value));
   const hint = document.getElementById('hint');
-  if (hint) hint.textContent = 'type on your keyboard · Enter answers prompts · Alt = CODE, Esc = CANCL · the circles, the edge arrows and the bar move the view · ◉ hides the circles · ◎ free view';
+  if (hint) hint.textContent = 'type on your keyboard · right Alt = ENTER, Enter = RET, left Alt = CODE, Esc = CANCL · the circles, the edge arrows and the bar move the view · ◉ hides the circles · ◎ free view';
   return el;
 }
 

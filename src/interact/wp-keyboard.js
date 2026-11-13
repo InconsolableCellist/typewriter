@@ -9,13 +9,8 @@ const MIN_HOLD_S = 0.04;
 
 export class WpKeyboardInput {
   /** press(index, forceN) drives a key; now() is the mechanism clock in s. */
-  /**
-   * enterIsEnter(): true while the machine waits on its prompt line (a menu choice, a name, a FIND string), where the
-   * operator ends the answer with ENTER. The PC's Enter then presses ENTER; in the typing area it presses RETURN as its
-   * place on the keyboard says. AltGr and keypad Enter are always ENTER.
-   */
-  constructor({ press, now, onFirstKey, enterIsEnter }) {
-    this.press = press; this.now = now; this.onFirstKey = onFirstKey; this.enterIsEnter = enterIsEnter;
+  constructor({ press, now, onFirstKey }) {
+    this.press = press; this.now = now; this.onFirstKey = onFirstKey;
     this.held = new Map();       // e.code -> { indices, at }
     this.pending = [];           // releases waiting for the minimum hold
     this.altGrAt = -1;
@@ -25,7 +20,6 @@ export class WpKeyboardInput {
   }
 
   indicesFor(code) {
-    if (code === 'Enter' && this.enterIsEnter?.()) code = 'NumpadEnter';
     const pos = KEYMAP[code];
     if (pos) return [KEY_BY_POS[pos].index];
     const chord = CHORDS[code];

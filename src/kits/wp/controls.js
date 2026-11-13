@@ -14,12 +14,12 @@ const clampTo = (v, [a, b]) => (Number.isFinite(v) ? Math.min(b, Math.max(a, v))
 /**
  * The knobs' positions (0 at the left stop, 1 at the right) as the CRT's drive. Contrast is the video amplifier's gain
  * on the characters: 0.3 to 1.7 of nominal, nominal at mid travel. Brightness is the grid bias: the whole picture's
- * level from 0.55 to 1.45 of nominal, and the bare raster's glow from black to a plainly grey field (0.002 to 0.042,
- * 0.012 at mid travel, where the unlit raster is just visible, HW 1.4). Out-of-range inputs sit at the stops.
+ * level from 0.55 to 1.45 of nominal, and the bare raster's glow from black to a plainly grey field (0.002 to 0.082,
+ * 0.022 at mid travel, where the unlit raster is plainly visible, HW 1.4). Out-of-range inputs sit at the stops.
  */
 export function crtDrive({ contrast = DISPLAY_DEFAULTS.contrast, brightness = DISPLAY_DEFAULTS.brightness } = {}) {
   const c = clamp01(contrast) ?? DISPLAY_DEFAULTS.contrast, b = clamp01(brightness) ?? DISPLAY_DEFAULTS.brightness;
-  return { gain: 0.3 + 1.4 * c, level: 0.55 + 0.9 * b, raster: 0.002 + 0.04 * b * b };
+  return { gain: 0.3 + 1.4 * c, level: 0.55 + 0.9 * b, raster: 0.002 + 0.08 * b * b };
 }
 
 /** A knob's turn from its mid position (rad, clockwise seen from the front positive) for a position 0..1. */

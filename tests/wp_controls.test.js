@@ -20,10 +20,10 @@ const deg = Math.PI / 180;
 test('knobs: contrast drives the character gain, brightness the level and the bare raster, within their stops', () => {
   const mid = crtDrive(DISPLAY_DEFAULTS);
   assert.ok(Math.abs(mid.gain - 1) < 1e-9 && Math.abs(mid.level - 1) < 1e-9, 'nominal at mid travel');
-  assert.ok(Math.abs(mid.raster - 0.012) < 1e-9, 'the raster just visible at mid travel, as before the knobs worked');
+  assert.ok(Math.abs(mid.raster - 0.022) < 1e-9, 'the raster as the CRT sets it, at mid travel');
   const lo = crtDrive({ contrast: 0, brightness: 0 }), hi = crtDrive({ contrast: 1, brightness: 1 });
   assert.ok(lo.gain > 0.2 && hi.gain < 2, 'contrast never blanks the text nor blows it out');
-  assert.ok(lo.level > 0.5 && hi.level < 1.5 && lo.raster > 0 && hi.raster < 0.05);
+  assert.ok(lo.level > 0.5 && hi.level < 1.5 && lo.raster > 0 && hi.raster < 0.1);
   let prev = null;
   for (let v = 0; v <= 1.0001; v += 0.05) {
     const d = crtDrive({ contrast: v, brightness: v });

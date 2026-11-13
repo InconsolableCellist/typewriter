@@ -113,3 +113,14 @@ html, body { margin: 0; height: 100%; background: #08080a; overflow: hidden; fon
   #navNote { top: auto; bottom: 210px; }
   body.wp-views #hint { display: none; }
 }
+
+/* Way markers (src/ui/wp-markers.js): a circle with an arrow over each place the view can go. */
+#navMarkers { position: fixed; inset: 0; pointer-events: none; z-index: 15; }
+#navMarkers[hidden] { display: none; }
+#navMarkers .way { position: absolute; left: 0; top: 0; margin: -22px 0 0 -22px; padding: 0; border: 0; background: none; pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+#navMarkers .ring { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(12,13,15,.55); border: 2px solid rgba(242,181,107,.85); box-shadow: 0 1px 6px rgba(0,0,0,.4); transition: background .15s, transform .15s; }
+#navMarkers svg { width: 24px; height: 24px; fill: #f2b56b; stroke: #f2b56b; transition: transform .2s; }
+#navMarkers .name { font: 10.5px "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace; letter-spacing: .06em; color: #e8e3d6; background: rgba(10,11,13,.75); padding: 1px 6px; border-radius: 2px; white-space: nowrap; opacity: 0; transition: opacity .15s; }
+#navMarkers .way:hover .ring { background: rgba(12,13,15,.82); transform: scale(1.08); }
+#navMarkers .way:hover .name { opacity: 1; }
+@media (hover: none) { #navMarkers .name { opacity: .9; } }

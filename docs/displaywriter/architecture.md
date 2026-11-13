@@ -303,7 +303,7 @@ but in a free view it would hold the target near the desk's centre.
 Every control the operator touches works in the browser. A control is a pickable for the pointer (3.5) whose
 `part()` gives its hover label and what it does: `onClick`, or `onDrag(dx, dy)` and `onDragEnd` for a knob or the
 display's cabinet, and `onWheel(deltaY)` while the pointer is over it. A drag on a control never orbits; a control
-with no `onClick` passes a click on to the view behind it (the cabinet to the Screen), and its label names both.
+with no `onClick` would pass a click on to a view target behind it, but the kit now gives the picker no view targets (clicks on objects never navigate; the way markers do), so only controls and keys answer a click. Both power switches carry an invisible hit proxy a little larger than their wells (`addHitProxy`).
 Where the mechanism host has a DOF, a hand grabs it (`sim.grab`); where the real part has no simulated DOF, its
 position is view-side state. The pure logic is `src/kits/wp/controls.js`, tested by `tests/wp_controls.test.js`.
 
@@ -312,7 +312,7 @@ position is view-side state. The pure logic is `src/kits/wp/controls.js`, tested
 | Station power rocker | click | `wordproc.js switchPower`: the rocker's pose, `station` power in the host (fan and drive motors run down, and their sound), `crt.setPower` (the raster collapses to the spot), `WpSystem.powerOff()` (saves due are written, every task stops). On again: a new system, `cold` with `t0` at the kit's clock, runs the power-on test and loads the program as `?cold` does |
 | Rear LEDs A to H | (no input) | `stationLeds(t)` from the time the station was switched on: all on for 1.2 s, then one stepping A to H at 0.3 s, then G alone while it runs; all off when off |
 | Contrast knob | drag (up or right is clockwise), wheel | `crtDrive`: the phosphor pass's character gain, 0.3 to 1.7 of nominal |
-| Brightness knob | drag, wheel | `crtDrive`: the picture's level (`uBright` times 0.55 to 1.45) and the bare raster's glow (`uRaster` 0.002 to 0.042). The Screen card shares these uniforms. A faint detent tick (`WpSpeaker.tick`) every 1/24 of the turn |
+| Brightness knob | drag, wheel | `crtDrive`: the picture's level (`uBright` times 0.55 to 1.45) and the bare raster's glow (`uRaster` 0.002 to 0.082, 0.022 at mid travel as the CRT starts). The Screen card shares these uniforms. A faint detent tick (`WpSpeaker.tick`) every 1/24 of the turn |
 | Display tilt and swivel | drag on the cabinet: up leans back, sideways turns | `parts.display.setTilt/setSwivel`, clamped to 0 to 20 degrees and 12 degrees either way (HW 1.3); the glass and its spill light are in the tilt node and follow. Knobs, tilt and swivel are remembered in `localStorage['typewriter.wp.display']` |
 | Keyboard card window | click | lifts 32 degrees on a hinge along its back edge, and lays back |
 | Printer panel keys | click (a 160 ms press) | the `panelKey` DOF; the controller's panel scan does the rest: Start, Stop, Print Test (off line), Cancel, Load, Release, Paper Up and Down |

@@ -26,6 +26,7 @@ import { installEnvironment } from '../render/environment.js';
 import { DeskSway } from '../render/desk-sway.js';
 import { BallBlur } from '../render/ball-blur.js';
 import { Ambience } from '../audio/ambience.js';
+import { compileBeforeFirstFrame, trackProgramLinks } from '../render/warmup.js';
 // Always needed, so imported statically: their chunks are preloaded with this one instead of found one after another.
 import { createSimClient } from '../sim/client.js';
 import { SoftWorld } from '../soft/index.js';
@@ -64,6 +65,7 @@ export async function mount(ctx) {
   useMock = params.has('mock');
   const canvas = ctx.canvas;
   const stage = createScene(canvas);
+  trackProgramLinks(stage.renderer);
   const geometry = deriveGeometry(machine);
   const rig = deriveRig(machine, geometry);
   const glyphs = await loadGlyphs(ctx.glyphs);
@@ -241,6 +243,8 @@ export async function mount(ctx) {
     }
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
   }
+  // Every program compiled behind the loading screen, including those of the models still on their way.
+  await compileBeforeFirstFrame(stage, [desk.mat, ...(isElement ? [view.emats.paint, view.emats.black, view.emats.rubberFoot] : [mats.japanGlb, mats.nickelGlb, mats.rubber, mats.japan])]);
   requestAnimationFrame(loop);
   // The first sound's downloads (worklet chunk, sprites), at idle after the first frame.
   import('./audio-prefetch.js').then((m) => { if (!unlocked) m.prefetchAudioWhenIdle(machine, { worklet: !!sim.unlockAudio && !sim.isMock }); }).catch(() => {});

@@ -167,6 +167,37 @@ async function roughnessChain(name, aniso) {
   return asTexture(mips[0], { aniso, mipmaps: mips });
 }
 
+// 1 x 1 stand-ins for the maps that arrive later. A material is created with them, so its shader program already has
+// the map, normal map, roughness and metalness map paths, and does not change (relink) when the real textures replace
+// them. Each is neutral: white albedo and roughness/metalness multiply by 1, the normal is exactly flat (half float).
+let PLACEHOLDERS = null;
+function placeholders() {
+  if (PLACEHOLDERS) return PLACEHOLDERS;
+  const one = (data, type, srgb) => {
+    const t = new THREE.DataTexture(data, 1, 1, THREE.RGBAFormat, type);
+    t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true;
+    return t;
+  };
+  const h = (x) => THREE.DataUtils.toHalfFloat(x);
+  PLACEHOLDERS = {
+    map: one(new Uint8Array([255, 255, 255, 255]), THREE.UnsignedByteType, true),
+    normal: one(new Uint16Array([h(0.5), h(0.5), h(1), h(1)]), THREE.HalfFloatType, false),
+    grey: one(new Uint8Array([255, 255, 255, 255]), THREE.UnsignedByteType, false),
+  };
+  return PLACEHOLDERS;
+}
+
+/** Gives `mat` a stand-in for each map that will arrive later and that it does not have yet (see placeholders()). */
+export function placeholderMaps(mat, { map = false, normal = false, roughness = false, metalness = false } = {}) {
+  const p = placeholders();
+  if (map && !mat.map) mat.map = p.map;
+  if (normal && !mat.normalMap) mat.normalMap = p.normal;
+  if (roughness && !mat.roughnessMap) mat.roughnessMap = p.grey;
+  if (metalness && !mat.metalnessMap) mat.metalnessMap = p.grey;
+  mat.needsUpdate = true;
+  return mat;
+}
+
 /** Physical parameters from materials.json that this renderer applies. */
 const PHYSICAL_KEYS = ['clearcoat', 'clearcoatRoughness', 'ior', 'envMapIntensity', 'sheen', 'sheenRoughness', 'specularIntensity', 'anisotropy', 'anisotropyRotation'];
 
@@ -187,6 +218,7 @@ function loadPlainSet(name, aniso) {
  * set reuse the first one's download and decode.
  */
 export async function applyTextureSet(name, uses, aniso = 8) {
+  for (const { mat } of uses) placeholderMaps(mat, { map: true, normal: true, roughness: true });   // before the first await: in place for compileAsync
   const [a, n, r] = await loadPlainSet(name, aniso);
   for (const { mat, repeat } of uses) {
     const rep = (t) => { if (!t) return null; const c = t.clone(); c.repeat.set(repeat[0], repeat[1]); c.needsUpdate = true; return c; };
@@ -241,6 +273,14 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
   // Every download and decode starts now, in parallel; only the hand-over to the materials (and so the GPU uploads)
   // below goes one set at a time.
   for (const j of wanted) loadSet(j.name, j).catch(() => {});
+  // Before the first await, so it is in place when the kit compiles the shaders: each material gets its final
+  // physical features (clearcoat, sheen, anisotropy...) and a stand-in for every map it will receive.
+  for (const j of wanted) {
+    const phys = table[j.name]?.physical ?? {};
+    for (const k of PHYSICAL_KEYS) if (phys[k] !== undefined && k in j.mat && !j.skip?.includes(k)) j.mat[k] = phys[k];
+    if (phys.sheenColor && j.mat.sheenColor) j.mat.sheenColor.setRGB(...phys.sheenColor);
+    placeholderMaps(j.mat, { map: !j.noAlbedo, normal: true, roughness: true, metalness: !!j.metal });
+  }
   for (const j of wanted) {
     try {
       const [a, n, r, mt] = await loadSet(j.name, j);
@@ -250,8 +290,6 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
       if (a && !j.noAlbedo) { j.mat.map = withRepeat(a, j.repeat); if (!j.keepColor) j.mat.color.setRGB(j.tint ?? 1, j.tint ?? 1, j.tint ?? 1); }
       if (mt) { j.mat.metalnessMap = withRepeat(mt, j.repeat); j.mat.metalness = 1; }
       else if (phys.metalness !== undefined) j.mat.metalness = phys.metalness;
-      for (const k of PHYSICAL_KEYS) if (phys[k] !== undefined && k in j.mat && !j.skip?.includes(k)) j.mat[k] = phys[k];
-      if (phys.sheenColor && j.mat.sheenColor) j.mat.sheenColor.setRGB(...phys.sheenColor);
       j.mat.needsUpdate = true;
     } catch (e) { console.info('texture skipped', j.name, e); }
     await new Promise((r2) => setTimeout(r2, 16));   // spread the GPU uploads over several frames

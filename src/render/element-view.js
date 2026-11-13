@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import keycaps from './element-keycaps.json';
+import { placeholderMaps } from './materials.js';
 
 export const ELEMENT_ENCLOSURE_URL = '/assets/models/element_enclosure.glb';
 const BASE = '/assets/textures/';
@@ -24,6 +25,7 @@ export function createElementMaterials(mats, maxAniso = 8) {
   const chrome = new THREE.MeshStandardMaterial({ color: 0xc8c9cb, roughness: 0.18, metalness: 1, envMapIntensity: 1.15 });
   const cast = new THREE.MeshStandardMaterial({ color: 0x1a1b1d, roughness: 0.55, metalness: 0.35 });
   const keyPlastic = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.26, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 0.9 });
+  placeholderMaps(paint, { map: true, normal: true, roughness: true });   // the crinkle maps' slots, so its program is final now
   const out = { ...mats, paint, black, blackMatte, chrome, cast, keyPlastic, rubberFoot: mats.rubber };
   const TILE = 0.08, UV = 0.2;
   const load = async (name, srgb) => {

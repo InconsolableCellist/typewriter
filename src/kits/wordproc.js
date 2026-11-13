@@ -44,12 +44,14 @@ import { installPdfViewer } from '../ui/wp-pdf-viewer.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 import { installStationControls, addHitProxy } from './wp/station.js';
 import { installAtmosphere } from './wp/atmosphere.js';
+import { compileBeforeFirstFrame, trackProgramLinks } from '../render/warmup.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
   const { canvas, params, machine } = ctx;
   const geometry = geometryFor(machine);
   const stage = createScene(canvas);
+  trackProgramLinks(stage.renderer);
   const { mats } = createMaterials();
   document.title = machine.name;
 
@@ -256,6 +258,7 @@ export async function mount(ctx) {
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
     stage.govern(now);
   }
+  await compileBeforeFirstFrame(stage, [desk.mat]);   // behind the loading screen; the desk model is still on its way
   requestAnimationFrame(loop);
   // The first sound's downloads (worklet chunk, sprites), at idle after the first frame.
   import('./audio-prefetch.js').then((m) => m.prefetchAudioWhenIdle(machine, { worklet: !printer.sim.isMock && !params.has('localsim') })).catch(() => {});

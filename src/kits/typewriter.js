@@ -36,11 +36,10 @@ async function loadGlyphs() {
     const g = await m.loadGlyphs();
     if (g && g.data) return { chars: g.chars, data: g.data, N: g.N ?? 96, texelMm: g.texelMm ?? 0.05, raw: g };
   } catch { /* fall through to the local reader */ }
-  const [meta, bin] = await Promise.all([
-    fetch('/assets/glyphs.json').then((r) => r.json()),
-    fetch('/assets/glyphs.bin').then((r) => r.arrayBuffer()),
-  ]);
-  return { ...meta, data: new Uint8Array(bin) };
+  const meta = await fetch('/assets/glyphs.json').then((r) => r.json());
+  let data = new Uint8Array(await fetch(meta.gzip ? '/assets/glyphs.gz.bin' : '/assets/glyphs.bin').then((r) => r.arrayBuffer()));
+  if (meta.gzip) data = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+  return { ...meta, data };
 }
 
 async function createBackends(m, g, glyphs) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bakes type faces into height fields.
 Run: uv run --with pillow --with scipy --with numpy tools/bake_glyphs.py FONT.ttf [--set wp]
-Default set: the typewriter slugs, public/assets/glyphs.{bin,json} at 10 pitch.
+Default set: the typewriter slugs, public/assets/glyphs.{gz.bin,json} at 10 pitch, gzipped.
 --set wp: the printwheel's petals (docs/displaywriter/architecture.md 12.3), public/assets/glyphs_wp.{gz.bin,json}
 at 12 pitch: the 94 distinct characters of the 96-character keyboard, gzipped.
 Heights are 0..255 where 255 is the printing face and 0 is at or below the relief depth. The
@@ -41,11 +41,8 @@ for c in chars:
     heights.append(h); areas.append(float((h > 200).sum()) * TEXEL_MM ** 2)
 data = np.stack(heights).astype('uint8').tobytes()
 name = 'glyphs_wp' if wp else 'glyphs'
-if wp:
-    with open(f'public/assets/{name}.gz.bin', 'wb') as f: f.write(gzip.compress(data, 9, mtime=0))
-else:
-    open(f'public/assets/{name}.bin', 'wb').write(data)
-meta = {'N': N, 'texelMm': TEXEL_MM, 'baselineV': 0.72, 'chars': chars, 'faceAreaMm2': areas}
-if wp: meta['gzip'] = True
+# Gzipped as `.gz.bin` (served as octet-stream, which no CDN compresses); src/machine/glyphs.js unpacks it.
+with open(f'public/assets/{name}.gz.bin', 'wb') as f: f.write(gzip.compress(data, 9, mtime=0))
+meta = {'N': N, 'texelMm': TEXEL_MM, 'baselineV': 0.72, 'chars': chars, 'faceAreaMm2': areas, 'gzip': True}
 json.dump(meta, open(f'public/assets/{name}.json', 'w'), ensure_ascii=False)
 print(len(chars), 'glyphs; face area mm2: min', min(areas), 'max', max(areas))

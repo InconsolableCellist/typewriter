@@ -1,4 +1,4 @@
-// Type-slug glyph height fields. public/assets/glyphs.bin holds N x N Uint8 height fields (see
+// Type-slug glyph height fields. public/assets/glyphs.gz.bin holds N x N Uint8 height fields, gzipped (see
 // tools/bake_glyphs.py); 255 is the printing face, 0 is at or below the relief depth. Works in the
 // browser (fetch) and in Node (fs, resolved relative to this module) so tests can load real faces. A machine names
 // its set (`machine.glyphs`, default 'glyphs'); a set whose JSON says `gzip` keeps its height fields gzipped.

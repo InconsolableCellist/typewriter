@@ -38,6 +38,7 @@ import { installNavUi } from '../ui/wp-nav.js';
 import { createManual, MANUAL_URL } from '../render/wp/manual.js';
 import { createPacket } from '../render/wp/packet.js';
 import { installManualReader } from '../ui/wp-manual.js';
+import { installPdfViewer } from '../ui/wp-pdf-viewer.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 import { installStationControls, addHitProxy } from './wp/station.js';
 import { installAtmosphere } from './wp/atmosphere.js';
@@ -169,10 +170,12 @@ export async function mount(ctx) {
   // reader, which is installed before the view shortcuts so that, open, it takes every key ahead of them and of the
   // machine (Esc is CANCL).
   const reader = installManualReader();
+  // IBM's manual itself: the scan on bitsavers, shown in a frame over the desk (not copied to this site).
+  const pdfViewer = installPdfViewer({ url: MANUAL_URL, title: 'IBM Displaywriter System Operator Reference Guide, Textpack 4/Reportpack (S544-2036-0)' });
   const ml = machine.deskLayout.manual, du = units.diskette.position;
   const manual = createManual({ scene: stage.scene, renderer: stage.renderer, at: [du.x + ml.at[0], du.y + ml.at[1], du.z + ml.at[2]], yaw: ml.yaw });
   boxes.manual = manual.box;
-  pickables.push({ object: manual.hit, part: () => ({ label: 'IBM Operator Reference Guide (opens the scanned manual)', onClick: () => window.open(MANUAL_URL, '_blank', 'noopener') }) });
+  pickables.push({ object: manual.hit, part: () => ({ label: 'IBM Operator Reference Guide · read the scanned manual', onClick: () => pdfViewer.open() }) });
   const qs = machine.deskLayout.quickStart;
   const packet = createPacket({ scene: stage.scene, renderer: stage.renderer, at: [qs.x, deskY, qs.z], yaw: qs.yaw });
   boxes.packet = packet.box;

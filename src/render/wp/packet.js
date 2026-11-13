@@ -24,7 +24,7 @@ function drawTitlePage(canvas) {
   PAGES.slice(1).forEach((p, i) => g.fillText(`${String(i + 2).padStart(2)}  ${p.title}`, left, H * (0.27 + i * 0.045), W * 0.76));
   g.font = `400 ${Math.round(W * 0.026)}px ${mono}`;
   g.fillStyle = '#555';
-  g.fillText('The full IBM manual is the blue binder', left, H * 0.72, W * 0.8);
+  g.fillText('The full IBM manual is the grey binder', left, H * 0.72, W * 0.8);
   g.fillText('on the diskette unit.', left, H * 0.75, W * 0.8);
   // A pencil tick or two from the operator.
   g.strokeStyle = 'rgba(60,60,70,0.55)'; g.lineWidth = W * 0.004;

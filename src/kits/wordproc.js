@@ -37,6 +37,8 @@ import { createPostits } from '../render/wp/postits.js';
 import { installNavUi } from '../ui/wp-nav.js';
 import { createManual, MANUAL_URL } from '../render/wp/manual.js';
 import { createPacket } from '../render/wp/packet.js';
+import { createShelf } from '../render/wp/shelf.js';
+import { shelfLabel, scanUrl, viewerTitle } from '../render/wp/shelf-items.js';
 import { installManualReader } from '../ui/wp-manual.js';
 import { installPdfViewer } from '../ui/wp-pdf-viewer.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
@@ -170,7 +172,7 @@ export async function mount(ctx) {
   // reader, which is installed before the view shortcuts so that, open, it takes every key ahead of them and of the
   // machine (Esc is CANCL).
   const reader = installManualReader();
-  // IBM's manual itself: the scan on bitsavers, shown in a frame over the desk (not copied to this site).
+  // IBM's manuals themselves: each scan on bitsavers, shown in a frame over the desk (none copied to this site).
   const pdfViewer = installPdfViewer({ url: MANUAL_URL, title: 'IBM Displaywriter System Operator Reference Guide, Textpack 4/Reportpack (S544-2036-0)' });
   const ml = machine.deskLayout.manual, du = units.diskette.position;
   const manual = createManual({ scene: stage.scene, renderer: stage.renderer, at: [du.x + ml.at[0], du.y + ml.at[1], du.z + ml.at[2]], yaw: ml.yaw });
@@ -180,6 +182,15 @@ export async function mount(ctx) {
   const packet = createPacket({ scene: stage.scene, renderer: stage.renderer, at: [qs.x, deskY, qs.z], yaw: qs.yaw });
   boxes.packet = packet.box;
   pickables.push({ object: packet.hit, part: () => ({ label: 'Quick start: read the packet', onClick: () => reader.open() }) });
+  // The rest of IBM's training materials, on the bookcase right of the desk. A binder with a known scan opens it in the
+  // viewer; the others, and the loose cards and diskettes, only say what they are.
+  const shelf = createShelf({ scene: stage.scene, renderer: stage.renderer, spot: machine.deskLayout.shelf });
+  Object.assign(boxes, shelf.boxes);
+  for (const { object, item } of shelf.picks) {
+    const url = item.title ? scanUrl(item) : null;
+    const onClick = url ? () => pdfViewer.open({ url, title: viewerTitle(item) }) : () => {};
+    pickables.push({ object, part: () => ({ label: shelfLabel(item), onClick }) });
+  }
   const startId = viewSpec(params.get('view'))?.id ?? LEGACY_CAMERAS[params.get('cam') ?? machine.defaultCamera] ?? 'desk';
   const frame = (id) => poseOf(id, boxes, camera.aspect, camera.fov);
   stage.resize(window.innerWidth, window.innerHeight);
@@ -195,7 +206,7 @@ export async function mount(ctx) {
   // The camera moves only by the way markers, the bar and the edge arrows: a click on an object works it or nothing.
   const markers = new WayMarkers({ nav, boxes: () => boxes, camera, canvas });
   const navUi = installNavUi({ nav, highlight: null, markers });
-  const pickAt = makePicker({ camera, canvas, keys: parts.keyboard.keys, pickables, nav: { targets: () => [] }, boxes: () => boxes, solids: () => Object.values(units) });
+  const pickAt = makePicker({ camera, canvas, keys: parts.keyboard.keys, pickables, nav: { targets: () => [] }, boxes: () => boxes, solids: () => [...Object.values(units), shelf.group] });
   installWpPointer({
     canvas, orbit, nav, press: (i, f) => keyboard.press(i, f), hint: navUi.hint, show: navUi.show,
     pick: (e) => { const h = pickAt(e); if (h?.kind === 'key') h.label = keyLabel(h.key); return h; },
@@ -241,7 +252,7 @@ export async function mount(ctx) {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, packet, reader, atmosphere, environment: atmosphere.environment, ambience: atmosphere.ambience };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, packet, shelf, pdfViewer, reader, atmosphere, environment: atmosphere.environment, ambience: atmosphere.ambience };
   return window.__tw;
 }
 

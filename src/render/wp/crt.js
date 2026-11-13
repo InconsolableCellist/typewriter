@@ -144,11 +144,15 @@ export class CRT {
     const blinking = this._hasBlink();
     if (blinking && blinkOn !== this.pass.uniforms.uBlinkOn.value) changed = true;
     if (this.gain !== this.pass.uniforms.uGain.value) changed = true;
+    const wasQuiet = this.quiet > STATIC_AFTER;
     this.quiet = changed ? 0 : this.quiet + dt;
-    if (this.quiet > STATIC_AFTER) return;
+    if (this.quiet > STATIC_AFTER && wasQuiet) return;
+    // The pass stops once nothing changes; its last run clears the after-glow outright, or what was still fading then
+    // (the old prompt under a new one) would be held on the screen for good, faint but lit up by the halation.
+    const settle = this.quiet > STATIC_AFTER;
     const u = this.pass.uniforms;
-    u.uDecayFast.value = Math.exp(-dt / DECAY.fast);
-    u.uDecaySlow.value = Math.exp(-dt / DECAY.slow);
+    u.uDecayFast.value = settle ? 0 : Math.exp(-dt / DECAY.fast);
+    u.uDecaySlow.value = settle ? 0 : Math.exp(-dt / DECAY.slow);
     u.uBlinkOn.value = blinkOn;
     u.uGain.value = this.gain;
     const prev = this.targets[this.current], next = this.targets[1 - this.current];

@@ -3,6 +3,7 @@
 // and the keyboard's information card window. Each is a pickable for the word processor's pointer (wp-pointer.js);
 // the positions are view-side state, remembered in localStorage. The logic is in controls.js.
 import * as THREE from 'three';
+import { HeavyJoint } from './heavy-joint.js';
 import { crtDrive, knobAngle, knobDetent, loadDisplaySettings, saveDisplaySettings, stationLeds } from './controls.js';
 
 const KNOB_PER_PX = 1 / 260;                 // a knob's whole travel over 260 px of drag
@@ -16,7 +17,7 @@ const WINDOW_LIFT = 32 * Math.PI / 180;      // the card window lifted on its ba
  * station was switched on, or null when off; now(): the sim time. Pushes its pickables to `pickables`. Returns
  * { settings, update(dt) }.
  */
-export function installStationControls({ parts, crt, limits, storage = null, tick = () => {}, poweredAt, now, pickables }) {
+export function installStationControls({ parts, crt, limits, storage = null, tick = () => {}, creak = null, poweredAt, now, pickables }) {
   const settings = loadDisplaySettings(storage, limits);
   const save = () => saveDisplaySettings(storage, settings);
   const D = parts.display;
@@ -49,17 +50,17 @@ export function installStationControls({ parts, crt, limits, storage = null, tic
   applyKnobs();
 
   // Tilt and swivel: a drag on the cabinet (the swivel node holds it, the knobs and the glass). Up leans the top back,
-  // sideways turns it. A click passes on to the view behind (the screen).
+  // sideways turns it. The cabinet is heavy and its bearings stiff (heavy-joint.js): the hand pulls it through a spring,
+  // it holds until pulled hard enough, then follows with a lag, sticking and slipping, and the plastic creaks.
   const applyPose = () => { D.setTilt(settings.tilt); D.setSwivel(settings.swivel); };
-  const clamp = (v, [a, b]) => Math.min(b, Math.max(a, v));
+  const voice = { onCreak: (s, v) => creak?.play(s, v), onStop: (v) => creak?.knock(v) };
+  const tilt = new HeavyJoint(settings.tilt, limits.tilt, voice);
+  const swivel = new HeavyJoint(settings.swivel, limits.swivel, voice);
+  let turning = false;
   pickables.push({ object: D.swivel, part: () => ({
-    label: 'Display · drag to tilt and swivel',
-    onDrag: (dx, dy) => {
-      settings.tilt = clamp(settings.tilt - dy * TILT_PER_PX, limits.tilt);
-      settings.swivel = clamp(settings.swivel + dx * SWIVEL_PER_PX, limits.swivel);
-      applyPose();
-    },
-    onDragEnd: save,
+    label: 'Display · drag to tilt and swivel (it is heavy)',
+    onDrag: (dx, dy) => { turning = true; tilt.pull(-dy * TILT_PER_PX); swivel.pull(dx * SWIVEL_PER_PX); },
+    onDragEnd: () => { tilt.letGo(); swivel.letGo(); },
   }) });
   applyPose();
 
@@ -84,6 +85,12 @@ export function installStationControls({ parts, crt, limits, storage = null, tic
     settings,
     update(dt) {
       updateLeds();
+      if (turning) {
+        tilt.step(dt); swivel.step(dt);
+        settings.tilt = tilt.a; settings.swivel = swivel.a;
+        applyPose();
+        if (tilt.hand === null && swivel.hand === null && tilt.stuck && swivel.stuck) { turning = false; save(); }
+      }
       if (win) {
         const target = winOpen ? WINDOW_LIFT : 0;
         winA += (target - winA) * (1 - Math.exp(-dt / 0.08));

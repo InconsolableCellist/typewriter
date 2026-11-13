@@ -16,6 +16,7 @@ import { IdbStore, restoreLibrary } from './wp/store.js';
 import { KeyboardHost } from './wp/keyboard-host.js';
 import { WpKeyboardInput } from '../interact/wp-keyboard.js';
 import { WpSpeaker } from '../audio/wp-speaker.js';
+import { CreakVoice } from '../audio/wp-creak.js';
 import { WpKeySampler } from '../audio/wp-keys.js';
 import { installPrinter } from './wp/printer.js';
 import { installDiskettes } from './wp/diskettes.js';
@@ -80,6 +81,7 @@ export async function mount(ctx) {
   const library = restoreLibrary(firstRunLibrary(), store);
   const devices = new VirtualDevices();   // its keyboard, printer and disk are replaced by the real ones below
   const speaker = new WpSpeaker();
+  const creak = new CreakVoice();   // the display's bearing, turned by a hand (station.js)
   devices.kbd = { click: () => speaker.click(), tone: (ms) => speaker.tone(ms) };
   // One mechanism host for the printer and the diskette unit, started warm: both diskettes home with their levers
   // closed. The software reaches them only through the device interface.
@@ -125,7 +127,7 @@ export async function mount(ctx) {
   // The keys' own sound comes from the keyboard's mechanism, which runs here on the main thread: a sampler on the same
   // AudioContext plays the recorded beam spring cuts at each stem's felt and top-stop contacts (architecture 10.4).
   const keySounds = new WpKeySampler(machine.audio?.keys);
-  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx) keySounds.attach(speaker.ctx);
+  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx) { keySounds.attach(speaker.ctx); creak.attach(speaker.ctx); }
     if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done && !params.has('localsim')) {   // ?localsim keeps the mechanism on the main thread (machines with no audio device, tests)
      unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
   const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
@@ -196,7 +198,7 @@ export async function mount(ctx) {
   });
   const station = installStationControls({
     parts, crt, limits: { tilt: machine.units.display.tilt, swivel: machine.units.display.swivel },
-    storage: safeStorage(), tick: () => speaker.tick(), poweredAt: () => poweredAt, now: simNow, pickables,
+    storage: safeStorage(), tick: () => speaker.tick(), creak, poweredAt: () => poweredAt, now: simNow, pickables,
   });
   const screenCard = new ScreenCard({ renderer: stage.renderer, crt, insets: document.getElementById('insets'), panel: document.getElementById('panel') });
 

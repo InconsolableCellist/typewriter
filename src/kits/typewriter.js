@@ -105,7 +105,7 @@ export async function mount(ctx) {
   if (isElement) { applyCavity(ELEMENT_CAVITY); head.followX = () => -soft.carrierOffset; }
   const desk = new Desk({ scene: stage.scene, mats });
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
-  loadRoom(stage.scene, '/assets/hdri/combination_room_2k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
+  loadRoom(stage.scene, '/assets/hdri/combination_room_1k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
 
   const panel = new Panel({
     machine,

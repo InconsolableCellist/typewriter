@@ -233,11 +233,11 @@ tests/e2e/xrun.sh node tools/gen/preview/studio.mjs out.png "mode=swatches"
 tests/e2e/xrun.sh node tools/gen/preview/studio.mjs out.png "mode=machine&paint=wrinkle_paint&cam=-0.5,0.32,0.55"
 ```
 
-## HDRI: `public/assets/hdri/combination_room_2k.exr`
+## HDRI: `public/assets/hdri/combination_room_1k.exr`
 | | |
 |---|---|
 | Asset | Combination Room, 2048 x 1024 Radiance HDR, 6.5 MB, md5 `1f43bc52010775159f5c4270c68596b9` |
-| Served as | Half-float OpenEXR, DWAB level 45, 2.5 MB: `python3 tools/gen/hdri_exr.py combination_room_2k.hdr` (`pip install OpenEXR`). Against the .hdr, after exposure 0.6 and a Reinhard curve, 57 dB PSNR, largest error 0.013 (about 3/255) |
+| Served as | 1024 x 512, box-filtered from the 2k file in linear light; half-float OpenEXR, DWAB level 45, 720 KB: `python3 tools/gen/hdri_exr.py combination_room_2k.hdr` (`pip install OpenEXR`; it also takes the earlier 2k EXR). The 2k EXR was 2.6 MB and, against the .hdr after exposure 0.6 and a Reinhard curve, 57 dB PSNR, largest error 0.013 (about 3/255) |
 | Source | https://polyhaven.com/a/combination_room, file `https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/combination_room_2k.hdr` |
 | Author | Sergej Majboroda |
 | Licence | CC0 1.0 (public domain dedication, no attribution required), stated on the asset's page; https://polyhaven.com/license |
@@ -247,12 +247,15 @@ A Victorian parlour with curtains and a large window. Measured in Blender: peak 
 no sun disc; the window holds about 37 % of the upper hemisphere's energy. In the file the window is at azimuth
 atan2(z, x) = +45 degrees.
 
-The one file does both jobs. A sharper backdrop was not needed: at a 29 degree lens the photograph is magnified so
+The one file does both jobs, and 1k is enough for both: the renderer samples it only through the prefiltered cube map
+(image light, and the backdrop at `backgroundBlurriness` 0.06), whose face is a quarter of the image width. From the 1k
+file that is 256 px, the same as the studio environment `createScene` starts with (`PMREMGenerator.fromScene`), so the
+lit programs, which three keys on the cube size, are not relinked when the photograph arrives. A sharper backdrop was not needed: at a 29 degree lens the photograph is magnified so
 far that a sharp copy would look wrong anyway, and blurred it reads as depth of field. See the settings below.
 
 ### Renderer settings
 ```js
-const tex = await new EXRLoader().loadAsync('/assets/hdri/combination_room_2k.exr');
+const tex = await new EXRLoader().loadAsync('/assets/hdri/combination_room_1k.exr');
 tex.mapping = THREE.EquirectangularReflectionMapping;
 scene.environment = tex;  scene.environmentIntensity = 0.6;   scene.environmentRotation.set(0, 3.0, 0);
 scene.background  = tex;  scene.backgroundIntensity  = 0.45;  scene.backgroundBlurriness = 0.06;  scene.backgroundRotation.set(0, 3.0, 0);

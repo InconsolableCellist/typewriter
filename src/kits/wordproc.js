@@ -55,7 +55,7 @@ export async function mount(ctx) {
 
   const desk = new Desk({ scene: stage.scene, mats });
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
-  loadRoom(stage.scene, '/assets/hdri/combination_room_2k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
+  loadRoom(stage.scene, '/assets/hdri/combination_room_1k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
 
   // The units, each in its own group at its world origin. The printwheel's faces are the glyphs that print.
   const umats = createUnitMaterials();

@@ -41,6 +41,7 @@ export function installStationControls({ parts, crt, limits, storage = null, tic
     pickables.push({ object: k.node, part: () => ({
       label: `${name} ${Math.round(settings[k.key] * 100)}% · drag to turn`,
       onDrag: (dx, dy) => turn(k, (dx - dy) * KNOB_PER_PX),
+      onClick: () => {},   // a knob is turned, not clicked: a click stays here rather than moving the view
       onDragEnd: save,
       onWheel: (dy) => { turn(k, -dy * KNOB_PER_WHEEL); saveSoon(); },
     }) });

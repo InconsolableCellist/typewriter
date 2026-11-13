@@ -1,6 +1,8 @@
 // PBR material library. Procedural grain is the fallback; files appear from the assets pipeline under
 // public/assets/textures/ and are picked up when present (see loadStudioTextures).
 import * as THREE from 'three';
+// Tile sizes and physical parameters of the authored sets, bundled: no request, and known before any texture arrives.
+import MATERIAL_TABLE from '../../public/assets/textures/materials.json';
 
 function noiseCanvas(size, fn) {
   const c = document.createElement('canvas');
@@ -168,13 +170,24 @@ async function roughnessChain(name, aniso) {
 /** Physical parameters from materials.json that this renderer applies. */
 const PHYSICAL_KEYS = ['clearcoat', 'clearcoatRoughness', 'ior', 'envMapIntensity', 'sheen', 'sheenRoughness', 'specularIntensity', 'anisotropy', 'anisotropyRotation'];
 
+/** The tile size (m) of an authored set, from materials.json. */
+export function setTile(name, fallback) { return MATERIAL_TABLE[name]?.tile ?? fallback; }
+
+// Albedo, normal and the roughness mip chain of a set, fetched and decoded once however many materials use it.
+const plainSets = new Map();
+function loadPlainSet(name, aniso) {
+  if (!plainSets.has(name)) plainSets.set(name, Promise.all([mapTexture(name, 'albedo', aniso, true), mapTexture(name, 'normal', aniso, false), roughnessChain(name, aniso)]));
+  return plainSets.get(name);
+}
+
 /**
  * Puts an authored texture set (albedo, normal and the roughness mip chain) on several materials at once, each with
  * its own repeat, sharing one upload. `uses` is [{ mat, repeat: [u, v] }]; repeat is UV units per tile. The material's
- * colour multiplies the set's neutral albedo, so one set serves differently coloured parts.
+ * colour multiplies the set's neutral albedo, so one set serves differently coloured parts. Later calls for the same
+ * set reuse the first one's download and decode.
  */
 export async function applyTextureSet(name, uses, aniso = 8) {
-  const [a, n, r] = await Promise.all([mapTexture(name, 'albedo', aniso, true), mapTexture(name, 'normal', aniso, false), roughnessChain(name, aniso)]);
+  const [a, n, r] = await loadPlainSet(name, aniso);
   for (const { mat, repeat } of uses) {
     const rep = (t) => { if (!t) return null; const c = t.clone(); c.repeat.set(repeat[0], repeat[1]); c.needsUpdate = true; return c; };
     if (a) mat.map = rep(a);
@@ -187,8 +200,7 @@ export async function applyTextureSet(name, uses, aniso = 8) {
 /** `only` limits loading to the named sets (a machine that uses few of them downloads only those). */
 /** `extra` adds jobs ({ name, mat, keepColor }) at the set's GLB repeat, for a machine's own materials. */
 export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTier = false, only = null, extra = [] } = {}) {
-  let table = {};
-  try { table = await (await fetch(`${BASE}materials.json`)).json(); } catch { /* defaults below */ }
+  const table = MATERIAL_TABLE;
   const tile = (n, d) => table[n]?.tile ?? d;
   const glb = (n, d) => (T => [0.2 / T, 0.2 / T])(tile(n, d));
   const metres = (n, d) => (T => [1 / T, 1 / T])(tile(n, d));

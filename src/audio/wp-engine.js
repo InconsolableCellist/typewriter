@@ -3,7 +3,7 @@
 // Stereo: the printer, station and diskette buses are panned by where the units stand (architecture.md 10.1); the
 // worklet writes both channels when `stereo` is set. Each block first steps the mechanism, capturing one probe frame per sample, then renders the
 // voices, so the two costs are measured apart (`voiceNs`, `mechNs`: wall time per sample, smoothed).
-import { SUBSTEP_HZ } from '../sim/mechanics.js';
+import { SUBSTEP_HZ } from '../sim/rate.js';
 import { WP_PORT } from '../sim/wp/ports.js';
 import { RadiationFilter, Room } from './room.js';
 import { WpSynth, StereoLimiter } from './wp-synth.js';

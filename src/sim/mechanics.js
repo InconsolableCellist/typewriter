@@ -20,7 +20,8 @@ const FLOOR = Math.floor;
 const V_KEY = 8, V_CAR = 8, V_PSI = 160, V_LL = 90, V_DOG = 40, V_AUX = 160, V_HAMMER = 400;
 const SHIFT_V = 8;
 
-export const SUBSTEP_HZ = 384000;
+import { SUBSTEP_HZ } from './rate.js';
+export { SUBSTEP_HZ };
 
 export class MechanicalSim {
   constructor({ machine, geometry, glyphs } = {}) {

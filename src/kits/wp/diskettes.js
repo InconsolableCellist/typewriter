@@ -16,7 +16,7 @@ export function installDiskettes({ stage, machine, sim, parts, library, pickable
   const listeners = [];
   sim.on('device', (e) => {
     if (e.dev !== 'disk') return;
-    if (e.ev === 'ready') status[e.drive] = { ready: true, mediaId: e.mediaId, type: e.type ?? '2D' };
+    if (e.ev === 'ready') status[e.drive] = { ready: true, mediaId: e.mediaId, type: e.mediaType ?? '2D' };
     if (e.ev === 'notReady') status[e.drive] = { ready: false };
     for (const fn of listeners) fn(e);
   });

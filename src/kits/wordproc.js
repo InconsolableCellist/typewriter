@@ -253,6 +253,8 @@ export async function mount(ctx) {
     stage.govern(now);
   }
   requestAnimationFrame(loop);
+  // The first sound's downloads (worklet chunk, sprites), at idle after the first frame.
+  import('./audio-prefetch.js').then((m) => m.prefetchAudioWhenIdle(machine, { worklet: !printer.sim.isMock && !params.has('localsim') })).catch(() => {});
 
   window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, packet, shelf, pdfViewer, reader, atmosphere, environment: atmosphere.environment, ambience: atmosphere.ambience };
   return window.__tw;

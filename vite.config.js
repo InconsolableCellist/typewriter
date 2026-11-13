@@ -1,12 +1,10 @@
 import { defineConfig } from 'vite';
 import assets from './vite/assets.js';
 
-// A fresh id per build: the deploy's unhashed /assets/ files are fetched with it (src/asset-version.js).
-const buildId = process.env.WORKERS_CI_COMMIT_SHA?.slice(0, 12) || Date.now().toString(36);
-
 export default defineConfig({
   server: { host: '127.0.0.1', port: 5317, strictPort: false, headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } },
-  build: { target: 'es2022' },
+  // Vite's own hashed output in its own folder, apart from the content-hashed files of public/assets/ (vite/assets.js);
+  // public/_headers makes both immutable.
+  build: { target: 'es2022', assetsDir: '_app' },
   plugins: [assets()],
-  define: { __BUILD_ID__: JSON.stringify(buildId) },
 });

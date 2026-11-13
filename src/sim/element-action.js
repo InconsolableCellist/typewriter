@@ -560,7 +560,11 @@ export class ElementAction {
     if (x < min) { let F = kStop * (min - x) - cStop * v; if (F < 0) F = 0; T += F; }
     if (x > max) { let F = kStop * (x - max) + cStop * v; if (F < 0) F = 0; T -= F; }
     v += (T / J) * h;
-    st.x = x + v * h; st.v = v;
+    x += v * h;
+    // At rest both decay towards zero; flush them before they go subnormal (many times slower on x86).
+    if (v < 1e-20 && v > -1e-20) v = 0;
+    if (x < 1e-20 && x > -1e-20) x = 0;
+    st.x = x; st.v = v;
   }
 
   driveSelection(h) {

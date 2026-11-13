@@ -6,8 +6,43 @@
     <link rel="icon" href="data:,">
     <title>Typewriter</title>
     <link rel="stylesheet" href="/src/ui/style.css" />
+    <style>
+      /* The loading screen, styled here so it shows before anything else has loaded (src/ui/loader.js runs it). */
+      #loader { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: #0b0c0e; color: #d9d2c0;
+        font: 13px "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace; transition: opacity .6s; }
+      #loader.done { opacity: 0; pointer-events: none; }
+      #loader .box { width: min(420px, calc(100vw - 32px)); }
+      #loader h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; letter-spacing: .08em; }
+      #loader .sub { margin: 0 0 22px; opacity: .6; letter-spacing: .04em; }
+      #loader .bar { height: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
+      #loader .fill { height: 100%; width: 0; background: #f2b56b; }
+      #loader .row { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; opacity: .7; font-size: 11px; }
+      #loader .file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #loader .code { margin-top: 26px; font-size: 12px; letter-spacing: .1em; min-height: 1.2em; }
+      /* The word processor: green phosphor on a dark tube. */
+      #loader.wp { background: radial-gradient(ellipse at center, #0c1410 0%, #050806 75%); color: #5dff9a; text-shadow: 0 0 6px rgba(93,255,154,.55); }
+      #loader.wp .fill { background: #5dff9a; box-shadow: 0 0 8px #5dff9a; }
+      #loader.wp .bar { background: rgba(93,255,154,.12); }
+      #loader .cursor { display: inline-block; width: .6em; animation: blink 1s steps(1) infinite; }
+      @keyframes blink { 50% { opacity: 0; } }
+    </style>
   </head>
   <body>
+    <div id="loader"><div class="box">
+      <h1 id="loaderTitle">Typewriter</h1>
+      <p class="sub" id="loaderSub">loading the machine</p>
+      <div class="bar"><div class="fill" id="loaderFill"></div></div>
+      <div class="row"><span class="file" id="loaderFile">&nbsp;</span><span id="loaderPct">0%</span></div>
+      <div class="code" id="loaderCode"></div>
+    </div></div>
+    <script>
+      // Before the modules: name the machine and pick the look at once.
+      (function () {
+        var wp = /machine=wordproc/.test(location.search) || (!/machine=/.test(location.search) && (function () { try { return /wordproc/.test(localStorage.getItem('machine') || ''); } catch (e) { return false; } })());
+        var l = document.getElementById('loader');
+        if (wp) { l.classList.add('wp'); document.getElementById('loaderTitle').textContent = 'IBM Displaywriter System'; document.getElementById('loaderSub').textContent = 'word processor, c. 1980'; }
+      })();
+    </script>
     <canvas id="c"></canvas>
     <div id="insets">
       <section class="card see-through">

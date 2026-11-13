@@ -1,5 +1,6 @@
 // Entry: chooses the machine and mounts the kit for its family (src/kits/). Switching machines reloads the page.
 import './asset-version.js';
+import './ui/loader.js';
 import { MACHINES, DEFAULT_MACHINE, UNLISTED, KITS } from './machine/index.js';
 
 const params = new URLSearchParams(location.search);

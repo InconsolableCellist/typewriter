@@ -30,4 +30,6 @@ export const WAC = {
   HEAD_LAND: 7,   // a drive, b arm speed (m/s) as the pad lands on the diskette
   LEVER: 8,       // a drive, b angular speed (rad/s) as the lever reaches an end (closed or open)
   SLIDE_HOME: 9,  // a drive, b speed (m/s) as a diskette meets its guide's end stop
+  SLIDE_IN: 10,   // a drive, b speed (m/s) as a diskette's edge passes the guide's lip at the lever's plane, going in
+  SLIDE_OUT: 11,  // a drive, b speed (m/s) as it passes the lip coming out
 };

@@ -9,7 +9,7 @@
 // block (`render`), so the cost of the voices can be measured apart from the mechanism's.
 import { Bank } from './modal.js';
 import { Limiter } from './room.js';
-import { WP_PORT } from '../sim/wp/ports.js';
+import { WP_PORT, WAC } from '../sim/wp/ports.js';
 
 const TAU = 2 * Math.PI;
 
@@ -37,7 +37,13 @@ export const PR = {
   LEVER: 18,      // levers on their stops and diskettes on their end stops (N m and N)
   HEAD_T: 19,     // head steppers' torque, signed, both drives (N m)
   CLAMP: 20,      // collet clamp forces, both drives (N)
-  COUNT: 21,
+  // Impulses, not forces: the latch and the diskette's contacts this sample, from the mechanism's acoustic events (WAC),
+  // already scaled by the contact's speed.
+  LATCH_SHUT: 21, // a lever reaching its closed end: the latch's clack and the snap of its spring
+  LATCH_OPEN: 22, // a lever reaching its open end
+  JACKET_TICK: 23,// a diskette's edge past the guide's lip, in or out
+  JACKET_HOME: 24,// a diskette meeting the guide's end stop
+  COUNT: 25,
 };
 
 // ---- levels ---------------------------------------------------------------------------------------------------------
@@ -52,7 +58,12 @@ export const LEVEL = {
   petal: 1e-3, platen: 1e-3, carrier: 1e-3, frame: 1e-3, cabinet: 1e-3, chassis: 1e-3, lever: 1e-3,
   // How hard each source drives the bodies (dimensionless couplings of N, or N m over the mounting radius).
   hammer: 3.6, backstop: 0.3, impact: 0.135, selection: 0.7, escapement: 1.0, index: 1.6, ribbon: 2.5, follower: 1, cam: 3, carrierStop: 1,
-  caseClick: 0.6, headStep: 38, headStop: 30, headLoad: 18, collet: 200, leverClick: 70,
+  caseClick: 0.6, headStep: 38, headStop: 30, headLoad: 18, collet: 200, leverClick: 10,
+  // The latch and the diskette in its guide, voiced from the mechanism's contact events (placeholders: no recording has
+  // them, 10.4), each at its reference speed: the lever closing peaks near -28 dBFS, opening near -31, a diskette
+  // meeting its stop near -31, its edge past the guide's lip near -36 going in and -39 coming out; the jacket scraping in
+  // the guide softly with its speed.
+  latchShut: 0.77, latchOpen: 0.34, jacketTick: 1.2, jacketHome: 0.36, jacketScrape: 0.025,
   // Sources heard directly, full scale at their reference speed.
   impactClick: 1.5e-3, wheelWhir: 0.25, rumble: 0.054, camWhirr: 0.018, printerFan: 0.011, printerHum: 9.6e-4,
   motorRotor: 1.4e-3, motorHum: 1.9e-3, motorAir: 4.8e-3, rub: 7.8e-3, stationFan: 0.014, stationHum: 1.2e-3, crtWhine: 4e-5,
@@ -66,6 +77,11 @@ const FRAME = [[410, 0.12, 0.7], [960, 0.10, 1], [1850, 0.08, 0.8], [3300, 0.06,
 const CABINET = [[145, 0.08, 1], [238, 0.07, 0.8], [395, 0.06, 0.7], [640, 0.05, 0.5], [1050, 0.04, 0.35]];      // lined plastic covers
 const CHASSIS = [[530, 0.07, 0.7], [1180, 0.06, 1], [2350, 0.05, 0.8], [3750, 0.04, 0.6], [5600, 0.03, 0.4]];   // cast drive frame
 const LEVER = [[310, 0.05, 1], [760, 0.04, 0.7], [1900, 0.03, 0.5], [3600, 0.02, 0.3]];                       // lever and front bezel
+const LATCH = [[2450, 0.035, 1], [4100, 0.025, 0.8], [6300, 0.015, 0.6], [8900, 0.01, 0.4]];                  // the latch's steel spring
+const LEVER_REF_W = 25;         // rad/s: the lever reaching its end, the detent's snap behind it (a hand's grab: 25 to 50)
+const SLIDE_REF_V = 1.0;        // m/s: a diskette pushed home by hand
+/** Level of a contact against its reference speed: (v / ref)^0.8, from nothing to twice the reference's. */
+const bySpeed = (v, ref) => Math.min(1.75, Math.pow(Math.max(0, v) / ref, 0.8));
 
 const MOUNT_R = 0.02;           // m: a motor's reaction torque reaches its mounting as a force over about this radius
 const COVER_LP = [1600, 7000];  // Hz: the covers' and acoustic filter's low pass with the access cover shut and open
@@ -274,15 +290,25 @@ class PrinterVoice {
  * is), turns at its own speed with an unbalance partial and a rotor-slot harmonic, and drives a pulley fan and a belt:
  * air noise with speed, fluttering at the belt's pass rate. A clamped diskette rubs its liner, more with the head loaded.
  * The head steppers' reaction rings the cast chassis at each step, so seeks tick and a recalibrate buzzes, and the
- * pulley hitting its stop pin knocks; the pad landing is the head-load clunk; the collet and the lever and the diskette
- * on its stop click on the chassis and the lever.
+ * pulley hitting its stop pin knocks; the pad landing is the head-load clunk; the collet and the lever click on the
+ * chassis and the lever. The latch and the diskette are voiced from their contact events, scaled by the contact's speed
+ * (placeholders, 10.4): the lever reaching its closed end is a plastic clack with the snap of the latch's steel spring,
+ * its open end a softer clack; the jacket's edge past the guide's lip a tick, the jacket on its end stop a dull knock,
+ * and a diskette moving in its guide scrapes with its speed.
  */
 class DisketteVoice {
   constructor(def, sr, levels) {
     this.sr = sr; this.def = def; this.L = levels;
     this.chassis = new Body(CHASSIS, sr, levels.chassis);
     this.lever = new Body(LEVER, sr, levels.lever);
+    this.latch = new Body(LATCH, sr, levels.lever);
     this.noise = new Noise(0x3740);
+    // Bursts of noise for the plastic parts: a click (fast decay, bright) and a knock (slower, dull); the scrape.
+    this.clickBp = new Biquad().set('bp', 4200, 0.8, sr); this.knockLp = new Biquad().set('lp', 1100, 0.7, sr);
+    this.scrapeBp = new Biquad().set('bp', 2600, 0.7, sr);
+    this.click = 0; this.knock = 0;
+    this.clickK = Math.exp(-1 / (0.0012 * sr)); this.knockK = Math.exp(-1 / (0.006 * sr));
+    this.scrapeAmp = 0;
     this.airBp = new Biquad().set('bp', 850, 0.6, sr);
     this.rubBp = new Biquad().set('bp', 3600, 0.9, sr);
     this.rotor = [new Osc(), new Osc()];
@@ -305,6 +331,9 @@ class DisketteVoice {
       if (d.media && d.N > 0) rub += (d.wd / D.wNominal) * (0.25 + Math.min(2, d.pad));
     }
     this.airAmp = L.motorAir * air; this.rubAmp = L.rub * rub; this.humAmp = L.motorHum * hum;
+    let sc = 0;                    // a diskette moving in its guide
+    for (let i = 0; i < 2; i++) { const d = D.drives[i]; if (d.media && d.sv !== 0) sc += Math.min(2, Math.abs(d.sv) / SLIDE_REF_V); }
+    this.scrapeAmp = L.jacketScrape * sc;
     const wm = D.drives[0].wm;
     this.beltInc = (M.pulleyRadius * wm) / 0.32 / sr;              // a 320 mm belt
   }
@@ -317,7 +346,22 @@ class DisketteVoice {
     const dLever = (f[o + PR.LEVER] - q[PR.LEVER]) * L.leverClick;
     const dClamp = (f[o + PR.CLAMP] - q[PR.CLAMP]) * L.collet;
     for (let k = PR.HEAD_STOP; k < PR.COUNT; k++) q[k] = f[o + k];
-    let y = this.chassis.tick(dStep + dStop + dPad + 0.3 * dClamp + 0.5 * dLever) + this.lever.tick(dLever + 0.2 * dClamp);
+    // The latch and the jacket: impulses into the bezel, the chassis and the latch spring, and noise bursts.
+    const shut = f[o + PR.LATCH_SHUT], open = f[o + PR.LATCH_OPEN], tick = f[o + PR.JACKET_TICK], home = f[o + PR.JACKET_HOME];
+    let xLever = dLever + 0.2 * dClamp, xChassis = dStep + dStop + dPad + 0.3 * dClamp + 0.5 * dLever, xLatch = 0;
+    if (shut + open + tick + home > 0) {
+      xLever += 40 * (shut + open) + 10 * tick + 30 * home;
+      xChassis += 15 * shut + 40 * home;
+      xLatch = 20 * shut;                                  // the spring's snap only at the closed end
+      this.click += 0.02 * (shut + open) + 0.006 * tick;
+      this.knock += 0.02 * home + 0.006 * shut;
+    }
+    let y = this.chassis.tick(xChassis) + this.lever.tick(xLever) + this.latch.tick(xLatch);
+    if (this.click > 1e-7 || this.knock > 1e-7) {
+      y += this.click * this.clickBp.tick(this.noise.next()) + this.knock * this.knockLp.tick(this.noise.next());
+      this.click *= this.clickK; this.knock *= this.knockK;
+    } else { this.click = 0; this.knock = 0; }
+    if (this.scrapeAmp > 0) y += this.scrapeAmp * this.scrapeBp.tick(this.noise.next());
     for (let i = 0; i < 2; i++) {
       const s = this.rotor[i].tick(), c = this.rotor[i].c;
       y += this.rotorAmp[i] * (s + 0.8 * s * c) + this.slotAmp[i] * this.slotOsc[i].tick();   // 1x and 2x, slot harmonic
@@ -410,7 +454,22 @@ export class WpSynth {
     if (D) {
       f[o + PR.HEAD_STOP] = P[WP_PORT.DISK_HEAD_STOP];
       f[o + PR.PAD] = P[WP_PORT.DISK_PAD];
-      f[o + PR.LEVER] = P[WP_PORT.DISK_LEVER] + P[WP_PORT.DISK_SLIDE];
+      f[o + PR.LEVER] = P[WP_PORT.DISK_LEVER];
+      // The latch and the jacket: events from the mechanism at the contact, with its speed (the end stop's force is
+      // voiced by its event, so the slide's port is not read).
+      let shut = 0, open = 0, tick = 0, home = 0;
+      const q = s.acQ, L = this.levels;
+      for (let e = 0; e < s.acN; e++) {
+        const k = q[e * 3], v = q[e * 3 + 2];
+        if (k === WAC.LEVER) {
+          const d = D.drives[q[e * 3 + 1]];
+          if (d && d.a > 0.5 * D.def.lever.closed) shut += L.latchShut * bySpeed(v, LEVER_REF_W);
+          else open += L.latchOpen * bySpeed(v, LEVER_REF_W);
+        } else if (k === WAC.SLIDE_IN) tick += L.jacketTick * bySpeed(v, SLIDE_REF_V);
+        else if (k === WAC.SLIDE_OUT) tick += 0.7 * L.jacketTick * bySpeed(v, SLIDE_REF_V);
+        else if (k === WAC.SLIDE_HOME) home += L.jacketHome * bySpeed(v, SLIDE_REF_V);
+      }
+      f[o + PR.LATCH_SHUT] = shut; f[o + PR.LATCH_OPEN] = open; f[o + PR.JACKET_TICK] = tick; f[o + PR.JACKET_HOME] = home;
       f[o + PR.HEAD_T] = D.st[0].Te + D.st[1].Te;
       f[o + PR.CLAMP] = D.drives[0].N + D.drives[1].N;
     }

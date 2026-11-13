@@ -26,6 +26,12 @@ export class WayMarkers {
     document.body.appendChild(this.root);
     this.items = [];
     this.v = new THREE.Vector3();
+    // The canvas's rectangle, read again only when the window or the canvas changes size (not every frame, where the
+    // read can force a style recalculation).
+    this.rect = null;
+    const stale = () => { this.rect = null; };
+    window.addEventListener('resize', stale);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(stale).observe(canvas);
     nav.onChange(() => { this.rebuild(); this.wake(); });
     this.rebuild();
     // The circles and the edge arrows fade out when the pointer has been still a moment, and back at its first move.
@@ -68,26 +74,30 @@ export class WayMarkers {
       el.addEventListener('click', (e) => { e.stopPropagation(); nav.go(t.id); });
       el.addEventListener('pointerdown', (e) => e.stopPropagation());
       this.root.appendChild(el);
-      this.items.push({ el, at: new THREE.Vector3(...at), rear, svg: el.querySelector('svg') });
+      this.items.push({ el, at: new THREE.Vector3(...at), rear, svg: el.querySelector('svg'), display: null, transform: null, turn: null });
     }
   }
 
   update() {
     if (!this.shown || !this.items.length) return;
-    const r = this.canvas.getBoundingClientRect(), cam = this.camera;
+    const r = this.rect ??= this.canvas.getBoundingClientRect(), cam = this.camera;
     const cx = r.left + r.width / 2, cy = r.top + r.height / 2, near = AHEAD * Math.min(r.width, r.height);
     for (const it of this.items) {
       const p = this.v.copy(it.at).project(cam);
       const off = p.z > 1 || Math.abs(p.x) > 1.05 || Math.abs(p.y) > 1.05;
-      it.el.style.display = off ? 'none' : '';
+      // Styles are written only when they change: at rest nothing is touched.
+      const display = off ? 'none' : '';
+      if (display !== it.display) it.el.style.display = it.display = display;
       if (off) continue;
       const x = r.left + (p.x + 1) / 2 * r.width, y = r.top + (1 - p.y) / 2 * r.height;
-      it.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      const transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      if (transform !== it.transform) it.el.style.transform = it.transform = transform;
       if (it.rear) continue;
       // Up for ahead, else toward where it lies from the middle of the view.
       const dx = x - cx, dy = y - cy;
       const deg = Math.hypot(dx, dy) < near ? 0 : (Math.atan2(dx, -dy) * 180) / Math.PI;
-      it.svg.style.transform = `rotate(${deg.toFixed(0)}deg)`;
+      const turn = `rotate(${deg.toFixed(0)}deg)`;
+      if (turn !== it.turn) it.svg.style.transform = it.turn = turn;
     }
   }
 }

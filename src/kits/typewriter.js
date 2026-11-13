@@ -255,6 +255,8 @@ export async function mount(ctx) {
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
   }
   requestAnimationFrame(loop);
+  // The first sound's downloads (worklet chunk, sprites), at idle after the first frame.
+  import('./audio-prefetch.js').then((m) => { if (!unlocked) m.prefetchAudioWhenIdle(machine, { worklet: !!sim.unlockAudio && !sim.isMock }); }).catch(() => {});
 
   window.__tw = { deskSway, ballBlur, ambience, environment, sim, soft, view, paper, panel, orbit, stage, geometry, machine, rig, interaction, hands, enclosure, head, terminal, pages, deskProps };
 }

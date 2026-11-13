@@ -222,8 +222,21 @@ class SimClient {
     const host = new WorkletHost(node, this.layout);
     const ready = host.whenReady();
     host.state.set(this.host.state);
+    // If the audio thread fails (an error in the processor, or no answer), the mechanism stays here and runs on:
+    // a frozen machine is worse than one without its audio-thread sound.
+    const failed = new Promise((resolve) => {
+      node.onprocessorerror = (e) => resolve(e ?? new Error('processor error'));
+      setTimeout(() => resolve(new Error('the audio thread did not answer')), 4000);
+    });
+    const outcome = await Promise.race([ready.then(() => null), failed]);
+    if (outcome) {
+      console.warn('audio thread failed; the mechanism stays on the page', outcome);
+      try { node.disconnect(); } catch { /* already gone */ }
+      this.host.startClock?.();
+      this.unlocking = false;
+      return this;
+    }
     this.bind(host);
-    await ready;
     this.host.shutdown();
     this.host = host;
     // Re-establish hand grabs on the new host and restore settings

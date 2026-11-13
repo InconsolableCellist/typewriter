@@ -5,6 +5,11 @@
 // coil currents, the cam motor's voltage, panel lights and device events. It never writes a mechanical state: it
 // holds nothing of the mechanism but `io`, whose members command drives and read sensors.
 
+// A deep copy for exportState/importState. Not structuredClone: the audio thread (an AudioWorkletGlobalScope), where this
+// state is imported at the handover, does not have it. Objects, arrays, typed arrays and numbers (Infinity included).
+const clone = (v) => (v === null || typeof v !== 'object' ? v : ArrayBuffer.isView(v) ? v.slice()
+  : Array.isArray(v) ? v.map(clone) : Object.fromEntries(Object.keys(v).map((k) => [k, clone(v[k])])));
+
 const OP_PRINT = 1, OP_ESCAPE = 2, OP_INDEX = 3, OP_PAPER = 5, OP_CONTROL = 6;
 const FIFO_DEPTH = 32;
 const LOOKAHEAD = 24;          // characters the planner times ahead of the carrier
@@ -714,8 +719,8 @@ export class PrinterCtl {
   exportState() {
     const s = {};
     for (const [k, v] of Object.entries(this)) if (k !== 'def' && k !== 'io' && k !== 'emit') s[k] = v;
-    return structuredClone(s);
+    return clone(s);
   }
 
-  importState(s) { Object.assign(this, structuredClone(s)); }
+  importState(s) { Object.assign(this, clone(s)); }
 }

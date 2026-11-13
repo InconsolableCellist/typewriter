@@ -7,6 +7,11 @@
 // switch changes and ID fields. Its only outputs are the head stepper's phases, the head-load solenoid and device
 // events. It never writes a mechanical state: it holds nothing of the mechanism but `io`.
 
+// A deep copy for exportState/importState. Not structuredClone: the audio thread (an AudioWorkletGlobalScope), where this
+// state is imported at the handover, does not have it. Objects, arrays, typed arrays and numbers (Infinity included).
+const clone = (v) => (v === null || typeof v !== 'object' ? v : ArrayBuffer.isView(v) ? v.slice()
+  : Array.isArray(v) ? v.map(clone) : Object.fromEntries(Object.keys(v).map((k) => [k, clone(v[k])])));
+
 const INF = Infinity;
 const mod = (a, n) => ((a % n) + n) % n;
 
@@ -193,8 +198,8 @@ export class DisketteCtl {
   exportState() {
     const s = {};
     for (const [k, v] of Object.entries(this)) if (k !== 'def' && k !== 'io' && k !== 'emit') s[k] = v;
-    return structuredClone(s);
+    return clone(s);
   }
 
-  importState(s) { Object.assign(this, structuredClone(s)); }
+  importState(s) { Object.assign(this, clone(s)); }
 }

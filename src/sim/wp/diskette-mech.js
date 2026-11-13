@@ -7,6 +7,7 @@
 // The adapter (diskette-ctl.js) reaches this only through `io`: phase commands, the solenoid, and sensors (the index
 // phototransistor, the lever switch, the media-type LED, and the read channel's ID fields). Sector bytes never come
 // here: an ID field carries the address of the sector passing under the head, nothing else.
+import { clone } from '../clone.js';
 import { Stepper2Phase } from './stepper.js';
 import { WP_PORT, WAC } from './ports.js';
 
@@ -350,12 +351,12 @@ export class DisketteMech {
 
   // ---- state transfer -----------------------------------------------------------------------------------------
   exportState() {
-    return { powered: this.powered, drives: structuredClone(this.drives), st: this.st.map((s) => s.exportState()) };
+    return { powered: this.powered, drives: clone(this.drives), st: this.st.map((s) => s.exportState()) };
   }
 
   importState(s) {
     this.powered = s.powered;
-    this.drives = structuredClone(s.drives);
+    this.drives = clone(s.drives);
     s.st.forEach((x, i) => this.st[i].importState(x));
   }
 }

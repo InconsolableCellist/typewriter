@@ -46,7 +46,7 @@ them and save them as PDF. Pages last for the current session.
 
 ## The front-strike typewriter, c. 1926 (`frontstrike1926`)
 
-![The open-frame front-strike typewriter on the walnut desk, a sheet of typed paper in the carriage, the banker's lamp and ashtray beside it](docs/images/frontstrike1926.png)
+![The open-frame front-strike typewriter seen from the typist's chair: black japanned frame, glass-topped round keys, the fan of type bars and a blank sheet in the carriage, with the banker's lamp, a stack of fresh paper and the ashtray on the desk](docs/images/frontstrike1926.jpg)
 
 A manual typebar machine on an open, japanned cast frame, with a moving carriage, a mainspring drawband, a margin bell
 and a line-space lever. It has 41 type bars (82 characters, 10 per inch) and six controls: the space bar, two shifts,
@@ -76,7 +76,7 @@ lighter.
 
 ## The electric single-element typewriter, c. 1971 (`element1971`)
 
-![The electric single-element typewriter on the desk, its type element at the print point of a sheet in the fixed platen](docs/images/element1971.png)
+![The electric single-element typewriter seen from the typist's chair: a tan office machine with its top cover closed, dark sculpted keys and a blank sheet in the fixed platen, with the banker's lamp, fresh paper and the ashtray on the desk](docs/images/element1971.jpg)
 
 A motor-driven office machine with a fixed platen and a carrier that travels along it. A one-revolution clutch tilts
 and rotates a type element to one of 88 characters (4 bands by 22 columns) and throws it at the paper at a set
@@ -103,7 +103,7 @@ momentum sways the table a little when it stops hard, and the lamp's pull chain 
 
 ## The IBM Displaywriter, c. 1980 (`wordproc1980`)
 
-![The IBM Displaywriter on the desk: the daisywheel printer on the left, the display station and its keyboard in the middle with green text on the screen, the dual diskette unit on the right](docs/images/wordproc1980.png)
+![The IBM Displaywriter on a wooden desk: the 5218 printwheel printer with its sheet feeder on the left, the display station on its electronics module in the middle with the TASK SELECTION menu in green on the screen, the keyboard in front of it, and the dual diskette unit on the right with the operator's manual on top, a desk file of diskettes, sticky notes and the quick-start packet beside it](docs/images/wordproc1980.jpg)
 
 The whole system is on the desk: the display station (a 25-line green-phosphor display on its electronics module), the
 84-key keyboard, the 6360 dual 8-inch diskette unit, and the 5218 printwheel printer with its sheet feeder. It runs our

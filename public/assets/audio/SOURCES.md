@@ -59,6 +59,24 @@ has loaded, and afterwards voices only bar-on-bar clashes and carriage rail nois
 
 Cut by `tools/audio/cut_element_samples.py` from a 2 min 44 s sound-test recording of an electric single-element typewriter, supplied by the project owner; origin and licence not recorded here. Each cut's `srcT` is its time in that recording. The file was decoded with ffmpeg only and mixed to mono at 48 kHz. Print cycles, space, backspace, correction, return and tab are cut as recorded; `el_run` is a seamless loop of the carrier running; the bell is kept only at its three partials (band-passed), because machine noise runs through it. The motor and key clicks remain synthesised (`src/audio/element-synth.js`).
 
+## Word processor samples (`samples_wp/`, `samples_wpkeys/`)
+
+Cut by `tools/audio/cut_wp_samples.py` from two recordings supplied by the project owner, decoded with ffmpeg only, mixed to
+mono at 48 kHz, read by Python run with `-I`, and encoded as Ogg Opus at 64 kbps. Each cut's `srcT` is its time in its
+recording. Origin and licence beyond what is stated here were not recorded.
+
+| Recording | What it is | Where it came from | Used for |
+|---|---|---|---|
+| `displaywriter_dc4nl` | 3 min 17 s, 48 kHz stereo: the sound of a video titled "006 - IBM 6580 Displaywriter with HUGE daisy wheel printer 1980 - dc4.nl" | Supplied by the owner as a local file; the video is published by dc4.nl | `samples_wp`: single head steps, head loads, seek bodies and two loops of the running machine (hum and air), all from 93.9 s on, where the machine is heard alone; level ratios (`tools/audio/wp_levels.json`) |
+| `beamspring_typing` | 4 min, 48 kHz stereo: typing on an IBM beam spring keyboard of the Displaywriter's kind | Supplied by the owner as a local file | `samples_wpkeys`: presses and releases of the alphanumeric keys, the wide keys and the space bar |
+
+Left out: the Displaywriter recording's first 93.9 s (handling with the machine off, speech, the camera operator's voice
+over the running machine), the stretches 98.8-99.4, 128.8-129.3 and 152.9-153.2 s (an electrical click, speech-like
+sounds), and the beam spring recording's finger snaps (0.9-3.8 s). The room's noise and the running machine's are taken
+out of the cuts by static spectral subtraction against quiet spans (the idle machine at 118.6-125.9 and 184.0-190.4 s; the
+beam spring recording before its first snap). No printing is heard in the Displaywriter recording, so the printer's sound
+stays synthesised.
+
 ## Ambience (`ambience/rain.ogg`, `ambience/thunder.ogg`)
 
 Indoor thunderstorm rain loop and thunder recording supplied by the project owner; origin and licence not recorded here. `rain.ogg` is the owner's crossfaded loop re-encoded as Ogg Opus. `thunder.ogg` is one 22.8 s roll cut from the owner's file, which repeats that roll. Decoded with ffmpeg only.

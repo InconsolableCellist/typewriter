@@ -71,3 +71,45 @@ html, body { margin: 0; height: 100%; background: #08080a; overflow: hidden; fon
 #pagesViewer .stage { flex: 1; min-height: 0; overflow: auto; display: flex; touch-action: none; }
 #pagesViewer .stage.zoomed { cursor: grab; }
 #pagesViewer .stage img { margin: auto; flex: none; display: block; background: #fff; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+
+/* The word processor's Screen card: the phosphor picture is drawn on the canvas under its body. */
+#screenCard .screen-body { display: block; width: 100%; }
+#screenCard.folded .screen-body, #screenCard.folded .screen-resize { display: none; }
+#screenCard .screen-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; touch-action: none; border-top-left-radius: 3px;
+  background: linear-gradient(135deg, transparent 45%, #cfc9ba 45% 52%, transparent 52% 66%, #cfc9ba 66% 73%, transparent 73%), rgba(10,10,12,.72); }
+
+/* The word processor's views: an arrow at each edge to the next station, and the bar of stations and focus items. */
+.nav-edge { position: fixed; top: 50%; transform: translateY(-50%); z-index: 20; display: flex; align-items: center; gap: 6px; height: 96px; min-width: 44px; padding: 0 8px;
+  font: 10.5px "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace; color: #e8e3d6; background: rgba(12,13,15,.38); border: 1px solid var(--hair); cursor: pointer; touch-action: manipulation; }
+.nav-edge[hidden] { display: none; }
+.nav-edge.left { left: 0; border-left: 0; border-radius: 0 4px 4px 0; }
+.nav-edge.right { right: 0; border-right: 0; border-radius: 4px 0 0 4px; flex-direction: row-reverse; }
+.nav-edge .arrow { font-size: 30px; line-height: 1; color: var(--accent); }
+.nav-edge .name { display: none; letter-spacing: .08em; white-space: nowrap; }
+.nav-edge:hover, .nav-edge:focus-visible { background: rgba(12,13,15,.82); }
+.nav-edge:hover .name, .nav-edge:focus-visible .name { display: inline; }
+#navBar { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: calc(100vw - 120px); user-select: none; }
+#navBar .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; padding: 3px; background: var(--panel); border: 1px solid var(--hair); border-radius: 3px; }
+#navBar .row:empty { display: none; }
+#navBar button { font: 9.5px "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace; letter-spacing: .06em; color: #cfc9ba; background: rgba(255,255,255,.04); border: 1px solid var(--hair); border-radius: 2px; padding: 3px 9px; cursor: pointer; touch-action: manipulation; }
+#navBar button:hover { background: rgba(255,255,255,.1); }
+#navBar button[aria-current="true"] { color: #14130f; background: var(--accent); border-color: var(--accent); }
+#navBar button.here:not([aria-current]) { border-color: var(--accent); }
+#navBar button.free[aria-pressed="true"] { color: #14130f; background: var(--accent); border-color: var(--accent); }
+#navBar .where { color: var(--dim); font-size: 9.5px; padding: 3px 6px; }
+#navNote { position: fixed; top: 76px; left: 50%; transform: translateX(-50%); z-index: 20; padding: 3px 9px; font-size: 10px; color: var(--accent); background: var(--panel); border: 1px solid var(--hair); border-radius: 2px; opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap; }
+#navNote.on { opacity: 1; }
+/* No hover on a touch screen: the arrows always name where they go, and the buttons are big enough for a finger. */
+@media (hover: none) {
+  .nav-edge .name { display: inline; }
+  .nav-edge { height: 72px; }
+  #navBar button { padding: 8px 12px; font-size: 11px; }
+}
+/* A narrow window: the bar moves down above the panel, clear of the Screen card, and the long hint gives way. */
+@media (max-width: 640px) {
+  #navBar { top: auto; bottom: 112px; max-width: calc(100vw - 16px); }
+  #navBar .row { flex-wrap: nowrap; overflow-x: auto; max-width: calc(100vw - 16px); justify-content: flex-start; }
+  #navBar button { flex: none; }
+  #navNote { top: auto; bottom: 210px; }
+  body.wp-views #hint { display: none; }
+}

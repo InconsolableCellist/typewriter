@@ -3,7 +3,9 @@ docs/displaywriter/models.md: tools/blender/previews/compare_<view>.png.
 
   python3 tools/blender/compare_wp_printer.py <reference dir>
 
-The reference dir holds the Bitsavers photos (5218_1.jpg ...) and the brochure page (hi-18.png); none are committed.
+The reference dir holds the Bitsavers photos (5218_1.jpg ...), the brochure page (hi-18.png), MIM p.57 at 300 dpi
+(mim-057-300.png), Printer Guide S544-0861-4 p.41 at 250 dpi (pg-050.png) and the owner's photograph
+(printer_5218_front.jpg); none are committed.
 """
 import os
 import sys
@@ -20,6 +22,9 @@ PAIRS = {
     "carrier": ("5218_4.jpg", (0, 700, 1200, 1304)),
     "feeder": ("hi-18.png", (276, 1236, 661, 1621)),
     "plain": ("hi-18.png", (742, 897, 1127, 1161)),
+    "owner": ("printer_5218_front.jpg", None),
+    "cartridge": ("mim-057-300.png", (459, 1417, 1913, 2472)),
+    "pgcart": ("pg-050.png", (510, 563, 1573, 1278)),
 }
 
 

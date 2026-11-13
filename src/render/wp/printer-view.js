@@ -36,7 +36,10 @@ function canvasTexture(c, srgb = true) {
   return t;
 }
 
-/** The black panel with its printed legends: LED names in two rows of five, the divider and the blank right section. */
+/**
+ * The black panel with its printed legends: LED names in two rows of five over their lights, the divider, and on the
+ * right section the operator's white card with the model written on it (the owner's photograph; PH 5218_1 has none).
+ */
 function panelTexture() {
   const W = 2048, H = Math.round(W * (PANEL.y1 - PANEL.y0) / (PANEL.x1 - PANEL.x0));
   const c = canvas(W, H), g = c.getContext('2d');
@@ -50,6 +53,13 @@ function panelTexture() {
     const lines = label.split('\n');
     lines.forEach((ln, k) => g.fillText(ln, x, y - (lines.length - 1 - k) * size * 1.05));
   });
+  const cx0 = px(0.1185), cx1 = px(0.2085), cy0 = py(0.1190), cy1 = py(0.0815);
+  g.fillStyle = '#f1efe8'; g.fillRect(cx0, cy0, cx1 - cx0, cy1 - cy0);
+  g.fillStyle = '#26262c'; g.textAlign = 'center';
+  const hand = (cy1 - cy0) * 0.36;
+  g.font = `${hand.toFixed(0)}px "Comic Sans MS", "Segoe Print", "Bradley Hand", cursive`;
+  g.fillText('IBM', (cx0 + cx1) / 2 - hand * 0.9, cy0 + hand * 1.05);
+  g.fillText('5218  A02', (cx0 + cx1) / 2, cy0 + hand * 2.15);
   return canvasTexture(c);
 }
 
@@ -117,6 +127,31 @@ function petalAtlas(glyphs, order) {
   return canvasTexture(c);
 }
 
+/** The badge on the top at the front left (PH 5218_2): IBM's striped letters over the model, dark on a satin plate. */
+function badgeTexture() {
+  const W = 256, H = 184, c = canvas(W, H), g = c.getContext('2d');
+  g.fillStyle = '#d8d3c4'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#1b1b1d';
+  g.font = 'bold 92px "Times New Roman", Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  g.fillText('IBM', W / 2, 98);
+  g.fillStyle = '#d8d3c4';
+  for (let k = 0; k < 8; k++) g.fillRect(0, 28 + k * 9.4, W, 3.2);   // the stripes through the letters
+  g.fillStyle = '#1b1b1d'; g.font = `30px ${FONT}`; g.textAlign = 'left';
+  g.fillText('5218 A02', 34, 150);
+  return canvasTexture(c);
+}
+
+/** The ribbon cartridge's moulded logo (PG p.41), a shade lighter than its plastic, on a clear ground. */
+function cartridgeLogoTexture() {
+  const W = 256, H = 110, c = canvas(W, H), g = c.getContext('2d');
+  g.fillStyle = 'rgba(120,120,122,0.85)';
+  g.font = 'bold 78px "Times New Roman", Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('IBM', W / 2, H / 2 + 4);
+  g.globalCompositeOperation = 'destination-out';
+  for (let k = 0; k < 7; k++) g.fillRect(40, 22 + k * 10.5, W - 80, 3.2);
+  return canvasTexture(c);
+}
+
 /** The leadscrew's thread: three starts (lead 21.16 mm), u = x / lead and v = angle / 2 pi on the cylinder. */
 function threadTexture() {
   const S = 256, c = canvas(S, S), g = c.getContext('2d');
@@ -155,13 +190,19 @@ function perforationTexture() {
  * Loads the printer. size: units.printer.size (the model is built to it); mats: createUnitMaterials();
  * opts: { printer (the definition's printer block), glyphs (the printwheel faces), order (petal order), url }.
  * Returns { group, parts, update(state, layout) }; parts: cover, panelKeys, power, and the moving mechanism.
+ * The operator's controls, each a node whose origin is its pivot (models.md, Printer, Controls): cover (hinge, turns
+ * about x), power (rocker, about x), panelKeys[0..7] (press along -z), leds[0..9], ribbonKnob (on the carrier, about y),
+ * platen (about x; the 5218 has no platen knobs), bail and feedRolls (paper release, about x), feederGate (about the
+ * stacker plate's normal), trays[0..1] (slide along z).
  */
 export async function buildPrinter(size, mats, opts = {}) {
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
   const gltf = await new GLTFLoader().loadAsync(opts.url ?? PRINTER_URL);
   const P = opts.printer;
   const pearl = texturedUnitMaterial(mats.pearl), gray = texturedUnitMaterial(mats.pebble), dark = texturedUnitMaterial(mats.dark);
-  const trim = texturedUnitMaterial(plastic(0xc8b48e, 0.6));
+  // The panel's frame, the strip under it and the power switch's bezel: a pale pearl a shade greyer than the covers
+  // (the owner's photograph and BRO p.18; PH 5218_1's are yellowed to tan).
+  const trim = texturedUnitMaterial(plastic(0xd2cdc0, 0.55));
   const panelMat = new THREE.MeshStandardMaterial({ map: panelTexture(), roughness: 0.45, metalness: 0 });
   const digits = canvas(128, 104), dg = digits.getContext('2d');
   drawDigits(dg, digits.width, digits.height, '');
@@ -174,10 +215,14 @@ export async function buildPrinter(size, mats, opts = {}) {
   const byName = {
     wp_pearl: pearl, wp_gray: gray, wp_dark: dark, wp_trim: trim, wp_panel: panelMat, wp_display: displayMat,
     wp_rubber: mats.rubber, wp_metal: metal(0x9c9c9a, 0.42), wp_chrome: metal(0xc9cacc, 0.16), wp_screw: screw,
-    wp_glass: new THREE.MeshPhysicalMaterial({ color: 0x3a2c22, roughness: 0.06, metalness: 0, transparent: true, opacity: 0.5, clearcoat: 1, depthWrite: false }),
+    // Smoked glass over the print line: tinted, reflective, the platen and paper seen through it.
+    wp_glass: new THREE.MeshPhysicalMaterial({ color: 0x2b231d, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.62, clearcoat: 1, clearcoatRoughness: 0.03, specularIntensity: 1, envMapIntensity: 1.4, depthWrite: false }),
     wp_red: plastic(0xc8261a, 0.42), wp_filter: filter, wp_wheel: wheelPlastic, wp_petal: petal,
     wp_cartridge: plastic(0x1d5a43, 0.45), wp_white: plastic(0xe6e2d6, 0.5), wp_motor: new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5, metalness: 0.4 }),
     wp_paper: new THREE.MeshStandardMaterial({ color: 0xf4f2ec, roughness: 0.9 }), wp_cable: plastic(0x8fa3a3, 0.6), wp_foam: new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 0.97 }),
+    wp_ribcart: plastic(0x3b3b3e, 0.55),   // the ribbon cartridge, a dark grey a shade lighter than the black plate (PG p.41)
+    wp_badge: new THREE.MeshStandardMaterial({ map: badgeTexture(), roughness: 0.35, metalness: 0.25 }),
+    wp_cartlogo: new THREE.MeshStandardMaterial({ map: cartridgeLogoTexture(), transparent: true, roughness: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }),
   };
   const nodes = {};
   const keyMats = KEY_COLOURS.map((c, i) => plastic(0xffffff, 0.38, { map: keyTexture(c, KEY_LEGENDS[i]), clearcoat: 0.25, clearcoatRoughness: 0.4 }));   // the colour is in the map
@@ -196,7 +241,12 @@ export async function buildPrinter(size, mats, opts = {}) {
   const group = new THREE.Group();
   group.add(gltf.scene);
   const carrier = nodes.printer_carrier, wheel = nodes.printer_wheel, hammer = nodes.printer_hammer;
-  carrier.attach(wheel); carrier.attach(hammer);   // they ride the carrier; their own motion is in its frame
+  // They ride the carrier; their own motion is in its frame. The ribbon advance knob turns on its own axle (y).
+  const ribbonKnob = nodes.printer_ribbon_knob, cartLogo = nodes.printer_cartlogo;
+  for (const o of [wheel, hammer, ribbonKnob, cartLogo]) if (o) carrier.attach(o);
+  // The sheet feeder's operator parts go with it: the paper insertion gate and the two trays.
+  const feederGate = nodes.printer_feeder_gate, trays = [nodes.printer_tray0, nodes.printer_tray1].filter(Boolean);
+  for (const o of [feederGate, ...trays]) if (o) nodes.printer_feeder.attach(o);
   const panelKeys = [...Array(8)].map((_, i) => nodes[`printer_key${i}`]);
   const leds = [...Array(10)].map((_, i) => nodes[`printer_led${i}`]);
   const rest = new Map();
@@ -204,7 +254,8 @@ export async function buildPrinter(size, mats, opts = {}) {
   const parts = {
     cover: nodes.printer_cover, panelKeys, power: nodes.printer_power, carrier, wheel, hammer, platen: nodes.printer_platen,
     bail: nodes.printer_bail, feedRolls: nodes.printer_feedrolls, leadscrew: nodes.printer_leadscrew, cam: nodes.printer_cam,
-    leds, display: nodes.printer_display, feeder: nodes.printer_feeder, body: nodes.printer_body,
+    leds, display: nodes.printer_display, feeder: nodes.printer_feeder, body: nodes.printer_body, ribbonKnob,
+    feederGate, trays,
   };
   const lead = P?.carrier?.lead ?? 0.02116, powerTravel = P?.power?.travel ?? 0.35;
   let lastLeds = -1, lastDigits = null;

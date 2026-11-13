@@ -10,18 +10,22 @@ and p.1, GIM p.25, ORG p.54, CSG p.42, ST p.90 and p.103, PSM p.61. Sizes are HW
 between the front cover (slides forward) and the top cover (slides back, PSM p.61) is a real gap.
 
 Nodes, in the unit's frame (origin on the desk under the centre; x right, y up, z toward the operator):
-  wp_diskette_top_cover, wp_diskette_front_cover, wp_diskette_base, wp_diskette_feet, wp_diskette_drive0/1 (dark
-  bezel and diskette guide), wp_diskette_rear (connector panel, sockets, screws), wp_diskette_badge (UV 0..1, the IBM
-  badge is drawn at run time), wp_diskette_lever0/1 (pivot at the axle; rest = open, pointing up; the kit turns them
-  by -lever about z) with wp_diskette_lever*_label (UV 0..1), wp_diskette_slot0/1 (empties at each slot mouth's centre).
+  wp_diskette_top_cover, wp_diskette_front_cover, wp_diskette_baffle (under the vents), wp_diskette_base,
+  wp_diskette_feet, wp_diskette_drive0/1 (dark drive front: pocket floor, slot liner, diskette guide) with
+  wp_diskette_drive*_lock (the lock mark, UV 0..1, material wp_drive_label), wp_diskette_rear (connector panel,
+  sockets, screws), wp_diskette_badge (UV 0..1, the IBM badge is drawn at run time), wp_diskette_lever0/1 (origin on
+  the axle at the face; rest = open, pointing up; the kit turns them by -lever about z; extras.control) with
+  wp_diskette_lever*_label (UV 0..1), wp_diskette_slot0/1 (empties at each slot mouth's centre; extras.control) with
+  wp_diskette_slot*_home (the diskette's centre when home). The 6360 has no power switch (models.md).
 Templates the view clones, in their own frames:
   wp_diskette_jacket (card frame: x along the label, y up toward the label edge, z out of the label face; centre at
   the origin) with wp_diskette_media and wp_diskette_label (UV 0..1); wp_diskette_envelope (same axes, origin at its
   bottom edge); wp_diskette_file (the desk file, origin on the desk under its centre) with wp_diskette_place0..5.
 Materials: wp_pearl, wp_gray, wp_dark, wp_rubber, wp_metal, wp_label, wp_jacket, wp_media, wp_disk_label,
-wp_envelope. UVs box projected, one unit = 0.2 m, except the label quads.
+wp_envelope, wp_drive_label. UVs box projected, one unit = 0.2 m, except the label quads.
 The script exits 1 when a diskette's path through a slot, or a lever's sweep, touches a panel.
 """
+import json
 import math
 import os
 import sys
@@ -40,29 +44,47 @@ UV_METRES = 0.2
 MACHINE_TO_BLENDER = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1)))
 
 # ---- the unit (HW 3.1) ----
+# Measured on the owner's photographs (models.md, Diskette unit; PH below): diskette_front.jpg for widths (its width is
+# stretched 1.09 times, so only horizontal ratios are read from it), desk_front_scott_peterson.jpg for heights (undistorted:
+# the face is 1.14 times as tall as wide, as 292 / 254), desk_station_keyboard_diskette.jpg for the lever in depth, and the
+# Incident Reporting Guide for the 6360 (Z241-6253-2, IRG p.1: the covers, the slot liners and the vents exploded).
 W, H, D = 0.254, 0.292, 0.398
 HX, ZF, ZR = W / 2, D / 2, -D / 2
 FOOT = 0.0035                 # rubber feet
-COVER_Y = 0.016               # lower edge of the covers; the grey base shows below it (BRO p.18 dark band)
+COVER_Y = 0.010               # lower edge of the covers: a shadowed band under them (PH diskette_front)
+BASE_INSET = (0.020, 0.008)   # the base plate's inset at the sides and at the front and back (PH desk_front_scott_peterson)
 T = 0.003                     # cover wall
-R_EDGE = 0.019                # the covers' rounded edges, vertical and along the top (GIM p.25, PSM p.61)
+R_EDGE = 0.021                # the covers' rounded edges, vertical and along the top (IRG p.1, PH desk_station_keyboard_diskette)
 GAP = 0.0008                  # panel gap
-Z_SEAM = ZF - 0.034           # front cover's rear edge: its return is the corner radius and a short flat (GIM p.25)
+Z_SEAM = ZF - 0.034           # front cover's rear edge: its return is the corner radius and a short flat (GIM p.25, IRG p.1)
+STEP = 0.0025                 # the front cover stands this much lower than the top cover, whose front edge ...
+LIP = 0.003                   # ... reaches this far forward over it: the slight overhang at the top (PH diskette_front)
+VENTS = (25, 0.0075, 0.003, ZR + 0.023, ZR + 0.039)   # slots across the top at the rear: count, pitch, width, z0, z1 (IRG p.1)
 
-# ---- the slots and levers (BRO p.18, ORG p.54, CSG p.42) ----
-SLOT_X = (-0.045, 0.045)      # slot centres, 90 mm apart (BRO p.18: 119 px at 1.32 px/mm)
-SLOT_Y = (0.036, 0.250)       # the cover's slot opening; an 8-inch diskette needs 203.2 mm (ORG p.54: 22 mm above the cover's lower edge to 37 mm under its top)
-SLOT_HALF = 0.0045            # half width of the cover's slot
+# ---- the slots and levers (PH diskette_front, desk_front_scott_peterson; IRG p.1; CSG p.42) ----
+SLOT_X = (-0.045, 0.045)      # slot centres, 90 mm apart (PH diskette_front: 80 px on a 226 px face; BRO p.18)
+SLOT_Y = (0.027, 0.236)       # the cover's slot opening (PH: 26 to 233 and 26 to 237 mm up); a diskette needs 203.2 mm
+SLOT_HALF = 0.0047            # half width of the cover's slot; the dark liner in it leaves 9 mm black (PH: 8 px = 9 mm)
+LINER = 0.0012                # the liner's lip inside the cover's slot (PH desk_station_keyboard_diskette: a dark inner lip)
 GUIDE_HALF = 0.00175          # half width of the guide the diskette runs in
-GUIDE_Y = (0.038, 0.248)
+GUIDE_Y = (SLOT_Y[0] + 0.002, SLOT_Y[1] - 0.002)
 DISK = 0.2032
 DISK_Y = (SLOT_Y[0] + SLOT_Y[1]) / 2       # the diskette's centre height in the guide
 DISK_T = 0.0016
 HOME = DISK + 0.005 + 0.003                # leading edge at home, from the mouth (wordproc1980.js diskettes.slide)
-PIVOT_DX, PIVOT_Y = -0.020, 0.082          # lever axle, left of each slot (ST p.90: the shaft comes from the drive's left frame)
-POCKET = (-0.036, 0.038, -0.018, 0.022)    # dark pocket round the closed lever, from (slot x, pivot y): x0, x1, y0, y1 (GIM p.25)
-POCKET_FLOOR = ZF - 0.006
-BADGE = (-HX + 0.022, -HX + 0.046, 0.240, 0.268)   # top left, level with the slot tops (ORG p.54, BRO p.1 and p.18)
+# The cross pocket each slot passes through, a third of the way up (PH: 52 x 33 mm, centre 83 mm up), its walls pearl
+# and 9 mm deep to the dark drive front (PH diskette_front: the pearl walls show at its lower and right edges).
+POCKET = (-0.026, 0.026, 0.0665, 0.0995)   # x0, x1 from the slot centre; y0, y1
+POCKET_FLOOR = ZF - 0.0092
+# The handle (ST p.90 'operator handle'): open, a dark plate 24 x 47 mm standing up left of the slot, in front of the
+# face, with a fin along it whose foot reaches 8 mm below the plate (PH diskette_front, right drive; desk_station_keyboard
+# _diskette). Turned 90 degrees clockwise it lies over the pocket, across the slot (CSG p.42), which puts the axle here:
+PIVOT_DX, PIVOT_Y = -0.0195, 0.079
+PLATE = (-0.016, 0.008, -0.004, 0.043)     # the plate, open, from the axle: x0, x1, y0, y1 (PH: 35.5 to 11.5 mm left of the slot, 75 to 122 mm up)
+FIN = (-0.0060, -0.0030, -0.012, 0.043, 0.0125)   # the fin: x0, x1, y0, y1 from the axle, and how far it stands from the plate
+PLATE_Z = (0.0010, 0.0040)                 # the plate's back and front from the face
+BADGE = (-HX + 0.019, -HX + 0.044, 0.219, 0.245)   # top left, its centre level with the slot tops (PH: 25 x 26 mm)
+LOCK = (0.009, 0.021, -0.008, 0.008)       # the lock mark on the pocket floor right of the slot: x0, x1 from the slot, y about the pocket's centre
 
 
 # ---------- mesh helpers (as build_element_enclosure.py) ----------
@@ -228,34 +250,71 @@ def assign(ob, mat):
 # ---------- the cabinet ----------
 
 def build_covers():
-    outer = ob_from(rounded_box(-HX, HX, COVER_Y, H, ZR, ZF, R_EDGE), "outer")
-    inner = ob_from(rounded_box(-HX + T, HX - T, COVER_Y - 0.01, H - T, ZR + T, ZF - T, R_EDGE - T), "inner")
-    boolean(outer, inner)
-    front = copy_ob(outer, "wp_diskette_front_cover")
+    """The top cover (top, sides and back in one, slides off to the rear) and the front cover (the face and its rounded
+    return, slides forward): PSM p.61, IRG p.1. The front cover stands STEP lower than the top cover, whose front edge
+    reaches LIP forward over it, so a shadowed line and a slight overhang run across the top (PH diskette_front)."""
+    top = ob_from(rounded_box(-HX, HX, COVER_Y, H, ZR, ZF, R_EDGE), "wp_diskette_top_cover")
+    boolean(top, ob_from(rounded_box(-HX + T, HX - T, COVER_Y - 0.01, H - T, ZR + T, ZF - T, R_EDGE - T), "inner"))
+    boolean(top, ob_from(box(-1, 1, -1, 1, Z_SEAM + LIP, 1), "cut"))
+    # Under the lip: everything of the front cover's outline (grown by the gap) in front of the seam goes.
+    under = ob_from(rounded_box(-HX - GAP, HX + GAP, COVER_Y - 0.01, H - STEP + GAP, Z_SEAM - 0.06, ZF + GAP, R_EDGE + GAP), "under")
+    boolean(under, ob_from(box(-1, 1, -1, 1, -1, Z_SEAM - GAP / 2), "cut"))
+    boolean(top, under)
+    front = ob_from(rounded_box(-HX, HX, COVER_Y, H - STEP, ZR, ZF, R_EDGE), "wp_diskette_front_cover")
+    boolean(front, ob_from(rounded_box(-HX + T, HX - T, COVER_Y - 0.01, H - STEP - T, ZR + T, ZF - T, R_EDGE - T), "inner"))
     boolean(front, ob_from(box(-1, 1, -1, 1, -1, Z_SEAM + GAP / 2), "cut"))
-    top = outer
-    top.name = "wp_diskette_top_cover"
-    boolean(top, ob_from(box(-1, 1, -1, 1, Z_SEAM - GAP / 2, 1), "cut"))
-    # The front: a slot for each drive, widening into the dark pocket round its lever (GIM p.25, CSG p.42).
-    for sx in SLOT_X:
-        boolean(front, ob_from(prism(rounded_rect(sx - SLOT_HALF, SLOT_Y[0], sx + SLOT_HALF, SLOT_Y[1], 0.0025, 3), "z", ZF - 0.02, ZF + 0.01), "slot"))
-        x0, x1, y0, y1 = POCKET
-        boolean(front, ob_from(prism(rounded_rect(sx + x0, PIVOT_Y + y0, sx + x1, PIVOT_Y + y1, 0.004, 3), "z", ZF - 0.02, ZF + 0.01), "pocket"))
-    # The top: a shallow recess that runs over the rear edge and down the back, to push the cover back by (CSG p.42 and
-    # PSM p.61 drawings; the use is inferred). The outer 1.2 mm of the shell, inside a rounded rectangle seen from above.
-    skin = ob_from(rounded_box(-HX - 0.01, HX + 0.01, COVER_Y, H + 0.01, ZR - 0.01, ZF, R_EDGE), "skin")
-    boolean(skin, ob_from(rounded_box(-HX + 0.0012, HX - 0.0012, COVER_Y - 0.01, H - 0.0012, ZR + 0.0012, ZF - 0.0012, R_EDGE - 0.0012), "core"))
-    boolean(skin, ob_from(prism(rounded_rect(-0.055, ZR - 0.02, 0.055, ZR + 0.070, 0.008, 4), "y", H - 0.040, H + 0.02), "region"), "INTERSECT")
-    boolean(top, skin)
     # The rear: a notch right of centre, seen from behind, for the connector panel (PSM p.61; three cables, HW 3.1).
     boolean(top, ob_from(prism(rounded_rect(-0.086, 0.0, -0.004, 0.052, 0.003, 2), "z", ZR - 0.01, ZR + 0.01), "notch"))
     return front, top
 
 
+def cut_face(front):
+    """The face, after its bevel: a slot for each drive, crossed a third of the way up by the pocket, whose pearl walls run
+    9 mm in to the drive front (IRG p.1 draws them double; PH diskette_front shows them at the lower and right edges). The
+    photographs show these edges crisp, and square edges cost few vertices."""
+    x0, x1, y0, y1 = POCKET
+    parts = [front]
+    for sx in SLOT_X:
+        parts.append(ob_from(prism(rounded_rect(sx + x0 - 0.0015, y0 - 0.0015, sx + x1 + 0.0015, y1 + 0.0015, 0.004, 2), "z", POCKET_FLOOR + 0.0003, ZF - T + 0.0005), "collar"))
+    for o in parts[1:]:
+        boolean(front, o, "UNION")
+    cutters = []
+    for sx in SLOT_X:
+        cutters.append(ob_from(prism(rounded_rect(sx - SLOT_HALF, SLOT_Y[0], sx + SLOT_HALF, SLOT_Y[1], 0.0025, 2), "z", ZF - 0.03, ZF + 0.01), "slot"))
+        cutters.append(ob_from(prism(rounded_rect(sx + x0, y0, sx + x1, y1, 0.0025, 2), "z", ZF - 0.03, ZF + 0.01), "pocket"))
+    cut = cutters[0]
+    for o in cutters[1:]:
+        boolean(cut, o, "UNION")
+    boolean(front, cut)
+    smooth(front)
+
+
+def cut_vents(top):
+    """A row of vent slots across the top near the rear edge (IRG p.1), cut after the bevel so their square edges cost
+    few vertices; a dark baffle under them (build_baffle)."""
+    n, pitch, vw, z0, z1 = VENTS
+    cutters = []
+    for k in range(n):
+        x = (k - (n - 1) / 2) * pitch
+        cutters.append(ob_from(box(x - vw / 2, x + vw / 2, H - 0.01, H + 0.01, z0, z1), "vent"))
+    boolean(top, join(cutters, "vents"))
+    smooth(top)
+
+
+def build_baffle():
+    """A dark tray under the vents, so they show shadow and not the drives' backs."""
+    n, pitch, vw, z0, z1 = VENTS
+    hw = (n - 1) / 2 * pitch + 0.008
+    tray = ob_from(box(-hw, hw, H - T - 0.010, H - T - 0.0004, z0 - 0.005, z1 + 0.008), "wp_diskette_baffle")
+    boolean(tray, ob_from(box(-hw + 0.0015, hw - 0.0015, H - T - 0.0085, H, z0 - 0.0035, z1 + 0.0065), "in"))
+    return tray
+
+
 def build_base():
-    base = ob_from(prism(rounded_rect(-HX + 0.008, ZR + 0.008, HX - 0.008, ZF - 0.008, 0.012, 5), "y", FOOT - 0.0005, COVER_Y + 0.003), "wp_diskette_base")
+    sx, sz = BASE_INSET
+    base = ob_from(prism(rounded_rect(-HX + sx, ZR + sz, HX - sx, ZF - sz, 0.012, 5), "y", FOOT - 0.0005, COVER_Y + 0.003), "wp_diskette_base")
     feet = bmesh.new()
-    for x in (-0.098, 0.098):
+    for x in (-0.092, 0.092):
         for z in (-0.165, 0.165):
             bm = cylinder(0.011, 0.0, FOOT, "y", (x, z), 14)
             me = bpy.data.meshes.new("f")
@@ -267,19 +326,33 @@ def build_base():
 
 
 def build_drive():
-    """Built once at x = 0 and placed at each slot (the two drives share one mesh). The dark drive front behind the cover: a bezel with the lever's pocket floor and the guide's mouth, and the guide
+    """Built once at x = 0 and placed at each slot (the two drives share one mesh). The dark drive front behind the
+    cover, as IRG p.1 draws it: a plate whose face is the pocket's floor, and the slot's liner standing from it through
+    the cover's slot to just under the face, so the slot is black to its lip; the guide's mouth in it; and the guide
     channel the diskette runs in, closed beyond home so the slot never shows the inside."""
-    sx = 0.0
-    bez = ob_from(box(sx - 0.040, sx + 0.042, 0.030, 0.256, ZF - 0.008, ZF - T - 0.0002), "bez")
     x0, x1, y0, y1 = POCKET
-    boolean(bez, ob_from(prism(rounded_rect(sx + x0 + 0.0002, PIVOT_Y + y0 + 0.0002, sx + x1 - 0.0002, PIVOT_Y + y1 - 0.0002, 0.0038, 3), "z", POCKET_FLOOR, ZF), "p"))
-    boolean(bez, ob_from(prism(rounded_rect(sx - SLOT_HALF + 0.0002, SLOT_Y[0] + 0.0002, sx + SLOT_HALF - 0.0002, SLOT_Y[1] - 0.0002, 0.0023, 3), "z", ZF - 0.0045, ZF), "s"))
-    boolean(bez, ob_from(box(sx - GUIDE_HALF, sx + GUIDE_HALF, GUIDE_Y[0], GUIDE_Y[1], ZF - 0.02, ZF), "g"))
-    ch = ob_from(box(sx - 0.006, sx + 0.006, 0.034, 0.252, ZF - HOME - 0.012, ZF - 0.008), "ch")
-    boolean(ch, ob_from(box(sx - GUIDE_HALF, sx + GUIDE_HALF, GUIDE_Y[0], GUIDE_Y[1], ZF - HOME - 0.008, ZF), "g"))
+    plate = ob_from(box(x0 - 0.010, x1 + 0.010, SLOT_Y[0] - 0.008, SLOT_Y[1] + 0.008, POCKET_FLOOR - 0.004, POCKET_FLOOR), "plate")
+    liner = ob_from(prism(rounded_rect(-SLOT_HALF + 0.00015, SLOT_Y[0] + 0.00015, SLOT_HALF - 0.00015, SLOT_Y[1] - 0.00015, 0.0024, 3), "z", POCKET_FLOOR - 0.001, ZF - 0.0007), "liner")
+    boolean(liner, ob_from(prism(rounded_rect(x0, y0, x1, y1, 0.0025, 3), "z", POCKET_FLOOR + 0.0002, ZF + 0.01), "pk"))
+    boolean(plate, liner, "UNION")
+    lip = SLOT_HALF - LINER
+    boolean(plate, ob_from(prism(rounded_rect(-lip, SLOT_Y[0] + LINER, lip, SLOT_Y[1] - LINER, 0.0015, 3), "z", POCKET_FLOOR - 0.0025, ZF + 0.01), "mouth"))
+    boolean(plate, ob_from(box(-GUIDE_HALF, GUIDE_HALF, GUIDE_Y[0], GUIDE_Y[1], ZF - 0.03, ZF), "g"))
+    ch = ob_from(box(-0.006, 0.006, GUIDE_Y[0] - 0.004, GUIDE_Y[1] + 0.004, ZF - HOME - 0.012, POCKET_FLOOR - 0.004), "ch")
+    boolean(ch, ob_from(box(-GUIDE_HALF, GUIDE_HALF, GUIDE_Y[0], GUIDE_Y[1], ZF - HOME - 0.008, ZF), "g"))
     # The axle's bush in the pocket floor.
-    bush = ob_from(cylinder(0.0045, POCKET_FLOOR - 0.001, POCKET_FLOOR + 0.0004, "z", (sx + PIVOT_DX, PIVOT_Y), 16), "bush")
-    return join([bez, ch, bush], "wp_diskette_drive0")
+    bush = ob_from(cylinder(0.0055, POCKET_FLOOR - 0.001, POCKET_FLOOR + 0.0005, "z", (PIVOT_DX, PIVOT_Y), 18), "bush")
+    return join([plate, ch, bush], "wp_diskette_drive0")
+
+
+def build_lock_mark():
+    """The mark on the pocket floor right of the slot, seen with the handle open (PH diskette_front, desk_station_
+    keyboard_diskette): an arrow and a padlock, with the drive type beside them, drawn at run time (UV 0..1)."""
+    x0, x1, y0, y1 = LOCK
+    yc = (POCKET[2] + POCKET[3]) / 2
+    lab = ob_from(box(x0, x1, yc + y0, yc + y1, POCKET_FLOOR + 0.00005, POCKET_FLOOR + 0.0002), "wp_diskette_drive0_lock")
+    plane_uv(lab, (x0, yc + y0, 0), (1 / (x1 - x0), 0, 0), (0, 1 / (y1 - y0), 0))
+    return lab
 
 
 def build_rear():
@@ -304,32 +377,37 @@ def build_badge():
 
 
 def build_lever():
-    """The operator handle (ST p.90 'operator handle', CSG p.42 'load lever') in its rest pose, open: a hub on the axle
-    and an arm pointing up, a grip rib standing out along it. Closed, the kit turns it 90 degrees clockwise to lie
-    across the slot, hub at the left (ORG p.54: the L seen from the front), with the 1/2D mark low on the hub (BRO p.18)."""
-    parts = []
-    parts.append(ob_from(cylinder(0.0075, POCKET_FLOOR + 0.0006 - ZF, 0.0012, "z", (0, 0), 24), "boss"))
-    parts.append(ob_from(prism(rounded_rect(-0.018, -0.014, 0.012, 0.014, 0.004, 3), "z", 0.0010, 0.0046), "hub"))
-    arm = [(-0.012, 0.008), (0.012, 0.008), (0.012, 0.0475), (0.007, 0.0525), (-0.007, 0.0525), (-0.012, 0.0475)]
-    parts.append(ob_from(prism(arm, "z", 0.0010, 0.0042), "arm"))
-    r = ob_from(prism([(-0.0062, 0.0046), (0.050, 0.0046), (0.050, 0.0085), (0.042, 0.0128), (-0.0005, 0.0128), (-0.0062, 0.0090)], "x", -0.0017, 0.0017), "rib")
-    # prism 'x' takes (z, y): swap so the rib runs along y with its height along z.
-    me = r.data
-    for v in me.vertices:
-        v.co = Vector((v.co.x, v.co.z, v.co.y))
-    me.flip_normals()
-    parts.append(r)
+    """The operator handle (ST p.90 'operator handle', CSG p.42 'load lever') in its rest pose, open, in the axle's frame
+    (origin on the axle at the face, z out of the face): a flat plate standing up beside the slot in front of the face,
+    a fin along its middle that stands out to be gripped and whose foot reaches below the plate (PH diskette_front: the
+    right drive's handle, a dark block crossed by a thin light line that runs on below it; desk_station_keyboard_diskette:
+    the same block seen from the right, the fin's side and its foot), and a boss through the pocket to the axle. Closed,
+    the kit turns it 90 degrees clockwise, so the plate covers the pocket across the slot (CSG p.42, the closed inset;
+    PH diskette_front, the left drive: the pocket all dark, the axle's ring at its left)."""
+    px0, px1, py0, py1 = PLATE
+    fx0, fx1, fy0, fy1, fh = FIN
+    zb, zf = PLATE_Z
+    parts = [ob_from(cylinder(0.0045, POCKET_FLOOR + 0.0006 - ZF, zb + 0.0003, "z", (0, 0), 14), "boss")]
+    parts.append(ob_from(prism(rounded_rect(px0, py0, px1, py1, 0.003, 3), "z", zb, zf), "plate"))
+    zt = zf + fh
+    fin = [(zb + 0.0002, fy0 + 0.003), (zb + 0.0002, fy1), (zt - 0.003, fy1), (zt, fy1 - 0.005), (zt, fy0 + 0.010), (zt - 0.008, fy0), (zb + 0.002, fy0)]
+    parts.append(ob_from(prism(fin, "x", fx0, fx1), "fin"))          # prism 'x' takes (z, y)
+    ring = ob_from(cylinder(0.0024, zf - 0.0002, zf + 0.0004, "z", (0, 0), 12), "ring")     # the axle's end, the 'O' on the closed handle
+    boolean(ring, ob_from(cylinder(0.0015, zf, zf + 0.001, "z", (0, 0), 12), "in"))
+    parts.append(ring)
     lever = parts[0]
     for o in parts[1:]:
         boolean(lever, o, "UNION")
     lever.name = lever.data.name = "wp_diskette_lever0"
-    bevel_finish(lever, width=0.0006, segs=2)
+    bevel_finish(lever, width=0.0006, segs=1)
     assign(lever, MATS["wp_dark"])
     box_uv(lever)
-    # The drive-type mark, a printed plate low on the hub, reading along the arm when closed.
-    lab = ob_from(prism(rounded_rect(0.0030, -0.0120, 0.0105, 0.0060, 0.0008, 2), "z", 0.0046, 0.00475), "wp_diskette_lever0_label")
+    # The drive-type mark (ST p.90: the 2D drive's handle is labelled 1/2D), printed on the plate beside the fin,
+    # reading across the slot when closed.
+    lx0, lx1, ly0, ly1 = -0.0015, 0.0065, 0.012, 0.030
+    lab = ob_from(prism(rounded_rect(lx0, ly0, lx1, ly1, 0.0008, 2), "z", zf, zf + 0.00015), "wp_diskette_lever0_label")
     # u runs along rest +y (closed: left to right), v along rest -x (closed: upward).
-    plane_uv(lab, (0.0105, -0.0120, 0), (0, 1 / 0.018, 0), (-1 / 0.0075, 0, 0))
+    plane_uv(lab, (lx1, ly0, 0), (0, 1 / (ly1 - ly0), 0), (-1 / (lx1 - lx0), 0, 0))
     assign(lab, MATS["wp_label"])
     lab.parent = lever
     return lever, lab
@@ -452,6 +530,7 @@ def make_materials():
     m("wp_media", (0.08, 0.045, 0.025, 1), 0.3)
     m("wp_disk_label", (0.8, 0.78, 0.7, 1), 0.7)
     m("wp_envelope", (0.85, 0.84, 0.8, 1), 0.85)
+    m("wp_drive_label", (0.3, 0.3, 0.29, 1), 0.5)
 
 
 # ---------- clearance ----------
@@ -502,26 +581,36 @@ def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     make_materials()
     front, top = build_covers()
+    baffle = build_baffle()
     base, feet = build_base()
     drive = build_drive()
+    lock = build_lock_mark()
     rear, fittings = build_rear()
     badge = build_badge()
     for ob, w in ((front, 0.0009), (top, 0.0009), (base, 0.0008)):
         bevel_finish(ob, width=w)
+    cut_vents(top)
+    cut_face(front)
     for ob in (rear, badge):
         bevel_finish(ob, width=0.0004, segs=1)
     smooth(fittings)
     smooth(drive)                 # dark, and seen only round the pocket and down the slot
+    smooth(baffle)
     smooth(feet)
-    for ob, mat in ((front, "wp_pearl"), (top, "wp_pearl"), (base, "wp_gray"), (feet, "wp_rubber"), (rear, "wp_dark"), (fittings, "wp_metal")):
+    for ob, mat in ((front, "wp_pearl"), (top, "wp_pearl"), (base, "wp_gray"), (feet, "wp_rubber"), (rear, "wp_dark"),
+                    (fittings, "wp_metal"), (baffle, "wp_dark")):
         assign(ob, MATS[mat])
         box_uv(ob)
     assign(drive, MATS["wp_dark"])
     box_uv(drive)
+    assign(lock, MATS["wp_drive_label"])
     drives = [drive, bpy.data.objects.new("wp_diskette_drive1", drive.data)]
     bpy.context.collection.objects.link(drives[1])
-    for d, sx in zip(drives, SLOT_X):
+    locks = [lock, bpy.data.objects.new("wp_diskette_drive1_lock", lock.data)]
+    bpy.context.collection.objects.link(locks[1])
+    for d, lk, sx in zip(drives, locks, SLOT_X):
         d.location = (sx, 0, 0)
+        lk.parent = d
     assign(badge, MATS["wp_label"])
     plane_uv(badge, (BADGE[0], BADGE[2], 0), (1 / (BADGE[1] - BADGE[0]), 0, 0), (0, 1 / (BADGE[3] - BADGE[2]), 0))
     lever, lab = build_lever()
@@ -533,13 +622,25 @@ def main():
     levers = [(lever, lab), (lever1, lab1)]
     for (lv, _), sx in zip(levers, SLOT_X):
         lv.location = (sx + PIVOT_DX, PIVOT_Y, ZF)
-    clearance_check([front, top, base] + drives, [lv for lv, _ in levers])
-    slots = []
+    clearance_check([front, top, base, baffle] + drives, [lv for lv, _ in levers])
+    # The controls, described for the kit (glTF extras, three.js userData.control: JSON in the unit's frame, metres and
+    # radians). Each lever turns about its node's z from 0 (open) to -pi/2 (closed). Each slot's diskette runs from the
+    # mouth (the slot node) along -z; its leading edge is `home` in when home, where its centre is at the _home child.
+    for i, (lv, _) in enumerate(levers):
+        lv["control"] = json.dumps({"kind": "lever", "drive": i, "axis": [0, 0, 1], "open": 0, "closed": -math.pi / 2})
+    slots, homes = [], []
     for i, sx in enumerate(SLOT_X):
         e = bpy.data.objects.new(f"wp_diskette_slot{i}", None)
         bpy.context.collection.objects.link(e)
         e.location = (sx, DISK_Y, ZF)
+        e["control"] = json.dumps({"kind": "slot", "drive": i, "axis": [0, 0, -1], "home": round(HOME, 5), "disk": DISK,
+                                   "centreAtHome": [0, 0, round(-(HOME - DISK / 2), 5)], "lever": f"wp_diskette_lever{i}"})
+        h = bpy.data.objects.new(f"wp_diskette_slot{i}_home", None)
+        bpy.context.collection.objects.link(h)
+        h.parent = e
+        h.location = (0, 0, -(HOME - DISK / 2))
         slots.append(e)
+        homes.append(h)
     jacket, media, label = build_jacket()
     envelope = build_envelope()
     holder, pads, places = build_file()
@@ -550,11 +651,11 @@ def main():
         del e["machine_location"]
         e.rotation_euler = (math.radians(-5), 0, 0)      # leaning back against the one behind (machine x axis)
 
-    objs = [front, top, base, feet, rear, fittings, badge, drive, lever, lab, jacket, media, label, envelope, holder, pads]
+    objs = [front, top, baffle, base, feet, rear, fittings, badge, drive, lock, lever, lab, jacket, media, label, envelope, holder, pads]
     for o in objs:
         o.data.transform(MACHINE_TO_BLENDER)
         o.data.name = o.name
-    for o in drives + [lv for lv, _ in levers] + slots:
+    for o in drives + [lv for lv, _ in levers] + slots + homes:
         loc = Vector(o.location)
         o.location = (loc.x, -loc.z, loc.y)
     for e in places:
@@ -569,7 +670,7 @@ def main():
     print("TOTAL:", total)
     if "--no-export" not in sys.argv:
         bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", export_yup=True, export_apply=False, export_texcoords=True,
-                                  export_normals=True, export_materials="EXPORT", use_selection=False, export_extras=False)
+                                  export_normals=True, export_materials="EXPORT", use_selection=False, export_extras=True)
         print("wrote", OUT, os.path.getsize(OUT), "bytes")
 
 

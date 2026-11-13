@@ -5,18 +5,39 @@
 import { KEYS, KEY_UNIT as U, KEY_FIELD } from '../../machine/wp-keys.js';
 
 export const CASE = {
-  rearTop: 0.101,      // m, the rear top edge is the unit's height (MD p.5): the keys stay below it
-  fieldZ: 0.0,         // m, the key field's centre from the unit's centre, horizontally (brochure p.18: equal borders)
-  capBase: -0.0085,    // m, cap bottoms below the cover surface: the caps stand in their wells, tops a few mm proud
+  rearTop: 0.101,      // m, the unit's height (MD p.5), reached by the round of the rear top edge: the keys stay below it
+  backRound: 0.009,    // m, radius of that round (the owner's side photograph)
+  fieldZ: 0.020,       // m, the key field's centre ahead of the unit's centre, horizontally: a deep rear band holds the
+                       // card recess, the front band is little more than the nose (owner's US top view; the
+                       // three-quarter photograph's camera solved on the openings, models.md Keyboard)
+  capBase: -0.0055,    // m, cap bottoms below the cover surface: tall caps, their tops 7 to 9 mm proud of the cover
   plate: -0.0150,      // m, the key plate (contamination shield) seen between the caps
   gap: 0.0008,         // m, between neighbouring cap bases (KBD_2.JPG)
   margin: 0.0021,      // m, clearance from the cap bases to the opening's edge
 };
 
-/** Height of the cover plane over the unit's centre, so that it reaches `rearTop` at the rear edge. */
-export const deckOrigin = (size, slope) => [0, CASE.rearTop - (size[2] / 2 + CASE.fieldZ) * Math.tan(slope), CASE.fieldZ];
+/** The cover plane's height where it meets the back (the sharp corner the rear round replaces), so the round's crown is `rearTop`. */
+export const rearCorner = (slope) => CASE.rearTop + CASE.backRound * (Math.tan(slope) + 1 / Math.cos(slope) - 1);
+
+/** The deck's origin: on the cover plane above the key field's centre (`fieldZ` ahead of the unit's centre). */
+export const deckOrigin = (size, slope) => [0, rearCorner(slope) - (size[2] / 2 + CASE.fieldZ) * Math.tan(slope), CASE.fieldZ];
 
 const MAIN_X = 2.5, RIGHT_X = 18;
+
+/**
+ * The card recess behind the main block (owner's photographs): a shallow well with a stepped rim, from just left of
+ * the main opening to INDEX's left edge, its front edge 11.5 mm behind the main opening's, 54 mm deep. A clear window
+ * lies on the ledge (`ledge` deep, `rim` wide) over the information card on the floor (`floor` deep). Deck frame.
+ */
+export function recess() {
+  const main = openings().main;
+  const x0 = Math.min(...main.map((p) => p[0])) - 0.0026;
+  const top = Math.min(...main.map((p) => p[1]));
+  const index = KEYS.find((k) => k.pos === 84);
+  const x1 = keyRect(index).x0 - 0.0002;
+  const z1 = top - 0.0115, z0 = z1 - 0.054;
+  return { x0, x1, z0, z1, r: 0.003, ledge: 0.0016, rim: 0.0045, floor: 0.0036 };
+}
 
 /** Group a key belongs to: each has its own opening in the cover. */
 export function keyGroup(key) {

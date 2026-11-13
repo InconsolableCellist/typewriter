@@ -9,22 +9,24 @@ import { CASE, deckOrigin, keyRect } from './keyboard-layout.js';
 
 export const KEYBOARD_URL = '/assets/models/wp_keyboard.glb';
 
-// Row profile of the period's sculpted caps (Office System 6 family, GIM p.22): the far rows lean their tops toward
-// the typist, the home row is level with the deck, the near rows lean back. h is the top's centre above the cap base.
+// Row profile of the period's tall sculpted caps (beam spring family; the owner's close-ups): the far rows lean their
+// tops toward the typist, the home row is level with the deck, the near rows lean back. h is the top's centre above
+// the cap base, which stands CASE.capBase below the cover, so the tops stand 7 to 9 mm proud of it.
 const DEG = Math.PI / 180;
 const PROFILE = [
-  { h: 0.0128, tilt: 9 * DEG },    // row above the numbers (left and right groups)
-  { h: 0.0128, tilt: 9 * DEG },    // numbers
-  { h: 0.0121, tilt: 5 * DEG },    // tab row
-  { h: 0.0116, tilt: 0 },          // home (lock) row
-  { h: 0.0118, tilt: -4 * DEG },   // shift row
-  { h: 0.0106, tilt: -7 * DEG },   // space row
+  { h: 0.0150, tilt: 10 * DEG },   // row above the numbers (left and right groups)
+  { h: 0.0150, tilt: 10 * DEG },   // numbers
+  { h: 0.0141, tilt: 5 * DEG },    // tab row
+  { h: 0.0135, tilt: 0 },          // home (lock) row
+  { h: 0.0138, tilt: -5 * DEG },   // shift row
+  { h: 0.0126, tilt: -8 * DEG },   // space row
 ];
 const ENTER_DROP = 0.003;           // ENTER sits 3 mm below the space bar (ST p.62)
-const TAPER = 0.0025;               // m, the straight skirt draws in this much on each side from base to shoulder
-const TOP_K = 1.2;                  // the crown's edge, past the shoulder's roll, in TAPERs
-const DISH = 0.001;                 // m, depth of the cylindrical dish across a cap
-const R_BASE = 0.0009, R_TOP = 0.0021;
+const TAPER = 0.0031;               // m, the straight skirt draws in this much on each side from base to shoulder
+const TOP_K = 1.12;                 // the crown's edge, past the shoulder's roll, in TAPERs
+const DISH = 0.0012;                // m, depth of the cylindrical dish across a cap
+const R_BASE = 0.0009, R_TOP = 0.0026;
+const LEGEND_X = -0.0012;           // m, the stacked characters sit a little left of the cap's centre (US photograph)
 
 export const KEYCAP_COLOR = 0xdcd8c8;   // pearl white as the photographs show it (KBD_2.JPG, under flash)
 const INK = '#1b1a18';
@@ -230,28 +232,35 @@ function drawTop(ctx, text, w, d, mm) {
   const lines = text.split('\n');
   const single = lines.length === 1 && [...text].length === 1;
   ctx.save(); ctx.translate(w / 2, d / 2);
-  if (single && /[A-Z]/.test(text)) glyph(ctx, text, 0, -0.3 * mm, 5.0 * mm, 600);
-  else if (single) glyph(ctx, text, 0, -0.3 * mm, 4.6 * mm, 600);
+  // Sizes from the owner's US photograph (cap heights, mm): letters 5.8, shifted over unshifted 4.1 over 5.0.
+  if (single && /[A-Z]/.test(text)) glyph(ctx, text, 0, 0, 5.8 * mm, 600);
+  else if (single) glyph(ctx, text, 0, 0, 5.2 * mm, 600);
   else if (lines.length === 2 && lines.every((l) => [...l].length === 1)) {
     const [hi, lo] = lines;
-    glyph(ctx, hi, 0, -2.6 * mm, hi === '°' ? 2.6 * mm : 3.3 * mm, 600);
-    glyph(ctx, lo, 0, 2.1 * mm, 3.7 * mm, 600);
+    const x = LEGEND_X * 1000 * mm;
+    glyph(ctx, hi, x, -2.8 * mm, hi === '°' ? 2.5 * mm : 4.1 * mm, 600);
+    glyph(ctx, lo, x, 2.6 * mm, 5.0 * mm, 600);
   } else {
     // Small bold capitals, made smaller where a word would crowd the cap's edges (INDEX on its narrow cap).
-    ctx.font = `700 ${1.9 * mm / 0.716}px ${FONT}`;
+    ctx.font = `700 ${2.1 * mm / 0.716}px ${FONT}`;
     const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
-    const k = Math.min(1, (w - 2.2 * mm) / widest);
-    const cap = 1.9 * mm * k, lh = 2.55 * mm * Math.max(k, 0.85);
+    const k = Math.min(1, (w - 0.4 * mm) / widest);   // the US INDEX cap: the word nearly spans its crown
+    const cap = 2.1 * mm * k, lh = 2.8 * mm * Math.max(k, 0.85);
     lines.forEach((l, i) => line(ctx, l, 0, (i - (lines.length - 1) / 2) * lh - 0.5 * mm, cap, 700));
   }
   ctx.restore();
 }
 
-/** Front legend: small bold capitals just under the top edge (or ½ with a hollow arrow, or a boundary arrow). */
-function drawFront(ctx, text, w, mm) {
+/**
+ * Front legend: bold capitals (or ½ with a hollow arrow, or a boundary arrow) centred on the part of the front face
+ * that stands above the cover, about a third of the way down the face (the owner's close-ups). `h` is the face's
+ * slant height in px.
+ */
+function drawFront(ctx, text, w, mm, h) {
   const lines = text.split('\n');
-  const cap = (/[½⇤⇥↖↙]/.test(text) ? 2.0 : 1.6) * mm, lh = 2.25 * mm;
-  lines.forEach((l, i) => line(ctx, l, w / 2, 1.9 * mm + cap / 2 + i * lh, cap, 700));
+  const cap = (/[½⇤⇥↖↙]/.test(text) ? 2.4 : 2.0) * mm, lh = 2.7 * mm;
+  const mid = h * 0.36;
+  lines.forEach((l, i) => line(ctx, l, w / 2, mid + (i - (lines.length - 1) / 2) * lh, cap, 700));
 }
 
 /** Shelf-packs every key's legend regions into one atlas and returns the uv mappers per key. */
@@ -285,7 +294,7 @@ function makeAtlas(caps, maxAniso) {
     const k = c.key;
     const tw = (c.topBox.x1 - c.topBox.x0) * PX, ox = (c.topBox.x0 - c.box.x0) * PX;
     if (k.top) { ctx.save(); ctx.translate(cell.x + ox, cell.y); drawTop(ctx, k.top, tw, cell.th, mm); ctx.restore(); }
-    if (k.front) { ctx.save(); ctx.translate(cell.x, cell.y + cell.th); drawFront(ctx, k.front, (c.box.x1 - c.box.x0) * PX, mm); ctx.restore(); }
+    if (k.front) { ctx.save(); ctx.translate(cell.x, cell.y + cell.th); drawFront(ctx, k.front, (c.box.x1 - c.box.x0) * PX, mm, cell.fh); ctx.restore(); }
     return {
       blank,
       // u, v across the top's box (v from the back edge toward the typist); canvas y runs down the cell.
@@ -357,10 +366,11 @@ export async function buildKeyboard(size, slope, mats, { url = KEYBOARD_URL, max
     capMat.needsUpdate = true;
   }).catch(() => {});
 
+  const caseParts = {};
   try {
     const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
     const gltf = await new GLTFLoader().loadAsync(url);
-    const byName = { wp_pearl: mats.pearl, wp_gray: mats.pebble, wp_dark: mats.dark, wp_rubber: mats.rubber };
+    const byName = { wp_pearl: mats.pearl, wp_gray: mats.pebble, wp_dark: mats.dark, wp_rubber: mats.rubber, wp_kbd_card: cardMaterial(maxAniso), wp_kbd_window: windowMaterial() };
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;
       o.castShadow = o.receiveShadow = true;
@@ -369,8 +379,82 @@ export async function buildKeyboard(size, slope, mats, { url = KEYBOARD_URL, max
     });
     gltf.scene.name = 'wp_keyboard_case';
     group.add(gltf.scene);
+    // Named parts for whoever animates or picks them: the cable, its connector housing, the card and its window.
+    for (const n of ['cable', 'bush', 'card', 'window', 'cover']) {
+      const o = gltf.scene.getObjectByName(`wp_keyboard_${n}`);
+      if (o) caseParts[n] = o;
+    }
+    const win = caseParts.window;
+    if (win) win.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.renderOrder = 1; } });
   } catch (e) { console.info('keyboard case', e); }
 
   const pressDir = new THREE.Vector3(0, -1, 0);   // in the deck's frame: down the stems, normal to the slope
-  return { group, parts: { keys, deck, pressDir } };
+  return { group, parts: { keys, deck, pressDir, ...caseParts } };
+}
+
+// ---------- the information card ----------
+
+/** The clear window over the card: a thin, glossy, nearly transparent plate. */
+function windowMaterial() {
+  const m = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0, transparent: true, opacity: 0.07, clearcoat: 1, clearcoatRoughness: 0.04, depthWrite: false });
+  m.name = 'wp_kbd_window';
+  return m;
+}
+
+/** The card's material, with its face drawn on a canvas. */
+function cardMaterial(maxAniso) {
+  const tex = new THREE.CanvasTexture(cardCanvas());
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso; tex.flipY = false;   // glTF uvs: v = 0 at the card's back edge, the canvas's top
+  const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 });
+  m.name = 'wp_kbd_card';
+  return m;
+}
+
+/**
+ * The Displaywriter System Information Card that lies in the recess (owner's US photograph), drawn in its manner, not
+ * copied: the striped IBM logo and the card's name at the left, the SYSTEM CONFIGURATION checklist in two columns with
+ * this desk's units ticked in pen, and the serial number, access code and communications ID fields at the right.
+ * 280 x 44 mm at 7.3 px/mm; the canvas's top edge is the card's back edge.
+ */
+function cardCanvas() {
+  const W = 2048, H = 322, mm = W / 280;
+  const can = document.createElement('canvas');
+  can.width = W; can.height = H;
+  const ctx = can.getContext('2d');
+  ctx.fillStyle = '#cbbd9c'; ctx.fillRect(0, 0, W, H);
+  // A faint printed border.
+  ctx.strokeStyle = '#a99f88'; ctx.lineWidth = 0.25 * mm; ctx.strokeRect(1.5 * mm, 1.5 * mm, W - 3 * mm, H - 3 * mm);
+  const ink = '#1e1c19';
+  const text = (s, x, y, size, weight = 400) => { ctx.font = `${weight} ${size * mm / 0.716}px ${FONT}`; ctx.fillStyle = ink; ctx.fillText(s, x * mm, y * mm); };
+  // IBM in its striped capitals: the letters drawn whole, then cut by background stripes.
+  ctx.save();
+  ctx.font = `900 ${6 * mm / 0.716}px "Arial Black", ${FONT}`; ctx.fillStyle = ink; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('IBM', 8 * mm, 14 * mm);
+  ctx.fillStyle = '#cbbd9c';
+  for (let i = 0; i < 8; i++) ctx.fillRect(7 * mm, (8 + i * 0.75 + 0.42) * mm, 30 * mm, 0.33 * mm);
+  ctx.restore();
+  text('Displaywriter System', 8, 25, 2.3);
+  text('Information Card', 8, 30, 2.3);
+  text('SYSTEM CONFIGURATION', 84, 10, 1.6);
+  const box = (x, y, tick) => {
+    ctx.strokeStyle = ink; ctx.lineWidth = 0.2 * mm; ctx.strokeRect(x * mm, (y - 1.5) * mm, 1.5 * mm, 1.5 * mm);
+    if (!tick) return;
+    ctx.strokeStyle = '#2b3550'; ctx.lineWidth = 0.32 * mm; ctx.beginPath();
+    ctx.moveTo((x + 0.2) * mm, (y - 0.8) * mm); ctx.lineTo((x + 0.7) * mm, (y - 0.1) * mm); ctx.lineTo((x + 1.9) * mm, (y - 2.1) * mm); ctx.stroke();
+  };
+  const left = [['Electronics Module', 1], ['Display Module', 1], ['Keyboard Module', 1], ['Diskette Unit', 1], ['Memory', 1], ['Printer', 1], ['Sheet Feed Paper Handler', 1]];
+  const right = [['Tractor Feed', 0], ['Shared Printer', 0], ['Shared Printer Capability', 0], ['Mag Card Unit', 0], ['Communications', 0], ['3277 Device Emulation', 0], ['3274 - 3276 Attached Workstation', 0]];
+  left.forEach(([s, t], i) => { const y = 15 + i * 3.6; box(83, y, t); text(s, 86, y, 1.35); });
+  right.forEach(([s, t], i) => { const y = 15 + i * 3.6; box(134, y, t); text(s, 137, y, 1.35); });
+  text('Kyb', 134, 6.5, 1.35);
+  ctx.fillStyle = ink; ctx.fillRect(140 * mm, 6.8 * mm, 16 * mm, 0.15 * mm);
+  text('Serial Number', 204, 10, 1.5);
+  ctx.fillRect(204 * mm, 15.5 * mm, 62 * mm, 0.15 * mm);
+  // The access code's bracket under the serial number's right end.
+  ctx.fillRect(228 * mm, 17 * mm, 0.15 * mm, 2.5 * mm); ctx.fillRect(228 * mm, 19.35 * mm, 4 * mm, 0.15 * mm);
+  ctx.fillRect(262 * mm, 17 * mm, 0.15 * mm, 2.5 * mm); ctx.fillRect(254 * mm, 19.35 * mm, 8 * mm, 0.15 * mm);
+  text('Access Code', 233, 20, 1.35);
+  text('Communications ID', 204, 33, 1.5);
+  ctx.fillRect(236 * mm, 33.3 * mm, 30 * mm, 0.15 * mm);
+  return can;
 }

@@ -1,0 +1,22 @@
+{
+ "idleBedRmsDb": -47.84,
+ "stepPeakOverBed": 17.19,
+ "headLoadPeakOverBed": 17.33,
+ "seekRmsOverBed": 12.44,
+ "bed_motorRmsOverBed": -1.13,
+ "bed_fanRmsOverBed": -7.28,
+ "beepRmsOverBed": 17.46,
+ "crtLineRmsOverBed": -18.02,
+ "keyPressPeakOverBed": 26.26,
+ "keyReleasePeakOverBed": 15.34,
+ "keyEvents": 71,
+ "beepHz": 960.0,
+ "beamspring": {
+  "space_pressPeakDb": -24.5,
+  "wide_pressPeakDb": -23.18,
+  "key_pressPeakDb": -22.25,
+  "space_releasePeakDb": -26.48,
+  "wide_releasePeakDb": -27.76,
+  "key_releasePeakDb": -27.37
+ }
+}

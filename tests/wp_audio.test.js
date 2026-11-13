@@ -1,6 +1,6 @@
-// The word processor's sound (architecture.md 10): every voice is synthesised from the mechanism's forces, torques and
-// speeds, on three buses panned by where the units stand. Node runs the whole mechanism and renders the audio blocks
-// the worklet would.
+// The word processor's sound (architecture.md 10): voices synthesised from the mechanism's forces, torques and speeds,
+// and the owner's recordings (10.4) played from the mechanism's own events, on three buses panned by where the units
+// stand. Node runs the whole mechanism and renders the audio blocks the worklet would.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import wordproc1980 from '../src/machine/wordproc1980.js';
@@ -11,6 +11,12 @@ import { WordprocSim } from '../src/sim/wp/index.js';
 import { WpAudioEngine } from '../src/audio/wp-engine.js';
 import { LEVEL } from '../src/audio/wp-synth.js';
 import { createMechanism, createAudioEngine } from '../src/sim/host-factory.js';
+import { BED_DBFS, RECORDED } from '../src/audio/wp-sampler.js';
+import { KeyVoicer, keyClass, BED_DBFS as KEY_BED_DBFS, PRESS_OVER_BED_DB, V_PRESS } from '../src/audio/wp-keys.js';
+import { KeyboardHost } from '../src/kits/wp/keyboard-host.js';
+import { KEY_BY_POS } from '../src/machine/wp-keys.js';
+import { WAC } from '../src/sim/wp/ports.js';
+import { readSamples } from '../tools/audio/node_samples.mjs';
 
 const glyphs = await loadGlyphs('glyphs_wp');
 const SR = 48000, BLOCK = 128;
@@ -22,12 +28,16 @@ const MOVING = ['hammer', 'impact', 'selection', 'escapement', 'index', 'ribbon'
   'headStep', 'headStop', 'headLoad', 'collet', 'leverClick', 'impactClick', 'wheelWhir', 'rumble', 'camWhirr'];
 const only = (keys) => Object.fromEntries(Object.keys(LEVEL).map((k) => [k, keys.includes(k) || /^(petal|platen|carrier|frame|cabinet|chassis|lever)$/.test(k) ? LEVEL[k] : 0]));
 
+let sprite = null;          // the recorded sprite, decoded once with ffmpeg
+const wpSamples = () => (sprite ??= readSamples('samples_wp'));
+
 /** The host and its engine; render() runs blocks and returns both channels with the sim time of each sample. */
 class Rig {
-  constructor({ levels, cold = false } = {}) {
+  constructor({ levels, cold = false, samples = false } = {}) {
     const machine = structuredClone(wordproc1980);
     this.sim = new WordprocSim({ machine, geometry: geometryFor(machine), glyphs, cold, drives: DISKS });
     this.eng = new WpAudioEngine(this.sim, SR, { levels });
+    if (samples) { const { pcm, manifest } = wpSamples(); this.eng.loadSamples(pcm, manifest); }
     this.events = [];
     this.eng.onSnapshot = (_s, ev) => this.events.push(...ev);
     this.queue = [];
@@ -211,7 +221,7 @@ test('the voices stay inside their budget of 1 microsecond a sample', (t) => {
   // rendering of each block; reading the probe frame from the mechanism is timed here in chunks on the same state.
   // Medians, so that other test files running alongside (a preempted block) do not decide it.
   const median = (a) => a.sort((x, y) => x - y)[a.length >> 1];
-  const r = new Rig();
+  const r = new Rig({ samples: true });
   r.render(0.05);
   r.print([...text(PROSE), 0x3000 | 16]);
   r.sim.command({ dev: 'disk', op: 'transfer', id: 1, drive: 0, side: 0, track: 50, sector: 1, count: 8 });
@@ -219,10 +229,12 @@ test('the voices stay inside their budget of 1 microsecond a sample', (t) => {
   const t0 = performance.now();
   r.render(1.0, (rig) => { if (rig.eng.voiceLastNs > 0) blocks.push(rig.eng.voiceLastNs); });
   const all = ((performance.now() - t0) * 1e6) / SR;
-  const synth = r.eng.synth, chunks = [];
+  assert.ok(r.eng.sampler.counts.disk_seek > 0, 'the recorded seek played');
+  const synth = r.eng.synth, sampler = r.eng.sampler, chunks = [];
   for (let c = 0; c < 200; c++) {
     const c0 = performance.now();
-    for (let k = 0; k < 1024; k++) synth.capture(k & 127);
+    for (let k = 0; k < 1024; k++) { synth.capture(k & 127); sampler.capture(k & 127); }
+    sampler.nT = 0;
     chunks.push(((performance.now() - c0) * 1e6) / 1024);
   }
   const render = median(blocks), capture = median(chunks), voices = render + capture;
@@ -242,4 +254,130 @@ test('the typewriters keep their mono engine; a mono caller of this one gets the
   const c = new Rig(), t0 = c.sim.t;
   c.eng.process(null, BLOCK);
   assert.ok(c.sim.t > t0);
+});
+
+// ---- the recordings (architecture.md 10.4) -------------------------------------------------------------------------
+
+/** Mid RMS and peak of a stretch, in dBFS. */
+const level = (o, from = 0, to = o.L.length) => {
+  let e = 0, p = 0;
+  for (let i = from; i < to; i++) { const m = 0.5 * (o.L[i] + o.R[i]); e += m * m; p = Math.max(p, Math.abs(m)); }
+  return { rms: db(e / Math.max(1, to - from)), peak: 20 * Math.log10(Math.max(p, 1e-15)) };
+};
+
+test('the recorded sprite plays from the mechanism: steps, a seek and the head load, at the recorded levels', (t) => {
+  const r = new Rig({ samples: true });
+  r.render(1.0);
+  assert.deepEqual(r.eng.sampler.counts, {}, 'nothing moves, nothing is triggered');
+  const idle = level(r.render(0.5));
+  r.sim.command({ dev: 'disk', op: 'recalibrate', id: 1, drive: 0 });
+  r.render(0.9);
+  // A seek of 40 tracks: the first step rings alone, every later one plays a grain of a recorded seek's buzz.
+  const lands = [];
+  const cap = r.eng.sampler.capture.bind(r.eng.sampler);
+  r.eng.sampler.capture = (i) => { for (let e = 0; e < r.sim.acN; e++) if (r.sim.acQ[e * 3] === WAC.HEAD_LAND) lands.push(r.sim.t); cap(i); };
+  r.eng.sampler.counts = {};
+  r.sim.command({ dev: 'disk', op: 'transfer', id: 2, drive: 0, side: 0, track: 40, sector: 1, count: 1 });
+  const seek = r.render(0.2);
+  const c = r.eng.sampler.counts;
+  assert.ok(c.disk_seek >= 35 && c.disk_seek <= 40 && c.disk_step === 1, `one step alone, then a grain a step: ${JSON.stringify(c)}`);
+  const rest = r.render(0.4);
+  assert.ok(r.eng.sampler.counts.disk_load >= 1 && lands.length >= 1, 'the pad landing plays a head load');
+  // One track on: a single step.
+  r.render(1.0);
+  r.eng.sampler.counts = {};
+  r.sim.command({ dev: 'disk', op: 'transfer', id: 3, drive: 0, side: 0, track: 41, sector: 1, count: 1 });
+  const one = r.render(0.04);
+  assert.deepEqual(r.eng.sampler.counts, { disk_step: 1 });
+  assert.ok(finite(seek) && finite(rest) && finite(one));
+  // Levels against the idle machine, as measured in the recording (tools/audio/wp_levels.json).
+  const lSeek = level(seek, 0, Math.round(0.19 * SR)).rms - idle.rms, lStep = level(one).peak - idle.rms;
+  const i0 = rest.t.findIndex((x) => x >= lands.at(-1) - 0.002), lLoad = level(rest, i0, i0 + Math.round(0.06 * SR)).peak - idle.rms;
+  t.diagnostic(`idle ${idle.rms.toFixed(1)} dBFS; seek RMS +${lSeek.toFixed(1)} dB (recorded +${RECORDED.seekRms}); single step peak ` +
+    `+${lStep.toFixed(1)} (+${RECORDED.stepPeak}); head load peak +${lLoad.toFixed(1)} (+${RECORDED.headLoadPeak})`);
+  assert.ok(Math.abs(idle.rms - BED_DBFS) < 1.5, `idle ${idle.rms.toFixed(1)} dBFS`);
+  assert.ok(Math.abs(lSeek - RECORDED.seekRms) < 3, `seek ${lSeek.toFixed(1)} dB`);
+  assert.ok(Math.abs(lStep - RECORDED.stepPeak) < 4, `step ${lStep.toFixed(1)} dB`);
+  assert.ok(Math.abs(lLoad - RECORDED.headLoadPeak) < 4, `head load ${lLoad.toFixed(1)} dB`);
+});
+
+test('a strike stands over the idle machine as documented, and over a seek', (t) => {
+  const r = new Rig({ samples: true });
+  r.render(1.0);
+  const idle = level(r.render(0.5));
+  let pk = -200;
+  for (const ch of 'mwe') { r.print(text(ch)); pk = Math.max(pk, level(r.render(0.15)).peak); }
+  t.diagnostic(`strike peak ${pk.toFixed(1)} dBFS, ${(pk - idle.rms).toFixed(1)} dB over the idle machine`);
+  // 10.4: the recording has no printing, so a strike keeps its assumed level, about 32 dB over the idle machine.
+  assert.ok(pk - idle.rms > 28 && pk - idle.rms < 38, `${(pk - idle.rms).toFixed(1)} dB`);
+  assert.ok(pk - idle.rms > RECORDED.seekRms + 15, 'a strike well over a seek');
+});
+
+test('the hums run while their units are powered and stop when they are not', () => {
+  const r = new Rig({ samples: true });
+  r.render(1.0);
+  const on = level(r.render(0.5));
+  const loops = r.eng.sampler.loops;
+  assert.deepEqual(loops.map((L) => L.kind).sort(), ['fan', 'motor']);
+  assert.ok(loops.every((L) => L.g > 0.9), loops.map((L) => L.g).join(' '));
+  r.sim.setStationPower(false);
+  const g = r.sim.grab('printerPower', 0, { target: -0.1 });
+  r.render(0.3); r.sim.release(g);
+  r.render(1.0);
+  const off = level(r.render(0.5));
+  assert.ok(off.rms < on.rms - 10, `on ${on.rms.toFixed(1)}, off ${off.rms.toFixed(1)} dBFS`);
+  // Cold: nothing runs until the module is switched on; then the fan and the motors run up and the hum comes.
+  const c = new Rig({ samples: true, cold: true });
+  c.sim.setStationPower(false);                     // as the kit does for ?cold
+  const cold = level(c.render(0.5));
+  assert.ok(c.eng.sampler.loops.every((L) => L.g < 1e-3) && cold.rms < BED_DBFS - 20, `cold ${cold.rms.toFixed(1)} dBFS`);
+  c.sim.setStationPower(true);
+  c.render(3.0);
+  const up = level(c.render(0.5));
+  assert.ok(up.rms > BED_DBFS - 4, `after power on ${up.rms.toFixed(1)} dBFS`);
+});
+
+test('the keyboard mechanism sounds its presses and releases, at the level measured against the machine', () => {
+  // The mechanism: a press meets the felt, a release comes home on the top stop; each an event with the stem's speed.
+  const heard = [];
+  const kb = new KeyboardHost(() => {}, () => 0);
+  kb.onSound = (e) => heard.push(e);
+  const A = KEY_BY_POS[38].index, SPACE = KEY_BY_POS[64].index, SHIFT = KEY_BY_POS[50].index;
+  kb.press(A, 1.2); kb.advance(0.06);
+  kb.queue.push({ t: 0.06, i: A, f: 0 }); kb.advance(0.2);
+  // The stem meets the felt, rebounds on it a few times, and later comes home once.
+  const presses = heard.filter((e) => e.kind === 'press'), releases = heard.filter((e) => e.kind === 'release');
+  assert.ok(Math.abs(presses[0].v - V_PRESS) < 0.1 && presses[0].t > 0.003 && presses[0].t < 0.01, JSON.stringify(presses[0]));
+  assert.ok(presses.slice(1).every((e, k) => e.v < 0.6 * presses[k].v && e.t - presses[0].t < 0.02), JSON.stringify(presses));
+  assert.ok(releases.length === 1 && releases[0].v > 0.5 && releases[0].t > 0.06, JSON.stringify(releases));
+  const { manifest } = readSamples('samples_wpkeys');
+  const voiced = new KeyVoicer(manifest);
+  assert.deepEqual(heard.map((e) => voiced.voice(e)?.item.set).filter(Boolean), ['key_press', 'key_release'], 'the rebounds are part of the press');
+  // A slower stem is quieter.
+  const gain = (v) => { const kv = new KeyVoicer(manifest); let s = 0; for (let k = 0; k < 30; k++) s += kv.voice({ kind: 'press', key: A, v, t: k }).gain; return s; };
+  assert.ok(gain(0.6) < 0.7 * gain(V_PRESS));
+  // Classes: the space bar and the wide keys have their own cuts.
+  const kv = new KeyVoicer(manifest);
+  assert.equal(keyClass(SPACE), 'space'); assert.equal(keyClass(SHIFT), 'wide'); assert.equal(keyClass(A), 'key');
+  assert.match(kv.voice({ kind: 'press', key: SPACE, v: 1.2, t: 10 }).item.set, /^space_press/);
+  assert.match(kv.voice({ kind: 'release', key: SHIFT, v: 1, t: 10 }).item.set, /^wide_release/);
+  assert.equal(kv.voice({ kind: 'press', key: SPACE, v: 1.2, t: 10.01 }), null, 'a felt rebound is part of the same press');
+  // Repeats differ: a key cycles through its own cuts, with varied level and rate.
+  const v4 = [0, 1, 2, 3].map((k) => kv.voice({ kind: 'press', key: A, v: V_PRESS, t: 20 + k }));
+  assert.ok(new Set(v4.map((v) => v.item.id)).size > 1 || new Set(v4.map((v) => v.gain.toFixed(4))).size > 1);
+  assert.ok(new Set(v4.map((v) => v.rate.toFixed(4))).size > 1);
+  // Level: a typical press peaks PRESS_OVER_BED_DB over the idle machine, as in the recording; releases under it.
+  assert.equal(KEY_BED_DBFS, BED_DBFS);
+  assert.ok(Math.abs(PRESS_OVER_BED_DB - RECORDED.keyPressPeak) < 0.5);
+  const median = (kind) => {
+    const v = new KeyVoicer(manifest), out = [];
+    for (let k = 0; k < 600; k++) {
+      const x = v.voice({ kind, key: [A, SPACE, SHIFT, KEY_BY_POS[24 + (k % 10)].index][k % 4], v: kind === 'press' ? V_PRESS : 1.0, t: k });
+      if (x) out.push(20 * Math.log10(0.7 * x.gain));
+    }
+    return out.sort((a, b) => a - b)[out.length >> 1];
+  };
+  const p = median('press'), rl = median('release');
+  assert.ok(Math.abs(p - (BED_DBFS + PRESS_OVER_BED_DB)) < 2, `press ${p.toFixed(1)} dBFS`);
+  assert.ok(rl < p - 2 && rl > BED_DBFS + RECORDED.keyReleasePeak - 4, `release ${rl.toFixed(1)} dBFS`);
 });

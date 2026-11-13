@@ -55,6 +55,7 @@ tooth on return, each platen detent, carriage stop and bell queue `AC` events fr
 audio rate; `src/audio/sampler.js` plays cuts from `public/assets/audio/samples/` with level and brightness set by
 the measured force or speed. Each key hashes to a stable set of cuts. Paper loops follow soft-body speed.
 A modal layer voices bar-bar metal, and is the fallback until samples load. `src/audio/element-synth.js` voices the electric machine's motor and clutches from the mechanism's state.
+The word processor's sound is `docs/displaywriter/architecture.md` section 10: synthesis from forces and speeds, and recorded cuts (`samples_wp`, `samples_wpkeys`) triggered by its mechanisms' events.
 Sources and terms for the recordings are in `public/assets/audio/SOURCES.md`.
 
 ## Contract: SimClient (`src/sim/client.js`)

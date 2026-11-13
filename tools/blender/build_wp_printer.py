@@ -13,11 +13,14 @@ acoustic filter, leadscrew thread, petal faces). The script exits 1 if a moving 
 
 Nodes, in the printer's frame (origin on the desk under its centre, x right, y up, z to the operator); a moving node's
 pivot is its origin:
-  printer_body (cabinet, panel bezel, slot, rear panel, feet), printer_panel (the black panel, UV 0..1 on its face),
-  printer_display, printer_key0..7, printer_led0..9, printer_power (rocker), printer_cover (access cover, on its hinge),
-  printer_frame (side frames, rails, motors, belt, paper pan), printer_platen, printer_bail, printer_feedrolls,
+  printer_body (cabinet, panel bezel, slot, rear panel, feet, badge), printer_panel (the black panel, UV 0..1 on its
+  face), printer_display, printer_key0..7, printer_led0..9, printer_power (rocker), printer_cover (access cover, on its
+  hinge), printer_frame (side frames, rails, motors, belt, paper pan), printer_platen, printer_bail, printer_feedrolls,
   printer_leadscrew, printer_cam, printer_carrier (selection motor, hammer coil, ribbon plate and cartridge,
-  printwheel cartridge, cardholder), printer_wheel (96 petals), printer_hammer (armature), printer_feeder (sheet feeder).
+  printwheel cartridge, cardholder), printer_ribbon_knob (on the ribbon plate, turns about y), printer_cartlogo (the
+  ribbon cartridge's logo decal), printer_wheel (96 petals), printer_hammer (armature), printer_feeder (sheet feeder),
+  printer_feeder_gate (paper insertion gate, turns about the stacker plate's normal), printer_tray0/1 (slide along z).
+The mechanism is centred on x = 0; the cabinet's centre is cabinet.offsetX to the right of it (the photographs).
 """
 import json
 import math
@@ -41,6 +44,7 @@ W, H, D = J["size"]
 HW, HD = W / 2, D / 2
 PC, PR, PL = J["platen"]["center"], J["platen"]["radius"], J["platen"]["length"]
 CAB = J["cabinet"]
+CAB_DX = CAB.get("offsetX", 0.0)          # the cabinet's centre is right of the mechanism's (PH 5218_1, BRO p.18)
 TOP = CAB["top"]                         # the cabinet's top
 CTOP = CAB["coverTop"]                   # the access cover and the slot's surround stand proud of it
 HY, HZ = CAB["hinge"]                    # access cover hinge (y, z)
@@ -57,7 +61,7 @@ FOOT = 0.006                             # feet
 T = 0.003                                # wall
 GAP = 0.0012                             # panel gap
 LIP = 0.164                              # the access cover's lip comes down the front face to here
-CWF, CWR = 0.2388, 0.2188                # access cover half widths at the front and at the hinge
+CWF, CWR = 0.2205, 0.2135                # access cover half widths at the front and at the hinge (0.62 of the width, BRO p.18)
 FACE = HD                                # front face plane
 
 
@@ -289,7 +293,7 @@ MATS = {}
 def make_materials():
     spec = {
         "wp_pearl": ((0.74, 0.71, 0.64), 0.6, 0), "wp_gray": ((0.52, 0.51, 0.48), 0.6, 0), "wp_dark": ((0.035, 0.034, 0.033), 0.55, 0),
-        "wp_trim": ((0.62, 0.50, 0.33), 0.55, 0), "wp_panel": ((0.02, 0.02, 0.022), 0.45, 0), "wp_rubber": ((0.02, 0.02, 0.02), 0.85, 0),
+        "wp_trim": ((0.66, 0.64, 0.58), 0.55, 0), "wp_panel": ((0.02, 0.02, 0.022), 0.45, 0), "wp_rubber": ((0.02, 0.02, 0.02), 0.85, 0),
         "wp_metal": ((0.55, 0.55, 0.56), 0.35, 1), "wp_chrome": ((0.8, 0.8, 0.82), 0.15, 1), "wp_glass": ((0.06, 0.045, 0.04), 0.05, 0), "wp_foam": ((0.09, 0.08, 0.07), 0.95, 0),
         "wp_key_green": ((0.05, 0.42, 0.12), 0.4, 0), "wp_key_yellow": ((0.85, 0.55, 0.03), 0.4, 0), "wp_key_blue": ((0.22, 0.52, 0.80), 0.4, 0),
         "wp_led_red": ((0.25, 0.02, 0.02), 0.2, 0), "wp_led_green": ((0.03, 0.2, 0.05), 0.2, 0), "wp_led_amber": ((0.3, 0.17, 0.02), 0.2, 0),
@@ -297,6 +301,7 @@ def make_materials():
         "wp_wheel": ((0.75, 0.75, 0.72), 0.45, 0), "wp_petal": ((0.75, 0.75, 0.72), 0.45, 0), "wp_cartridge": ((0.05, 0.25, 0.18), 0.45, 0),
         "wp_white": ((0.8, 0.79, 0.75), 0.5, 0), "wp_screw": ((0.6, 0.6, 0.62), 0.3, 1), "wp_motor": ((0.08, 0.08, 0.085), 0.45, 0.5),
         "wp_paper": ((0.85, 0.85, 0.82), 0.8, 0), "wp_cable": ((0.55, 0.62, 0.62), 0.6, 0),
+        "wp_badge": ((0.78, 0.74, 0.62), 0.4, 0.3), "wp_ribcart": ((0.07, 0.07, 0.075), 0.55, 0), "wp_cartlogo": ((0.10, 0.10, 0.10), 0.5, 0),
     }
     for name, (col, rough, met) in spec.items():
         mat = bpy.data.materials.new(name)
@@ -305,8 +310,8 @@ def make_materials():
         b.inputs["Base Color"].default_value = (*col, 1)
         b.inputs["Roughness"].default_value = rough
         b.inputs["Metallic"].default_value = met
-        if name == "wp_glass":
-            b.inputs["Transmission Weight"].default_value = 0.25
+        if name == "wp_glass":                     # smoked glass: dark, glossy, partly see-through
+            b.inputs["Alpha"].default_value = 0.62
         MATS[name] = mat
 
 
@@ -325,6 +330,7 @@ def cabinet_master(inset=0.0, y0=SEAM, y1=TOP):
     ob = prism_ob(side, "x", -HW - 0.01, HW + 0.01, "m")
     boolean(ob, prism_ob(front, "z", -HD - 0.01, HD + 0.01), "INTERSECT")
     boolean(ob, prism_ob(plan, "y", y0 - 0.001 if not inset else y0 - 0.03, y1 + 0.01), "INTERSECT")
+    ob.data.transform(Matrix.Translation((CAB_DX, 0, 0)))
     return ob
 
 
@@ -347,8 +353,12 @@ LED_POS = [(LED_X[0], LED_Y[0]), (LED_X[0], LED_Y[1]), (LED_X[1], LED_Y[0]), (LE
            (LED_X[2], LED_Y[1]), (LED_X[3], LED_Y[0]), (LED_X[3], LED_Y[1]), (LED_X[4], LED_Y[0]), (LED_X[4], LED_Y[1])]
 LED_MAT = ["wp_led_red", "wp_led_green"] + ["wp_led_amber", "wp_led_green"] + ["wp_led_amber"] * 6
 DISPLAY = (-0.085, -0.061, 0.0924, 0.1117)
-POWER = dict(x0=0.250, x1=0.296, y0=0.0465, y1=0.0899, rx=0.2760, ry=0.0653, rw=0.0186, rh=0.0226)
-REAR_PANEL = (-0.322, -0.213, 0.016, 0.163)        # attachment panel recess down through the base band, printer's left rear (PH 5218_3)
+# The power switch 94 to 102 mm from the cabinet's right end (BRO p.18, PH 5218_1).
+POWER = dict(x0=0.249, x1=0.295, y0=0.0465, y1=0.0899, rx=0.2720, ry=0.0653, rw=0.0186, rh=0.0226)
+# Attachment panel recess down through the base band, 43 mm in from the cabinet's left end seen from the front (PH 5218_3).
+REAR_PANEL = (-HW + CAB_DX + 0.043, -HW + CAB_DX + 0.152, 0.016, 0.163)
+BADGE = (-0.262, -0.226, HD - 0.062, HD - 0.036)   # x0, x1, z0, z1: the IBM 5218 badge on the top at the front left (PH 5218_1, 5218_2)
+MAGNET_X = 0.066                                   # the cover's magnetic latch, right of the scoop (PH 5218_2)
 LATCH = [(-0.270, -0.240), (0.240, 0.270)]          # paper-handler latch openings beside the hinge (PH 5218_2)
 LATCH_Z = (0.058, 0.108)
 REAR_SQ = [(-0.241, -0.219), (0.219, 0.241)]
@@ -373,12 +383,16 @@ def build_top_cover():
     boolean(top, prism_ob(rrect(x0, y0, x1, y1, 0.004), "z", -HD - 0.01, -HD + 0.016))
     for i in range(11):
         z = -0.272 + i * 0.0125
-        boolean(top, box_ob(HW - 0.012, HW + 0.01, 0.078, 0.150, z - 0.003, z + 0.003))
+        boolean(top, box_ob(HW + CAB_DX - 0.012, HW + CAB_DX + 0.01, 0.078, 0.150, z - 0.003, z + 0.003))
     # The slot's surround at the cover's height: cheeks either side, and behind it the hood whose front is the
     # acoustic filter (PH 5218_1: the cover's window, the slot and the perforated filter in one raised recess).
     for sx in (-1, 1):
         boolean(top, box_ob(min(sx * SLOT_HW, sx * CWR), max(sx * SLOT_HW, sx * CWR), TOP - 0.001, CTOP, SLOT0 - 0.004, HZ - 0.004), "UNION")
     boolean(top, prism_ob(HOOD, "x", -CWR, CWR), "UNION")
+    # The scoop is a closed pocket in the face (PH 5218_1 shows its light floor), not a hole into the cabinet.
+    cup = box_ob(-0.0375, 0.0375, 0.1465, LIP - GAP - 0.0005, FACE - 0.0155, FACE - T + 0.0005, "cup")
+    boolean(cup, prism_ob(rrect(-0.034, 0.150, 0.034, LIP - GAP + 0.003, 0.004), "z", FACE - 0.012, FACE + 0.01))
+    boolean(top, cup, "UNION")
     bevel_finish(top, 0.0012, 1)
     return top
 
@@ -392,9 +406,10 @@ def build_base():
     ob = solid(lambda bm: add_prism(bm, rrect(-x, -z, x, z, 0.022), "y", FOOT, SEAM + 0.006), "base")
     inner = solid(lambda bm: add_prism(bm, rrect(-x + T, -z + T, x - T, z - T, 0.019), "y", FOOT + T, SEAM + 0.02), "bi")
     boolean(ob, inner)
+    ob.data.transform(Matrix.Translation((CAB_DX, 0, 0)))
     x0, x1, y0, y1 = REAR_PANEL
     boolean(ob, box_ob(x0, x1, y0, SEAM + 0.02, -HD - 0.01, -HD + 0.016))
-    bevel_finish(ob, 0.0016, 3)
+    bevel_finish(ob, 0.0016, 2)
     return ob
 
 
@@ -402,7 +417,7 @@ def build_feet():
     bm = bmesh.new()
     for x in (-HW + 0.07, HW - 0.07):
         for z in (-HD + 0.06, HD - 0.06):
-            add_cyl(bm, "y", (x, FOOT / 2, z), 0.016, FOOT, 24, 0.014)
+            add_cyl(bm, "y", (x + CAB_DX, FOOT / 2, z), 0.016, FOOT, 16, 0.014)
     return ob_from(bm, "feet")
 
 
@@ -417,7 +432,7 @@ def build_bezel():
     pb = prism_ob(rrect(Q["x0"], Q["y0"], Q["x1"], Q["y1"], 0.003), "z", FACE - 0.002, FACE + 0.004, "pb")
     boolean(pb, prism_ob(rrect(Q["rx"] - Q["rw"] / 2 - 0.0012, Q["ry"] - Q["rh"] / 2 - 0.0012, Q["rx"] + Q["rw"] / 2 + 0.0012, Q["ry"] + Q["rh"] / 2 + 0.0012, 0.0015), "z", FACE - 0.001, FACE + 0.01))
     ob = join([fr, div, strip, pb], "bezel")
-    bevel_finish(ob, 0.0007, 2)
+    bevel_finish(ob, 0.0012, 2)
     return ob
 
 
@@ -491,7 +506,7 @@ def build_rear_panel():
     # Round paper-handler socket, the DE-9 of the controller cable, the IEC inlet (PH 5218_3); seen from behind, x mirrors.
     bm = bmesh.new()
     cx = x0 + 0.020
-    add_cyl(bm, "z", (cx, 0.140, -HD + 0.0100), 0.0135, 0.006, 32)
+    add_cyl(bm, "z", (cx, 0.140, -HD + 0.0100), 0.0135, 0.006, 20)
     add_box(bm, cx - 0.004, cx + 0.004, 0.152, 0.156, -HD + 0.0085, -HD + 0.0130)
     add_rbox(bm, cx - 0.0155, cx + 0.0155, 0.096, 0.108, -HD + 0.0100, -HD + 0.0135, 0.001, 1)
     add_rbox(bm, cx - 0.0110, cx + 0.0110, 0.052, 0.076, -HD + 0.0090, -HD + 0.0135, 0.002, 1)
@@ -507,15 +522,57 @@ def build_rear_panel():
 
 
 def build_vent_backing():
-    ob = box_ob(HW - 0.016, HW - 0.012, 0.072, 0.156, -0.282, -0.135, "vent")
+    ob = box_ob(HW + CAB_DX - 0.016, HW + CAB_DX - 0.012, 0.072, 0.156, -0.282, -0.135, "vent")
     assign(ob, "wp_dark")
     return ob
+
+
+def build_badge():
+    """The IBM 5218 badge on the top at the front left (PH 5218_1, 5218_2): a plate 36 x 26 mm, uv 0..1 on its face for
+    the view's artwork (v = 1 at its far edge)."""
+    x0, x1, z0, z1 = BADGE
+    bm = bmesh.new()
+    add_box(bm, x0, x1, TOP - 0.001, TOP + 0.0006, z0, z1)
+    uv = bm.loops.layers.uv.new("UVMap")
+    for f in bm.faces:
+        for lp in f.loops:
+            c = lp.vert.co
+            lp[uv].uv = ((c.x - x0) / (x1 - x0), (z1 - c.z) / (z1 - z0)) if f.normal.y > 0.7 else (0.0, 0.0)
+    ob = ob_from(bm, "badge")
+    assign(ob, "wp_badge")
+    return ob
+
+
+def build_ledge():
+    """What the open cover shows on the cabinet's front edge (PH 5218_2): the magnetic latch the cover's keeper meets,
+    right of the scoop, and a plate held by two screws at the left; and the acoustic foam over the base plate under the
+    carrier (MIM p.63)."""
+    bm = bmesh.new()
+    add_box(bm, MAGNET_X - 0.016, MAGNET_X + 0.016, 0.148, LIP - GAP - 0.004, FACE - 0.018, FACE - T)
+    mag = ob_from(bm, "magnet")
+    assign(mag, "wp_gray")
+    bm = bmesh.new()
+    add_box(bm, MAGNET_X - 0.012, MAGNET_X + 0.012, LIP - GAP - 0.0046, LIP - GAP - 0.004, FACE - 0.014, FACE - 0.007)
+    add_box(bm, -0.205, -0.150, 0.150, LIP - GAP - 0.0004, FACE - 0.022, FACE - T)
+    pl = ob_from(bm, "ledge")
+    assign(pl, "wp_metal")
+    bm = bmesh.new()
+    for x in (-0.196, -0.159):
+        add_cyl(bm, "y", (x, LIP - GAP, FACE - 0.0145), 0.0028, 0.0012, 12)
+    sc = ob_from(bm, "screws")
+    shade(sc, 40)
+    assign(sc, "wp_chrome")
+    bm = bmesh.new()
+    add_box(bm, -0.282, 0.282, 0.012, 0.0165, 0.100, 0.296)
+    foam = ob_from(bm, "bfoam")
+    assign(foam, "wp_foam")
+    return [mag, pl, sc, foam]
 
 
 def build_latch_floors():
     bm = bmesh.new()
     for x0, x1 in LATCH:
-        add_box(bm, x0 - 0.002, x1 + 0.002, TOP - 0.032, TOP - 0.029, LATCH_Z[0] - 0.002, LATCH_Z[1] + 0.002)
+        add_box(bm, x0 - 0.002, x1 + 0.002, TOP - 0.024, TOP - 0.021, LATCH_Z[0] - 0.002, LATCH_Z[1] + 0.002)
     for x0, x1 in REAR_SQ:
         add_box(bm, x0 - 0.002, x1 + 0.002, TOP - 0.025, TOP - 0.022, REAR_SQ_Z[0] - 0.002, REAR_SQ_Z[1] + 0.002)
     ob = ob_from(bm, "lf")
@@ -580,8 +637,8 @@ def cover_solid(inset=0.0, down=0.0):
 
 
 # The window well in the cover's rear: its floor slopes up from the hinge, the tinted window set in it (PH 5218_1).
-WELL_HW, WELL_Z = 0.198, 0.146
-WINDOW = (-0.190, 0.190, 0.101, 0.141)   # x0, x1, z0, z1
+WELL_HW, WELL_Z = 0.198, 0.222
+WINDOW = (-0.190, 0.190, 0.100, 0.217)   # x0, x1, z0, z1: over half the cover's depth (PH 5218_2 raised, the owner's photo, BRO p.18)
 
 
 def floor_y(z):
@@ -603,7 +660,7 @@ def build_cover():
     bm = bmesh.new()
     for x in (-0.204, 0.204):
         add_cyl(bm, "x", (x, HY, HZ), 0.003, 0.010, 12)
-    add_box(bm, -0.012, 0.012, LIP + 0.004, LIP + 0.011, HD - 0.010, HD - T)
+    add_box(bm, MAGNET_X - 0.012, MAGNET_X + 0.012, LIP + 0.004, LIP + 0.011, HD - 0.010, HD - T)
     k = ob_from(bm, "kn")
     bevel_finish(ob, 0.0012)
     box_uv(ob)
@@ -682,7 +739,7 @@ def belt_loop(c1, r1, c2, r2, seg=24):
     return lo[:-1] + hi[:-1]
 
 
-INDEX_MOTOR = (0.072 + DY, 0.012)   # (y, z) of the index motor's shaft, below and behind the platen (MIM p.20, p.38)
+INDEX_MOTOR = (0.102 + DY, 0.012)   # (y, z) of the index motor's shaft, below and behind the platen (MIM p.20, p.38), over the base's wall
 CAM_C = (0.082 + DY, 0.020)
 
 
@@ -690,8 +747,10 @@ def build_frame():
     parts = []
     bm = bmesh.new()
     # Side frames, the mechanism's base plate.
+    # The frames stand tall round the platen and stay low in front, under the ribbon plate, which passes over them at
+    # the carrier's stops (MIM p.18; PH 5218_4).
     for s in (-1, 1):
-        prof = round_poly([(-0.035, 0.012), (0.262, 0.012), (0.262, 0.090 + DY), (0.120, 0.168 + DY), (0.010, 0.168 + DY), (-0.035, 0.120 + DY)], [0, 0, 0.01, 0.02, 0.02, 0.01])
+        prof = round_poly([(-0.035, 0.012), (0.262, 0.012), (0.262, 0.078), (0.148, 0.090), (0.112, 0.168 + DY), (0.010, 0.168 + DY), (-0.035, 0.120 + DY)], [0, 0, 0.01, 0.01, 0.015, 0.02, 0.01])
         add_prism(bm, prof, "x", s * FRAME_X - 0.0015, s * FRAME_X + 0.0015)
     add_box(bm, -0.30, 0.30, 0.009, 0.012, -0.045, 0.300)
     met = ob_from(bm, "frame_met")
@@ -709,7 +768,7 @@ def build_frame():
     bm = bmesh.new()
     add_cyl(bm, "x", (FRAME_X + 0.034, SCREW[0], SCREW[1]), 0.027, 0.056, 24)
     add_cyl(bm, "x", (FRAME_X + 0.004, SCREW[0], SCREW[1]), 0.012, 0.012, 20)
-    add_cyl(bm, "x", (-FRAME_X - 0.038, INDEX_MOTOR[0], INDEX_MOTOR[1]), 0.026, 0.040, 24)
+    add_cyl(bm, "x", (-FRAME_X - 0.031, INDEX_MOTOR[0], INDEX_MOTOR[1]), 0.026, 0.036, 24)
     add_cyl(bm, "x", (FRAME_X + 0.024, 0.035 + DY, 0.060), 0.016, 0.040, 24)
     motors = ob_from(bm, "motors")
     shade(motors, 35)
@@ -768,9 +827,9 @@ def build_platen():
     bm = bmesh.new()
     add_cyl(bm, "x", (0, 0, 0), 0.006, 2 * FRAME_X + 0.03, 16)
     for s in (-1, 1):
-        add_cyl(bm, "x", (s * (PL / 2 + 0.004), 0, 0), 0.013, 0.008, 24)
-    add_cyl(bm, "x", (PULLEY_X - 0.0055, 0, 0), 0.032, 0.0015, 28)
-    add_cyl(bm, "x", (PULLEY_X + 0.0055, 0, 0), 0.032, 0.0015, 28)
+        add_cyl(bm, "x", (s * (PL / 2 + 0.004), 0, 0), 0.013, 0.008, 16)
+    add_cyl(bm, "x", (PULLEY_X - 0.0055, 0, 0), 0.032, 0.0015, 20)
+    add_cyl(bm, "x", (PULLEY_X + 0.0055, 0, 0), 0.032, 0.0015, 20)
     met = ob_from(bm, "pm")
     shade(met, 35)
     assign(met, "wp_metal")
@@ -822,7 +881,7 @@ def build_feedrolls():
             rolls.append(c)
             add_cyl(rbm, "x", (x, c[0], c[1]), rr, 0.018, 10)
         ys = [FEED_ROD[0] - 0.006, rolls[0][0], rolls[1][0]]
-        poly = round_poly([(FEED_ROD[1] - 0.008, FEED_ROD[0] - 0.007), (FEED_ROD[1] + 0.008, FEED_ROD[0] - 0.007), (rolls[0][1] + 0.004, rolls[0][0] - 0.002), (rolls[1][1] - 0.004, rolls[1][0] - 0.002)], [0.003] * 4)
+        poly = round_poly([(FEED_ROD[1] - 0.008, FEED_ROD[0] - 0.007), (FEED_ROD[1] + 0.008, FEED_ROD[0] - 0.007), (rolls[0][1] + 0.004, rolls[0][0] - 0.002), (rolls[1][1] - 0.004, rolls[1][0] - 0.002)], [0.003] * 4, seg=3)
         add_prism(bm, poly, "x", x - 0.0115, x + 0.0115)
     br = ob_from(bm, "fbr")
     shade(br, 35)
@@ -887,8 +946,145 @@ PETAL_Z = (WC[2], WC[2] + 0.0012)       # the slug faces lie in the plane petalT
 HAMMER_REST = PETAL_Z[1] + J["hammer"]["freeTravel"]
 HAMMER_Y = PC[1] - 0.002               # the armature on the middle of the top petal's face
 RIB = J["ribbon"]
-LOBE_R = 0.040
-LOBE_Y = (0.1225 + DY, 0.1455 + DY)
+PLATE_Y = (0.1185 + DY, 0.1215 + DY)  # the ribbon plate's underside and top
+# On the ribbon plate (MIM p.57 to scale, 0.234 mm a pixel at 300 dpi): the belt rollers and the advance knob (x, z).
+RIB_ROLLERS = [(0.0204, 0.2219), (0.0920, 0.2305), (0.1197, 0.2067), (-0.105, 0.236)]
+RIB_KNOB = (0.1267, 0.2324)
+
+
+def hull(pts):
+    """Convex hull (monotone chain) of 2D points, counter-clockwise."""
+    pts = sorted(set((round(p[0], 6), round(p[1], 6)) for p in pts))
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lo, hi = [], []
+    for p in pts:
+        while len(lo) >= 2 and cross(lo[-2], lo[-1], p) <= 0:
+            lo.pop()
+        lo.append(p)
+    for p in reversed(pts):
+        while len(hi) >= 2 and cross(hi[-2], hi[-1], p) <= 0:
+            hi.pop()
+        hi.append(p)
+    return lo[:-1] + hi[:-1]
+
+
+CARRIER_DECALS = []                    # separate nodes that ride the carrier (the view attaches them)
+CART_FRONT = 0.196                     # the ribbon cartridge's top edge in front (z), the spools under it
+
+
+def cart_top(z):
+    """The ribbon cartridge's top rises toward the platen, to the ribbon's height at its rear tips (PG p.44 photo)."""
+    return 0.1265 + (CART_FRONT - z) * 0.15
+
+
+def build_ribbon_cartridge():
+    """The ribbon cartridge (Printer Guide S544-0861-4 p.41 and p.44 photographs, MIM p.57): a flat-topped moulding
+    265 mm across whose two lobes, one over each spool, run back to pointed tips where the film leaves for the guides on
+    the printwheel cartridge; a deep notch between them for the selection motor and hammer. Under its straight front
+    edge the spool housings stand forward and show each spool's toothed flange. A slot window on the left lobe, the
+    raised IBM logo on the right (a decal the view draws)."""
+    sx, sz = RIB["spoolX"], RIB["spoolZ"]
+    yb = PLATE_Y[1] + 0.0005
+    body = prism_ob([(-0.132, CART_FRONT), (0.132, CART_FRONT), (0.132, 0.157), (0.098, 0.139), (-0.098, 0.139), (-0.132, 0.157)], "y", yb, 0.16, "rcart")
+    # Each lobe a round hump (MIM p.57: radius 38 mm about a point 59 mm out and 67 mm in front of the print line)
+    # running back to a blunt tip (PG p.41, p.44); the motor's notch between them, round at its foot.
+    for s in (-1, 1):
+        circ = [(s * 0.060 + 0.039 * math.cos(2 * math.pi * k / 28), 0.152 + 0.039 * math.sin(2 * math.pi * k / 28)) for k in range(28)]
+        boolean(body, prism_ob(hull(circ + [(s * 0.050, 0.102), (s * 0.058, 0.101)]), "y", yb, 0.16), "UNION")
+        bay = [(s * sx - 0.036, CART_FRONT + 0.01), (s * sx + 0.036, CART_FRONT + 0.01), (s * sx + 0.024, 0.183), (s * sx - 0.024, 0.183)]
+        boolean(body, prism_ob(bay, "y", yb + 0.0085, 0.2))
+    boolean(body, prism_ob(rrect(-0.034, 0.0, 0.034, 0.178, 0.011), "y", yb - 0.01, 0.2))
+    boolean(body, prism_ob([(0.05, yb), (CART_FRONT, yb), (CART_FRONT, cart_top(CART_FRONT)), (0.05, cart_top(0.05))], "x", -0.2, 0.2), "INTERSECT")
+    boolean(body, prism_ob(rrect(-0.069, 0.149, -0.063, 0.173, 0.0029), "y", cart_top(0.16) - 0.003, 0.2))
+    # The spool housings under the front edge, open in front over each spool's toothed flange.
+    for s in (-1, 1):
+        hs = solid(lambda bm, s=s: add_cyl(bm, "y", (s * sx, yb + 0.0045, sz), 0.041, 0.009, 28))
+        boolean(hs, box_ob(s * sx - 0.022, s * sx + 0.022, yb - 0.01, yb + 0.02, sz + 0.024, sz + 0.06))
+        boolean(body, hs, "UNION")
+    triangulate(body)
+    shade(body, 35)
+    assign(body, "wp_ribcart")
+    bm = bmesh.new()
+    for s in (-1, 1):
+        add_prism(bm, [(s * sx + x, sz + z) for x, z in gear_poly(0.036, 24, 0.0016)], "y", yb + 0.0015, yb + 0.0045)
+    fl = ob_from(bm, "flange")
+    shade(fl, 35)
+    assign(fl, "wp_dark")
+    # The logo on the right lobe: a quad just over the top, uv 0..1 (v = 1 at its far edge).
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new("UVMap")
+    x0, x1, z0, z1 = 0.046, 0.088, 0.158, 0.176
+    vs = [bm.verts.new((x, cart_top(z) + 0.0003, z)) for x, z in ((x0, z1), (x1, z1), (x1, z0), (x0, z0))]
+    f = bm.faces.new(vs)
+    for lp, (u, v) in zip(f.loops, ((0, 0), (1, 0), (1, 1), (0, 1))):
+        lp[uv].uv = (u, v)
+    logo = ob_from(bm, "printer_cartlogo")
+    assign(logo, "wp_cartlogo")
+    CARRIER_DECALS.append(logo)
+    return join([body, fl], "ribcart")
+
+
+def build_wheel_cartridge():
+    """The printwheel cartridge (Printer Guide p.47 photograph, p.50 drawings; MIM p.57): two plates either side of the
+    wheel, round below a band with ears at each side, the top open over the upper petals inside a trapezoid handle; the
+    hub shows through a rounded triangle in the motor-side plate; the ribbon guides on brackets at the band."""
+    cx, cy = WC[0], WC[1]
+    R, b0, b1 = 0.0415, 0.010, 0.017
+    xa = math.sqrt(R * R - b0 * b0)
+    a0 = math.atan2(b0, xa)        # from the band's right end clockwise round the bottom to its left end
+    arc = [(cx + R * math.cos(a0 - (math.pi + 2 * a0) * k / 32), cy + R * math.sin(a0 - (math.pi + 2 * a0) * k / 32)) for k in range(33)]
+    plate = [(cx - 0.045, cy + b1), (cx + 0.045, cy + b1), (cx + 0.045, cy + b0)] + arc + [(cx - 0.045, cy + b0)]
+    zb = (WC[2] - 0.0024, WC[2] - 0.0014)
+    zf = (PETAL_Z[1] + 0.0009, PETAL_Z[1] + 0.0019)
+    back = prism_ob(plate, "z", *zb, "wcb")
+    front = prism_ob(plate, "z", *zf, "wcf")
+    win = [(cx, cy + 0.022), (cx + 0.015, cy - 0.012), (cx - 0.015, cy - 0.012)]
+    win = round_poly(win, [0.004, 0.004, 0.004])
+    boolean(front, prism_ob(win, "z", zf[0] - 0.01, zf[1] + 0.01))
+    boolean(front, solid(lambda bm: add_cyl(bm, "z", (cx, cy, zf[0]), 0.0095, 0.02, 24)))
+    obs = [back, front]
+    rim = [(cx + 0.0415 * math.cos(a), cy + 0.0415 * math.sin(a)) for a in [p for p in (math.atan2(y - cy, x - cx) for x, y in arc)]]
+    rim_in = [(cx + 0.0405 * (x - cx) / 0.0415, cy + 0.0405 * (y - cy) / 0.0415) for x, y in rim]
+    obs.append(prism_ob(rim + rim_in[::-1], "z", zb[0], zf[1], "rim"))
+    bm = bmesh.new()
+    for s in (-1, 1):
+        add_box(bm, min(s * 0.0405, s * 0.045), max(s * 0.0405, s * 0.045), cy + b0, cy + b1, zb[0], zf[1])
+        # the handle's slanted sides and top bar, on the motor side of the wheel
+        p0, p1 = Vector((s * 0.043, cy + b1)), Vector((s * 0.0105, cy + 0.0435))
+        d = (p1 - p0).normalized()
+        n = Vector((-d.y, d.x)) * 0.0025 * (1 if s > 0 else -1)
+        quad = [p0, p1, p1 + n, p0 + n] if s > 0 else [p0, p0 + n, p1 + n, p1]
+        add_prism(bm, [(q.x, q.y) for q in quad], "z", zf[0], zf[1] + 0.001)
+    add_box(bm, -0.0115, 0.0115, cy + 0.0425, cy + 0.045, zf[0], zf[1] + 0.002)
+    gx, gz = RIB["guidePostX"], WC[2] - J["hammer"]["petalTravel"] + 0.0012 + 0.0022 + 0.0005 + 0.0065
+    for s in (-1, 1):
+        add_box(bm, min(s * 0.024, s * 0.045), max(s * 0.024, s * 0.045), cy + b1 - 0.003, cy + b1, zf[0], gz + 0.002)
+        add_box(bm, s * gx - 0.002, s * gx + 0.002, cy + b1 - 0.003, 0.121, gz - 0.002, gz + 0.002)
+    obs.append(ob_from(bm, "handle"))
+    sh = join(obs, "wcart")
+    shade(sh, 35)
+    assign(sh, "wp_cartridge")
+    bm = bmesh.new()
+    for s in (-1, 1):
+        add_cyl(bm, "y", (s * gx, 0.147 + DY, gz), 0.0022, 0.020, 16)
+    posts = ob_from(bm, "posts")
+    shade(posts, 35)
+    assign(posts, "wp_chrome")
+    return [sh, posts]
+
+
+def build_ribbon_knob():
+    """The ribbon advance knob on the ribbon plate (MIM p.95, PG p.42): knurled, the capstan of the feed belt; turned by
+    hand to take up slack. Its own node, pivot on its axle (y)."""
+    bm = bmesh.new()
+    add_prism(bm, gear_poly(0.0140, 16, 0.0007), "y", 0.0, 0.019)
+    add_cyl(bm, "y", (0, 0.0195, 0), 0.0115, 0.001, 30)
+    add_box(bm, -0.007, 0.007, 0.019, 0.0212, -0.0012, 0.0012)
+    ob = ob_from(bm, "printer_ribbon_knob")
+    shade(ob, 35)
+    assign(ob, "wp_dark")
+    return ob, (RIB_KNOB[0], PLATE_Y[1], RIB_KNOB[1])
 
 
 def build_carrier():
@@ -902,7 +1098,8 @@ def build_carrier():
         cl = prism_ob(round_poly([(-0.032, 0.084 + DY), (0.032, 0.084 + DY), (0.032, 0.120 + DY), (0.0, 0.142 + DY), (-0.032, 0.120 + DY)], [0.002, 0.002, 0.012, 0.01, 0.012]), "z", z0, z0 + 0.006, "cl")
         boolean(cl, solid(lambda bm: add_cyl(bm, "z", (0, WC[1], z0 + 0.003), MOTOR_R + 0.0003, 0.02, 28)))
         cast = join([cast, cl], "cast")
-    bevel_finish(cast, 0.0008, 1)
+    triangulate(cast)       # under the ribbon plate: no bevel, to spare the budget
+    shade(cast, 35)
     assign(cast, "wp_dark")
     obs.append(cast)
     # Selection motor, its shaft and the hammer coil clamped above it (MIM p.52, p.87).
@@ -923,83 +1120,44 @@ def build_carrier():
     shade(noses, 35)
     assign(noses, "wp_metal")
     obs.append(noses)
-    # The ribbon plate with its belt rollers and the advance knob (MIM p.94, p.95).
-    rp = prism_ob(rrect(-0.105, 0.092, 0.105, 0.248, 0.008), "y", 0.1185 + DY, 0.1215 + DY, "rp")
-    boolean(rp, prism_ob(rrect(-0.029, 0.08, 0.029, 0.172, 0.004), "y", 0.1 + DY, 0.13 + DY))
+    # The ribbon plate (MIM p.57's top view to scale, PH 5218.jpg): 300 mm across at the front, where the cartridge's
+    # spring latches stand at its ends, narrow behind round the selection motor. It passes over the frames at the stops.
+    py0, py1 = PLATE_Y
+    plate = round_poly([(-0.150, 0.262), (0.150, 0.262), (0.150, 0.160), (0.060, 0.160), (0.060, 0.092), (-0.060, 0.092), (-0.060, 0.160), (-0.150, 0.160)],
+                       [0.008, 0.008, 0.004, 0.006, 0.006, 0.006, 0.006, 0.004])
+    rp = prism_ob([(x, z) for x, z in plate], "y", py0, py1, "rp")
+    boolean(rp, prism_ob(rrect(-0.029, 0.08, 0.029, 0.172, 0.004), "y", py0 - 0.01, py1 + 0.01))
+    for sx in (-1, 1):
+        tab = [(0.168, py1 - 0.0005), (0.206, py1 - 0.0005), (0.199, 0.131), (0.177, 0.131)]
+        boolean(rp, prism_ob(tab, "x", min(sx * 0.141, sx * 0.150), max(sx * 0.141, sx * 0.150)), "UNION")
     bevel_finish(rp, 0.0005, 1)
     assign(rp, "wp_dark")
     obs.append(rp)
-    rollers = [(-0.090, 0.226), (-0.058, 0.233), (-0.026, 0.233), (0.006, 0.233), (0.038, 0.233), (0.064, 0.222)]
-    knob = (0.088, 0.226)
     bm = bmesh.new()
-    for x, z in rollers:
-        add_cyl(bm, "y", (x, 0.1265 + DY, z), 0.0055, 0.010, 12)
+    for x, z in RIB_ROLLERS:
+        add_cyl(bm, "y", (x, py1 + 0.005, z), 0.0058, 0.010, 14)
     rol = ob_from(bm, "rol")
     shade(rol, 35)
     assign(rol, "wp_white")
     obs.append(rol)
-    pts = [(x, z) for x, z in rollers] + [knob]
-    outer = belt_loop((pts[0][1], pts[0][0]), 0.0068, (knob[1], knob[0]), 0.0118, 12)
-    belt = prism_ob(outer, "y", 0.1225 + DY, 0.1305 + DY, "rbelt")
-    inner = belt_loop((pts[0][1], pts[0][0]), 0.0056, (knob[1], knob[0]), 0.0105, 12)
-    boolean(belt, prism_ob(inner, "y", 0.11 + DY, 0.14 + DY))
+    # The ribbon feed belt from the first roller round the advance knob (MIM p.95), and the gear between them.
+    kx, kz = RIB_KNOB
+    r0 = RIB_ROLLERS[0]
+    belt = prism_ob(belt_loop((r0[1], r0[0]), 0.0068, (kz, kx), 0.0150, 14), "y", py1 + 0.002, py1 + 0.008, "rbelt")
+    boolean(belt, prism_ob(belt_loop((r0[1], r0[0]), 0.0056, (kz, kx), 0.0138, 14), "y", py1 - 0.01, py1 + 0.02))
     shade(belt, 35)
     assign(belt, "wp_rubber")
     obs.append(belt)
     bm = bmesh.new()
-    add_prism(bm, gear_poly(0.0105, 14, 0.0012), "y", 0.1215 + DY, 0.143 + DY)
-    for v in bm.verts:
-        v.co.x += knob[0]
-        v.co.z += knob[1]
-    kn = ob_from(bm, "knob")
-    shade(kn, 35)
-    assign(kn, "wp_dark")
-    obs.append(kn)
-    # The ribbon cartridge: two spool lobes either side of the hammer, a bridge in front, arms to the ribbon guides
-    # beside the print point (MIM p.57; SET p.1-4).
-    sx, sz = RIB["spoolX"], RIB["spoolZ"]
-    cart = solid(lambda bm: [add_cyl(bm, "y", (s * sx, sum(LOBE_Y) / 2, sz), LOBE_R, LOBE_Y[1] - LOBE_Y[0], 36) for s in (-1, 1)], "cart")
-    bridge = box_ob(-0.05, 0.05, 0.1395 + DY, LOBE_Y[1], 0.140, 0.166)
-    boolean(cart, bridge, "UNION")
-    gx, gz = RIB["guidePostX"], WC[2] - J["hammer"]["petalTravel"] + 0.0012 + 0.0022 + 0.0005 + 0.0065
-    for s in (-1, 1):
-        quad = [(s * (gx - 0.0005), gz - 0.003), (s * (gx + 0.008), gz - 0.003), (s * 0.050, 0.112), (s * 0.036, 0.118)]
-        arm = prism_ob(round_poly(quad if s > 0 else quad[::-1], [0.002] * 4), "y", LOBE_Y[0], LOBE_Y[0] + 0.004, "arm")
-        boolean(cart, arm, "UNION")
-    bevel_finish(cart, 0.0009, 1)
-    assign(cart, "wp_dark")
-    obs.append(cart)
-    bm = bmesh.new()
-    for s in (-1, 1):
-        add_cyl(bm, "y", (s * gx, 0.147 + DY, gz), 0.0022, 0.020, 16)
-    posts = ob_from(bm, "posts")
-    shade(posts, 35)
-    assign(posts, "wp_chrome")
-    obs.append(posts)
-    # The printwheel cartridge: a shell round the lower half of the wheel, its handle tab at the bottom (MIM p.57).
-    shell = []
-    for z0, z1 in ((WC[2] - 0.0024, WC[2] - 0.0014), (PETAL_Z[1] + 0.0009, PETAL_Z[1] + 0.0019)):
-        poly = []
-        for k in range(25):
-            a = math.pi + math.pi * k / 24
-            poly.append((WC[0] + 0.0415 * math.cos(a), WC[1] + 0.0415 * math.sin(a)))
-        for k in range(24, -1, -1):
-            a = math.pi + math.pi * k / 24
-            poly.append((WC[0] + 0.012 * math.cos(a), WC[1] + 0.012 * math.sin(a)))
-        shell.append(prism_ob(poly, "z", z0, z1, "sh"))
-    poly = []
-    for k in range(25):
-        a = math.pi + math.pi * k / 24
-        poly.append((0.0415 * math.cos(a), WC[1] + 0.0415 * math.sin(a)))
-    for k in range(24, -1, -1):
-        a = math.pi + math.pi * k / 24
-        poly.append((0.0405 * math.cos(a), WC[1] + 0.0405 * math.sin(a)))
-    shell.append(prism_ob(poly, "z", WC[2] - 0.0024, PETAL_Z[1] + 0.0019, "rim"))
-    shell.append(box_ob(-0.010, 0.010, WC[1] - 0.052, WC[1] - 0.040, PETAL_Z[1] + 0.0009, PETAL_Z[1] + 0.0059, "tab"))
-    sh = join(shell, "wcart")
-    shade(sh, 35)
-    assign(sh, "wp_cartridge")
-    obs.append(sh)
+    add_prism(bm, [(0.1057 + x, 0.2277 + z) for x, z in gear_poly(0.0045, 10, 0.0008)], "y", py1, py1 + 0.008)
+    add_cyl(bm, "x", (-0.087, py1 + 0.003, 0.252), 0.0022, 0.104, 10)      # the cartridge release spring along the front
+    gear = ob_from(bm, "gear")
+    shade(gear, 35)
+    assign(gear, "wp_metal")
+    obs.append(gear)
+    obs.append(build_ribbon_cartridge())
+    obs.extend(build_wheel_cartridge())
+    gz = WC[2] - J["hammer"]["petalTravel"] + 0.0012 + 0.0022 + 0.0005 + 0.0065
     # The cardholder: a clear sector hugging the platen round the print point, with its window (MIM p.57, adjustment 137).
     bm = bmesh.new()
     for (xa, xb, b0, b1) in ((-0.030, 0.030, -0.49, -0.17), (-0.030, 0.030, 0.16, 0.45), (-0.030, -0.011, -0.17, 0.16), (0.011, 0.030, -0.17, 0.16)):
@@ -1113,9 +1271,12 @@ def build_feeder():
     cut = prism_ob([(0.25, o0 - 0.02), (0.25, o1), (plate_z(o1) - back, o1), (plate_z(o0 - 0.02) - back, o0 - 0.02)], "x", -ohw, ohw, "cut")
     boolean(cut, prism_ob(rrect(-ohw, o0 - 0.05, ohw, o1, 0.016), "z", -0.5, 0.5), "INTERSECT")
     boolean(body, cut)
-    # Tray slots in the rear face.
+    # Tray slots in the rear face; a hand scoop in each side under the top's rear edge (PG p.90, p.103: "hand scoops").
     for y0, y1 in TRAYS:
         boolean(body, box_ob(-TRAY_HW - 0.002, TRAY_HW + 0.002, y0 - 0.002, y1 + 0.002, F["back"] - 0.01, F["back"] + 0.03))
+    for sx in (-1, 1):
+        sc = prism_ob(rrect(F["topBack"] + 0.008, F["top"] - 0.070, F["topBack"] + 0.088, F["top"] - 0.030, 0.012), "x", sx * hw - 0.014, sx * hw + 0.014)
+        boolean(body, sc)
     bevel_finish(body, 0.0014, 2)
     box_uv(body)
     assign(body, "wp_pearl")
@@ -1148,33 +1309,60 @@ def build_feeder():
     shade(er, 35)
     assign(er, "wp_rubber")
     obs.append(er)
-    # Paper insertion gate (lower left) and the round control at the lower right (SET p.3-5; BRO p.18).
+    # The left side guide standing in front of the plate the height of the opening (BRO p.18, PG p.90), and the lip
+    # along the opening's foot, over the sheet's way into the printer.
     bm = bmesh.new()
-    yg = o0 + 0.030
-    add_rbox(bm, -ohw + 0.006, -ohw + 0.022, yg - 0.018, yg + 0.018, plate_z(yg) + 0.002, plate_z(yg) + 0.012, 0.002, 1)
+    ya, yb = o0 + 0.004, o1 - 0.090
+    q = [(-ohw + 0.002, ya, plate_z(ya) + 0.0005), (-ohw + 0.058, ya, plate_z(ya) + 0.0005), (-ohw + 0.058, yb, plate_z(yb) + 0.0005), (-ohw + 0.002, yb, plate_z(yb) + 0.0005)]
+    add_quad_prism(bm, q, (0, 0.1736, 0.9848), 0.010)
+    lg = ob_from(bm, "lguide")
+    shade(lg, 35)
+    box_uv(lg)
+    assign(lg, "wp_pearl")
+    obs.append(lg)
+    # The round control at the lower right (BRO p.18). The paper insertion gate is its own node (below).
+    bm = bmesh.new()
     add_cyl(bm, "z", (ohw - 0.032, o0 + 0.024, plate_z(o0 + 0.024) + 0.003), 0.008, 0.008, 24)
-    gate = ob_from(bm, "gate")
+    knob = ob_from(bm, "fknob")
+    shade(knob, 35)
+    assign(knob, "wp_dark")
+    obs.append(knob)
+    moving = []
+    # The paper insertion gate (SET p.26, step 7): a lever on the left guide that turns between manual and automatic
+    # feed. Built round its pivot, its axis the plate's normal (0, 0.174, 0.985); rest = automatic.
+    yg = o0 + 0.030
+    bm = bmesh.new()
+    add_rbox(bm, -0.006, 0.006, -0.008, 0.026, 0.0, 0.006, 0.002, 1)
+    add_cyl(bm, "z", (0, 0, 0.003), 0.008, 0.006, 20)
+    gate = ob_from(bm, "printer_feeder_gate")
+    gate.data.transform(Matrix.Rotation(-math.radians(10), 4, "X"))     # lie on the leaning plate
+    pivot = (-ohw + 0.030, yg, plate_z(yg) + 0.0105)
+    gate.data.transform(Matrix.Translation(pivot))
     shade(gate, 35)
     assign(gate, "wp_dark")
-    obs.append(gate)
-    # Trays: drawers stacked at the rear, their handle ends out of the body; the upper one shows its paper.
+    moving.append((gate, pivot))
+    # Trays: drawers stacked at the rear, their handle ends out of the body; the upper one shows its paper. Each is its
+    # own node (printer_tray0 upper, printer_tray1 lower), its pivot at the middle of its handle end; it slides along z.
     for i, (y0, y1) in enumerate(TRAYS):
+        tobs = []
         tr = box_ob(-TRAY_HW, TRAY_HW, y0, y1, F["trayBack"], F["back"] + 0.025, "tray")
         boolean(tr, box_ob(-TRAY_HW + 0.004, TRAY_HW - 0.004, y0 + 0.004, y1 + 0.01, F["trayBack"] + 0.012, F["back"] + 0.03))
-        boolean(tr, prism_ob(rrect(-0.055, (y0 + y1) / 2 - 0.010, 0.055, (y0 + y1) / 2 + 0.010, 0.006), "z", F["trayBack"] - 0.01, F["trayBack"] + 0.008))
-        bevel_finish(tr, 0.0012, 2)
+        # The tray's end is its handle: a frame round a wide window, the arrow at its left (PG p.93).
+        boolean(tr, prism_ob(rrect(-0.100, y0 + 0.011, 0.128, y1 - 0.011, 0.005), "z", F["trayBack"] - 0.01, F["trayBack"] + 0.008))
+        bevel_finish(tr, 0.0012, 1)
         box_uv(tr)
         assign(tr, "wp_pearl")
-        obs.append(tr)
+        tobs.append(tr)
         bm = bmesh.new()
         add_box(bm, -0.108, 0.108, y0 + 0.004, y0 + 0.004 + 0.02, F["trayBack"] + 0.013, F["back"] + 0.02)
         pst = ob_from(bm, "stack")
         assign(pst, "wp_paper")
-        obs.append(pst)
+        tobs.append(pst)
+        moving.append((join(tobs, f"printer_tray{i}"), (0.0, (y0 + y1) / 2, F["trayBack"])))
     # Latches into the cover openings beside the hinge and at the rear corners; rubber pads under the body.
     bm = bmesh.new()
     for x0, x1 in LATCH:
-        add_box(bm, x0 + 0.003, x1 - 0.003, TOP - 0.020, TOP + 0.002, LATCH_Z[0] + 0.004, 0.086)
+        add_box(bm, x0 + 0.003, x1 - 0.003, TOP - 0.019, TOP + 0.002, LATCH_Z[0] + 0.004, 0.086)
     for x0, x1 in REAR_SQ:
         add_box(bm, x0 + 0.002, x1 - 0.002, TOP - 0.015, TOP + 0.002, REAR_SQ_Z[0] + 0.002, REAR_SQ_Z[1] - 0.002)
     la = ob_from(bm, "latch")
@@ -1187,7 +1375,7 @@ def build_feeder():
     pads = ob_from(bm, "pads")
     assign(pads, "wp_rubber")
     obs.append(pads)
-    return join(obs, "printer_feeder")
+    return join(obs, "printer_feeder"), moving
 
 
 # ---------- clearance ----------
@@ -1279,7 +1467,7 @@ def main():
     assign(bez, "wp_trim")
     filt = build_filter()
     guide = build_paper_guide()
-    body = join([top, base, feet, bez, build_vent_backing(), build_latch_floors(), guide] + build_rear_panel(), "printer_body")
+    body = join([top, base, feet, bez, build_vent_backing(), build_latch_floors(), guide, build_badge()] + build_ledge() + build_rear_panel(), "printer_body")
     panel = build_panel()
     assign(panel, "wp_panel")
     disp = build_display()
@@ -1292,27 +1480,25 @@ def main():
     screw, screw_pivot = build_leadscrew()
     cam, cam_pivot = build_cam()
     carrier, carrier_pivot = build_carrier()
+    knob, knob_pivot = build_ribbon_knob()
+    decals = list(CARRIER_DECALS)
     wheel, wheel_pivot = build_wheel()
     hammer, hammer_pivot = build_hammer()
-    feeder = build_feeder()
+    feeder, feeder_moving = build_feeder()
     keys = build_keys()
     leds = build_leds()
     power, power_pivot = build_power()
     ok = clearance_check({"top": body, "filter": filt, "frame": frame, "feeder": feeder, "carrier": carrier, "wheel": wheel,
                           "hammer": hammer, "cover": cover, "platen": platen, "bail": bail})
-    for ob in (body, panel, disp, frame, feeder, filt):
+    for ob in (body, panel, disp, frame, feeder, filt, *decals):
         place(ob, (0, 0, 0))
     filt.name = "printer_filter"
-    for ob, pv in ((cover, cover_pivot), (bail, bail_pivot), (rolls, rolls_pivot), (carrier, carrier_pivot), (wheel, wheel_pivot), (hammer, hammer_pivot)):
+    for ob, pv in ((cover, cover_pivot), (bail, bail_pivot), (rolls, rolls_pivot), (carrier, carrier_pivot), (wheel, wheel_pivot), (hammer, hammer_pivot), *feeder_moving):
         place(ob, pv)
-    for ob, pv in [(platen, platen_pivot), (screw, screw_pivot), (cam, cam_pivot), (power, power_pivot)] + keys + leds:
+    for ob, pv in [(platen, platen_pivot), (screw, screw_pivot), (cam, cam_pivot), (power, power_pivot), (knob, knob_pivot)] + keys + leds:
         place(ob, pv, local=True)
-    for ob in (frame, platen, bail, rolls, cam, hammer, power) + tuple(o for o, _ in leds):
+    for ob in (frame, platen, bail, rolls, cam, hammer, power, knob, carrier) + tuple(o for o, _ in leds):
         strip_uv(ob)
-    for ob in bpy.context.scene.objects:
-        if ob.type == "MESH" and ob.name.startswith("printer_carrier"):
-            # keep the carrier's UV-less parts lean: only the cartridge label area uses no texture either
-            strip_uv(ob)
     total = 0
     for o in bpy.context.scene.objects:
         if o.type != "MESH":

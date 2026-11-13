@@ -109,6 +109,7 @@ export class CRT {
     this.lastVersion = -1; this.quiet = 0; this.blinkT = 0;
     this.gain = 1;                  // the video gain the phosphor pass applies: the contrast knob
     this.contrast = 1;
+    this.level = 1;                 // the brightness knob's share of the beam current: the whole picture's level
     this.powered = true; this.heat = 1; this.hv = 1; this.dot = 0;
     this.litFraction = 0;           // for the green spill light
     this.material = this.makeGlass();
@@ -144,11 +145,15 @@ export class CRT {
     const blinking = this._hasBlink();
     if (blinking && blinkOn !== this.pass.uniforms.uBlinkOn.value) changed = true;
     if (this.gain !== this.pass.uniforms.uGain.value) changed = true;
+    const wasQuiet = this.quiet > STATIC_AFTER;
     this.quiet = changed ? 0 : this.quiet + dt;
-    if (this.quiet > STATIC_AFTER) return;
+    if (this.quiet > STATIC_AFTER && wasQuiet) return;
+    // The pass stops once nothing changes; its last run clears the after-glow outright, or what was still fading then
+    // (the old prompt under a new one) would be held on the screen for good, faint but lit up by the halation.
+    const settle = this.quiet > STATIC_AFTER;
     const u = this.pass.uniforms;
-    u.uDecayFast.value = Math.exp(-dt / DECAY.fast);
-    u.uDecaySlow.value = Math.exp(-dt / DECAY.slow);
+    u.uDecayFast.value = settle ? 0 : Math.exp(-dt / DECAY.fast);
+    u.uDecaySlow.value = settle ? 0 : Math.exp(-dt / DECAY.slow);
     u.uBlinkOn.value = blinkOn;
     u.uGain.value = this.gain;
     const prev = this.targets[this.current], next = this.targets[1 - this.current];
@@ -243,6 +248,16 @@ float crtHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.
     return mat;
   }
 
+  /**
+   * The display's knobs (src/kits/wp/controls.js crtDrive): contrast is the video gain on the characters; brightness
+   * the grid bias, which sets the level of the whole picture and how much of the bare raster glows behind it.
+   */
+  setKnobs({ gain, raster, level }) {
+    if (Number.isFinite(gain)) this.contrast = gain;
+    if (Number.isFinite(level)) this.level = level;
+    if (Number.isFinite(raster)) this.material.userData.uniforms.uRaster.value = raster;
+  }
+
   /** The station's power: the heater warms over seconds, the deflection follows the high voltage in a fraction. */
   setPower(on) {
     if (on === this.powered) return;
@@ -257,7 +272,7 @@ float crtHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.
     this.dot *= Math.exp(-dt / 0.9);
     const u = this.material.userData.uniforms;
     const bright = Math.pow(this.heat, 2.2);
-    u.uBright.value = bright;
+    u.uBright.value = bright * this.level;
     u.uScale.value.set(Math.max(0.002, Math.min(1, this.hv * 1.08)), Math.max(0.002, Math.min(1, this.hv * 1.15)));
     u.uDot.value = this.dot * this.heat;
     u.uTime.value += dt;

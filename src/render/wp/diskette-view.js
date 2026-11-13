@@ -229,6 +229,15 @@ export async function buildDiskette(size, mats, { url = DISKETTE_URL, driveMark 
         disk.position.copy(p.position).add(tv.set(0, ABOVE_ENVELOPE, 0).applyQuaternion(p.quaternion));
         disk.quaternion.copy(p.quaternion);
       },
+      /** Drawn up out of its envelope in the file's place k, as a hand holds it ready for a drive. */
+      outOfEnvelope(k) {
+        place = k;
+        const p = places[k % places.length];
+        holder.add(env); env.position.copy(p.position); env.quaternion.copy(p.quaternion);
+        holder.add(disk);
+        disk.position.copy(p.position).add(tv.set(0, ABOVE_ENVELOPE + DISK * 0.92, 0.03).applyQuaternion(p.quaternion));
+        disk.quaternion.copy(p.quaternion);
+      },
       /** In slot i's guide, its leading edge `depth` m in from the mouth. */
       inSlot(i, depth) {
         if (disk.parent !== group) group.add(disk);

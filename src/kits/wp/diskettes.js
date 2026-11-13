@@ -34,16 +34,21 @@ export function installDiskettes({ stage, machine, sim, parts, library, pickable
   const disks = new Map();
   const ids = [...library.images.keys()];
   const inDrive = [0, 1].map((i) => status[i].mediaId ?? null);
+  // A hand holds at most one diskette out of its envelope: taken from the file, or drawn out of a drive.
+  let hand = null;
   ids.forEach((id, k) => {
     const v = parts.makeDiskette(id, library.get(id)?.type ?? '2D', { program: id === PROGRAM_NAME });
     const d = { id, view: v, drive: inDrive.indexOf(id) >= 0 ? inDrive.indexOf(id) : null, place: k };
     disks.set(id, d);
-    const label = () => (d.drive === null ? `Diskette ${id}` : `Diskette ${id} (drive ${d.drive + 1})`);
+    const label = () => (hand === d ? `Put diskette ${id} back in its envelope`
+      : d.drive === null ? `Take diskette ${id} out of its envelope` : `Diskette ${id} (drive ${d.drive + 1})`);
     pickables.push({ object: v.disk, part: () => ({ kind: 'diskette', label: label(), onClick: () => clickDisk(d) }) });
     pickables.push({ object: v.envelope, part: () => (d.drive === null ? { kind: 'diskette', label: label(), onClick: () => clickDisk(d) } : { kind: 'envelope', label: `Envelope ${id} (empty)` }) });
     v.inPlace(k, d.drive === null);
   });
   const placeInHolder = (d) => d.view.inPlace(d.place, true);
+  const takeInHand = (d) => { if (hand && hand !== d) placeInHolder(hand); hand = d; d.view.outOfEnvelope(d.place); };
+  const putBack = (d) => { if (hand === d) hand = null; placeInHolder(d); };
 
   // Hands: a grab that pulls a lever or a diskette toward a target and lets go.
   const hold = (dof, i, target, opts) => {
@@ -61,27 +66,35 @@ export function installDiskettes({ stage, machine, sim, parts, library, pickable
   const inSlot = (i) => [...disks.values()].find((d) => d.drive === i) ?? null;
   parts.drives.forEach((dr, i) => pickables.push({ object: dr, part: () => {
     const d = inSlot(i);
-    if (!d) return null;
+    if (!d) {
+      if (!hand) return { kind: 'drive', label: `Drive ${i + 1} (empty: take a diskette out of its envelope in the file)` };
+      return lever(i) < closed / 3 ? { kind: 'drive', label: `Put diskette ${hand.id} into drive ${i + 1}`, onClick: () => insert(hand, i) }
+        : { kind: 'drive', label: `Drive ${i + 1}: open the lever first` };
+    }
     return { kind: 'diskette', label: lever(i) < closed / 3 ? `Take out diskette ${d.id}` : `Diskette ${d.id} (open the lever to take it out)`, onClick: () => clickDisk(d) };
   } }));
 
+  function insert(d, i) {
+    if (inSlot(i) || lever(i) > closed / 3 || slide(i) >= 0) return;
+    if (hand === d) hand = null;
+    d.drive = i;
+    sim.command({ dev: 'disk', op: 'media', drive: i, mediaId: d.id, type: library.get(d.id)?.type ?? '2D' });
+    setTimeout(() => hold('disketteSlide', i, home + 0.004, { k: 400, c: 6, maxF: 4 }), 50);
+  }
+
   function clickDisk(d) {
     if (d.drive === null) {
-      // Into the first drive whose lever is open and slot empty; then pushed home.
-      const i = [0, 1].find((k) => slide(k) < 0 && lever(k) < closed / 3);
-      if (i === undefined) return;
-      d.drive = i;
-      sim.command({ dev: 'disk', op: 'media', drive: i, mediaId: d.id, type: library.get(d.id)?.type ?? '2D' });
-      setTimeout(() => hold('disketteSlide', i, home + 0.004, { k: 400, c: 6, maxF: 4 }), 50);
+      // In the file: out of its envelope into the hand; in the hand: back into its envelope.
+      if (hand === d) putBack(d); else takeInHand(d);
       return;
     }
-    // In a drive: with the lever open, draw it out to the mouth and take it.
+    // In a drive: with the lever open, draw it out to the mouth and take it in hand.
     const i = d.drive;
     if (lever(i) > closed / 3) return;
     hold('disketteSlide', i, -0.01, { k: 400, c: 6, maxF: 4 });
     setTimeout(() => {
       sim.command({ dev: 'disk', op: 'media', drive: i, mediaId: null });
-      d.drive = null; placeInHolder(d);
+      d.drive = null; takeInHand(d);
     }, HOLD_S * 1000 + 50);
   }
 

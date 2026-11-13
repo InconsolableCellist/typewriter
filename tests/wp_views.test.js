@@ -55,7 +55,7 @@ test('stations: a row of three units under the desk, the arrows walk it and undo
 
 test('focus items: each station has its own, Back returns to the station, and the old presets map to views', () => {
   assert.deepEqual(STATIONS.computer.items, ['screen', 'keyboard', 'notes', 'controls', 'rear']);
-  assert.deepEqual(STATIONS.diskettes.items, ['slots', 'levers', 'file']);
+  assert.deepEqual(STATIONS.diskettes.items, ['slots', 'levers', 'file', 'manual']);
   assert.deepEqual(STATIONS.printer.items, ['panel', 'mechanism', 'paperPath']);
   for (const [s, st] of Object.entries(STATIONS)) {
     for (const f of st.items) {

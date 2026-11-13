@@ -340,7 +340,7 @@ export async function buildKeyboard(size, slope, mats, { url = KEYBOARD_URL, max
     return { ...s, h, tilt: p.tilt, ...capGeometry(s.poly, s.star, h, p.tilt, { blank: [0, 0] }) };
   });
   const atlas = makeAtlas(pre, maxAniso);
-  const capMat = new THREE.MeshPhysicalMaterial({ color: KEYCAP_COLOR, roughness: 0.55, metalness: 0, map: atlas.tex, ior: 1.49 });   // matte (GIM p.104)
+  const capMat = new THREE.MeshStandardMaterial({ color: KEYCAP_COLOR, roughness: 0.55, metalness: 0, map: atlas.tex });   // matte (GIM p.104); no physical feature (ior 1.49 against standard's 1.5)
   capMat.name = 'wp_keycap_legend';
   const keys = pre.map((s, i) => {
     s.geo.dispose();

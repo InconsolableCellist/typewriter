@@ -18,7 +18,11 @@ const PANEL = { x0: -0.214, x1: 0.212, y0: 0.0653, y1: 0.1218 };
 const LED_X = [-0.203, -0.182, -0.160, -0.139, -0.117], LED_Y = [0.0981, 0.0766];
 const FONT = '"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif';
 
-const plastic = (color, roughness = 0.5, extra = {}) => new THREE.MeshPhysicalMaterial({ color, roughness, metalness: 0, clearcoat: 0.05, ...extra });
+// A moulded plastic. A clearcoat under about 0.1 cannot be seen and costs a second specular lobe and environment
+// lookup, so the plain plastics are standard; a part that asks for a real coat (the panel keys) is physical.
+const plastic = (color, roughness = 0.5, extra = {}) => ((extra.clearcoat ?? 0) >= 0.1
+  ? new THREE.MeshPhysicalMaterial({ color, roughness, metalness: 0, ...extra })
+  : new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, ...extra }));
 const metal = (color, roughness) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 1 });
 
 function canvas(w, h) {

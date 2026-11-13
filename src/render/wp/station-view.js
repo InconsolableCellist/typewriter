@@ -41,7 +41,7 @@ function unitOwnMaterials(mats, g) {
     wp_mbadge: new THREE.MeshPhysicalMaterial({ map: moduleBadgeTexture(), roughness: 0.4, metalness: 0.3, clearcoat: 0.4, clearcoatRoughness: 0.25 }),
     wp_tag: new THREE.MeshStandardMaterial({ map: labelTexture(), roughness: 0.6, metalness: 0 }),
     wp_legend: new THREE.MeshStandardMaterial({ map: legendTexture(), roughness: 0.55, metalness: 0 }),
-    wp_window: new THREE.MeshPhysicalMaterial({ color: 0x2a1a16, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.45, depthWrite: false }),
+    wp_window: new THREE.MeshStandardMaterial({ color: 0x2a1a16, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.45, depthWrite: false }),
   };
   return mats.station;
 }

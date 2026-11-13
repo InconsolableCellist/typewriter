@@ -1342,7 +1342,8 @@ the sprite, so a cut played at its `scale` keeps its recorded level.
    3.8 s (unused), then fast typing, about 17 key sounds a second, in a reverberant room.
 2. **The sprites.** `samples_wp` (117 KB, 14.4 s, Opus 64 kbps mono): 16 single steps, 3 head loads, 19 seek bodies
    (the run of each buzz, within 10 dB of its loudest), and two 4 s loops of the idle machine (118.6 s) split at
-   450 Hz: `bed_motor` (the twice-line hum and the drive motors' tones) and `bed_fan` (the air). `samples_wpkeys`
+   450 Hz: `bed_motor` (the twice-line hum and the drive motors' tones) and `bed_fan` (the air). The loops are no
+   longer played (item 4): they carried the room's rustling, and at 4 s their repetition was heard. `samples_wpkeys`
    (74 KB, 6.5 s): 16 presses and 16 releases of the alphanumeric keys, 8 and 8 of the wide keys and of the space bar.
    A press is a key sound louder than the median of its neighbours within 1.5 s, a release one quieter; the space bar
    and wide keys are the presses (and releases) with the most low-frequency body (the top 15 % and the next 15 %).
@@ -1353,10 +1354,23 @@ the sprite, so a cut played at its `scale` keeps its recorded level.
    seek of any length sounds like the recorded ones. The level follows the rotor's speed at the crossing. The pad
    landing (`WAC.HEAD_LAND`, the arm's speed) plays a head-load clack; the pad lifting the same at 0.35. So 10.3 item 2
    no longer holds for the recordings: the sampler reads the `WAC` queue before the engine clears it.
-4. **The hums run while powered**: `bed_motor` at the mean of the two drive motors' (speed / running speed)^2, a
-   quarter of that with the power off (the hum stops with the line; the rotors' tones run down); `bed_fan` at
-   (station fan speed / running speed)^2.5. The recorded line was 50 Hz and this machine's is `station.mainsHz` (60), so
-   `bed_motor` plays at 1.2 times its rate: the hum at 120 Hz, the motors' tones up with their speed. While the sprite
+4. **The hum is generated from its analysis** (`tools/audio/analyze_wp_hum.py`, `tools/audio/wp_hum.json`, the same
+   data in `src/audio/wp-hum-data.js`; `src/audio/wp-hum.js`). The idle stretches (117.5 to 128 s, 184 to 190.5 s) are
+   analysed as a median Welch spectrum (0.73 Hz bins), so the rustling in a few frames does not count: the 16 strongest
+   lines standing 10 dB over the running median (100, 200 and 300 Hz from the 50 Hz line; a pair at 220 and 224 Hz, the
+   loudest, at -53 dBFS; 244, 308 and 321 Hz; eight from 517 Hz to 1.8 kHz), and the floor in third-octave bands from
+   20 Hz to 20 kHz (rising 15 dB an octave to its top at 250 to 320 Hz, -62 dBFS a band, then falling about 1.5 dB an
+   octave). Split at 450 Hz as the loops were: the motors' voice -48.3 dBFS (lines -49.1), the fans' -56.3. Each voice
+   is a sum of sinusoids, each with its level and frequency wandering at random (1 dB, 0.15 %, over a second or two;
+   the line's family together, 0.03 %), and white noise through band passes every 2/3 octave fitted to the floor (each
+   band's gain wandering 0.5 dB). Nothing repeats: 4 s apart the idle output correlates at about 0.06. The bands within
+   15 dB of the loudest match the analysis within 3 dB, the rest within 3.5, the lines within 1 dB
+   (`tests/wp_audio.test.js`). The whole is set to the old loops' level (the idle machine at `BED_DBFS`, lifted by
+   `HUM_LIFT_DB`). It costs about 0.1 microseconds a sample.
+   The motors' voice runs at the mean of the two drive motors' (speed / running speed)^2, a quarter of that with the
+   power off (the hum stops with the line; the rotors' tones run down); the fans' at (station fan speed / running
+   speed)^2.5. The recorded line was 50 Hz and this machine's is `station.mainsHz` (60), so the motors' lines play at
+   1.2 times their frequency: the hum at 120 Hz, the motors' tones up with their speed. While the sprite
    is loaded the synthesised station fan, drive motors, drive air and head load are off and the step and stop-pin
    couplings scaled (`REPLACED`, `SCALED`); the printer, its fan, the levers, collet, diskette slide and the jacket's rub
    stay synthesised. The recorded sounds join after the synthetic room and radiation filter, since they carry their own.
@@ -1394,10 +1408,19 @@ the sprite, so a cut played at its `scale` keeps its recorded level.
    microseconds a sample in Node (the sampler adds about 0.05); within 13's budget.
 10. **Left open.** The printer has no recording: strikes, carrier, selection, line feed, paper handling, the cover and
    the printer fan stay synthesised, at the levels assumed in 10.3. A recording of the 5218 printing would replace them
-   the same way. The lever, the diskette's insertion and a recalibrate against the stop pin are not in the recording.
+   the same way. The lever, the diskette's insertion and a recalibrate against the stop pin are not in the recording; the lever and
+   the diskette have placeholders (item 11).
    The press and release split, and the key classes, are by level and spectrum; a recording of single keys, the space
    bar and the wide keys pressed slowly would make them exact. The power rocker's clack (52.0 s) is recorded but the
    rocker is not yet a mechanism, so it is not played.
+11. **The latch and the diskette, placeholders** (`wp-synth.js`, from `WAC` events of `diskette-mech.js`). The lever
+   reaching an end (`WAC.LEVER`, its speed): closed, a plastic clack on the bezel and chassis with the snap of the
+   latch's steel spring (modes 2.45 to 8.9 kHz), near -28 dBFS peak at 25 rad/s (a hand's grab reaches 25 to 50, the
+   detent's snap behind it); open, a softer clack near -31. The diskette: its edge past the guide's lip at the lever's
+   plane (`WAC.SLIDE_IN`, `WAC.SLIDE_OUT`, new) a tick near -36 and -39 at 1 m/s; meeting its end stop
+   (`WAC.SLIDE_HOME`) a dull knock near -31; moving in the guide, a soft scrape with its speed. Levels go with
+   (speed / reference)^0.8. The slide's end-stop force no longer rings the lever body (the event voices it), and the
+   lever's own contact forces ring it at a seventh of before (`leverClick` 10).
 
 ---
 

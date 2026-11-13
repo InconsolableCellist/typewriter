@@ -105,7 +105,7 @@ export function createMaterials() {
     steelDark: phy({ color: 0x3e4045, roughness: 0.5, metalness: 1.0 }),
     blued: phy({ color: 0x24262c, roughness: 0.46, metalness: 1.0 }),   // black-oxide bars
     brass: phy({ color: 0xa2834b, roughness: 0.36, metalness: 1.0 }),
-    rubber: phy({ color: 0x0f0f10, roughness: 0.82, metalness: 0.0, envMapIntensity: 0.7 }),
+    rubber: std({ color: 0x0f0f10, roughness: 0.82, metalness: 0.0, envMapIntensity: 0.7 }),   // no physical feature (its set's ior 1.52 is F0 0.043 against 0.04)
     felt: phy({ color: 0x31382e, roughness: 1, metalness: 0 }),
     knob: phy({ color: 0x0c0c0e, roughness: 0.48, metalness: 0.0, clearcoat: 0.45, clearcoatRoughness: 0.38 }),
     table: phy({ color: 0x15161a, roughness: 0.6, metalness: 0.0, clearcoat: 0.25, clearcoatRoughness: 0.5, ...powderCoat(1 / POWDER_TILE) }),

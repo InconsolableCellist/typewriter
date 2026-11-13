@@ -3,6 +3,7 @@
 // docs/displaywriter/models.md, "Diskette unit"). Nothing here moves by itself: the kit poses the levers and the
 // diskettes from the mechanism's snapshot (src/kits/wp/diskettes.js). The badge and every label are drawn at run time.
 import * as THREE from 'three';
+import { mergeStaticMeshes, partObjects } from './merge-static.js';
 
 export const DISKETTE_URL = '/assets/models/wp_diskette.glb';
 export const DISK = 0.2032;                 // m, an 8-inch diskette
@@ -248,5 +249,9 @@ export async function buildDiskette(size, mats, { url = DISKETTE_URL, driveMark 
     };
   }
 
-  return { group, parts: { levers, leverRange, slots, slotPaths, drives, covers, badge: node('wp_diskette_badge'), holder, places, makeDiskette } };
+  const parts = { levers, leverRange, slots, slotPaths, drives, covers, badge: node('wp_diskette_badge'), holder, places, makeDiskette };
+  const frames = partObjects(parts);
+  mergeStaticMeshes(group, frames);
+  mergeStaticMeshes(holder, frames);
+  return { group, parts };
 }

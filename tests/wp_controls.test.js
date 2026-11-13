@@ -237,3 +237,24 @@ test('power switches: a pick just off the small rocker still finds it, through i
   assert.equal(hit?.kind, 'control', 'the proxy catches it, not the Controls box behind');
   assert.equal(hit.label, 'Power: switch off');
 });
+
+test('the display is heavy and stiff: it holds against a light pull, breaks away with a creak, lags, sticks, stops', async () => {
+  const { HeavyJoint } = await import('../src/kits/wp/heavy-joint.js');
+  const creaks = [], stops = [];
+  const j = new HeavyJoint(0, [-0.3, 0.3], { onCreak: (s, v) => creaks.push({ s, v }), onStop: (v) => stops.push(v) });
+  j.pull(0.05); j.step(0.5);
+  assert.equal(j.a, 0, 'a light pull does not move it');
+  assert.equal(creaks.length, 0);
+  j.pull(0.1); j.step(0.02);
+  assert.ok(creaks.length >= 1 && creaks[0].v === 0, 'breaking away creaks');
+  const early = j.a;
+  assert.ok(early > 0 && early < 0.1, `it follows with a lag (${early.toFixed(3)} rad after 20 ms)`);
+  j.step(1.5);
+  assert.ok(j.a > 0.06 && j.a < 0.15 && j.stuck, `it comes to rest short of the hand and sticks (${j.a.toFixed(3)})`);
+  j.letGo(); const rest = j.a; j.step(1);
+  assert.equal(j.a, rest, 'let go, it stays where it is');
+  j.pull(1); j.step(2);
+  assert.ok(Math.abs(j.a - 0.3) < 0.002, 'it reaches its stop');
+  assert.ok(stops.length >= 1, 'with a knock');
+  assert.ok(creaks.length > 3, 'and creaks on the way');
+});

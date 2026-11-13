@@ -14,7 +14,7 @@ export const NOTES = [
   },
   {
     id: 'type',
-    lines: ['# New document', 'a ENTER  Typing Tasks', 'a ENTER  Create', 'name ENTER', 'WORK01 ENTER', 'ENTER  (menu ok)', 'type! RET = new line', 'END = save + finish', 'Revise: b, same way'],
+    lines: ['# New document', 'a ENTER  Typing Tasks', 'a ENTER  Create', 'name ENTER', 'WORK01 ENTER (CAPS!)', 'ENTER  (menu ok)', 'type! RET = new line', 'END = save + finish', 'Revise: b, same way'],
   },
   {
     id: 'print',

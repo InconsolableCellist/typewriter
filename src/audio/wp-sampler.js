@@ -3,17 +3,19 @@
 // speeds, over the running machine's recorded hum. Each head step that crosses a track plays a single step's ring when
 // it comes alone, or a short grain of a recorded seek's buzz when it follows another step, so a seek of any length
 // sounds as the recorded ones do at the drive's step rate; the head-load pad landing plays a head-load clack, and
-// lifting it the same clack, softer. Two loops carry the idle machine: below 450 Hz the drive motors' hum and tones,
-// following the motors' speeds and power; above it the air, following the station fan's speed. Every cut plays at its
-// recorded scale times one gain, so the recording's own balance between a seek, a step and the hum is kept. The printer
-// and the levers stay synthesised (wp-synth.js): nothing in the recording is usable for them.
+// lifting it the same clack, softer. The idle machine is generated from its analysis (wp-hum.js): below 450 Hz the drive
+// motors' hum and tones, following the motors' speeds and power; above it the air, following the station fan's speed.
+// Every cut plays at its recorded scale times one gain, and the hum at the recording's level times the same gain, so the
+// recording's own balance between a seek, a step and the hum is kept. The printer and the levers stay synthesised
+// (wp-synth.js): nothing in the recording is usable for them.
 import { WAC } from '../sim/wp/ports.js';
 import { fanSteadyOmega } from '../sim/wp/station-mech.js';
+import { WpHum } from './wp-hum.js';
 
 /**
- * The hum loops play this much over the recording's balance. At the recorded -50 dBFS the idle machine, mostly a
+ * The hum plays this much over the recording's balance. At the recorded -50 dBFS the idle machine, mostly a
  * 100-120 Hz hum and fan air, was inaudible on laptop and phone speakers (the owner heard only the keys); in the room the
- * fans and motors are plainly there. The lift touches only the two loops, not the steps, seeks, head loads or keys.
+ * fans and motors are plainly there. The lift touches only the hum's two voices, not the steps, seeks, head loads or keys.
  */
 export const HUM_LIFT_DB = 12;
 export const BED_DBFS = -50;    // the idle machine's RMS at the operator's chair, as wp-synth's assumed idle level
@@ -21,8 +23,8 @@ export const BED_DBFS = -50;    // the idle machine's RMS at the operator's chai
 export const RECORDED = {
   stepPeak: 17.2, headLoadPeak: 17.3, seekRms: 12.4, keyPressPeak: 26.3, keyReleasePeak: 15.3, beepRms: 17.5, crtLineRms: -18.0,
 };
-/** wp-synth levels replaced by the recordings while they are loaded: the drive motors and the station fan are in the bed
- * loops, the steps and the head load in the cuts. */
+/** wp-synth levels replaced by the recordings while they are loaded: the drive motors and the station fan are in the
+ * generated hum, the steps and the head load in the cuts. */
 export const REPLACED = { stationFan: 0, stationHum: 0, motorRotor: 0, motorHum: 0, motorAir: 0, headLoad: 0 };
 /** And scaled: the stepper's own tick stays under the recorded steps at a fifth; the pulley on its stop pin, which the
  * recording has nothing of, is brought down so that a recalibrate sits about 15 dB over the idle machine, as the program
@@ -36,10 +38,12 @@ const ALONE_S = 0.02;           // a step with none in the 20 ms before it rings
 const W_STEP = 7;               // rad/s: the head rotor's speed crossing a track in a seek's run, for the level of a grain
 const W_ALONE = 3;              // rad/s: and in a single step from rest
 const V_LAND = 0.027;           // m/s: the arm's speed as the pad lands under the solenoid
-const SMOOTH = 0.0015;          // loop gain smoothing per sample
+const SMOOTH = 0.0015;          // hum gain smoothing per sample
 const MAXT = 64;                // triggers per block
 const SET = ['disk_step', 'disk_seek', 'disk_load'];
-const RECORDED_MAINS_HZ = 50;   // the recorded machine's line (dc4.nl, the Netherlands; its hum is at 100 Hz)
+/** The idle machine's RMS in the recording, in the sprite's source units: the two old loops' (bed_motor 0.003558, bed_fan
+ * 0.001753), the reference every cut's level is kept against. */
+const BED_SRC_RMS = Math.hypot(0.003558, 0.001753);
 
 export class WpSampler {
   constructor(sim, sampleRate) {
@@ -54,6 +58,7 @@ export class WpSampler {
     this.primed = false;
     this.n = 0;                 // samples rendered, the clock for ALONE_S
     this.loops = [];
+    this.humBuf = new Float64Array(128);
   }
 
   rand() { let x = this.s; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this.s = x; return (x >>> 0) / 4294967296; }
@@ -66,11 +71,9 @@ export class WpSampler {
       const cut = { o: Math.round(it.o * sr), n: Math.round(it.d * sr), scale: it.scale ?? it.srcPk / p, rms: it.rms ?? 0 };
       (this.sets[it.set] ??= []).push(cut);
     }
-    const motor = this.sets.bed_motor?.[0], fan = this.sets.bed_fan?.[0];
-    const bed = Math.hypot(motor?.rms ?? 0, fan?.rms ?? 0) || 1;
     // One gain for everything, so the recording's balance is kept; the root 2 undoes the constant-power pan, so the
     // idle machine's mid (the mono mix, as the recording was measured) sits at BED_DBFS.
-    this.unit = (Math.SQRT2 * 10 ** (BED_DBFS / 20)) / bed;
+    this.unit = (Math.SQRT2 * 10 ** (BED_DBFS / 20)) / BED_SRC_RMS;
     // A Hann grain every STEP_REF_S keeps the recorded buzz's power: mean(hann^2) = 3/8 per grain length.
     this.grainGain = 1 / Math.sqrt((0.375 * GRAIN_S) / STEP_REF_S);
     this.grainN = Math.round(GRAIN_S * sr);
@@ -79,11 +82,14 @@ export class WpSampler {
     this.fanRun = S ? fanSteadyOmega(S.def.fan) : 1;
     this.loops = [];
     this.humLift = 10 ** (HUM_LIFT_DB / 20);
-    // The recorded machine ran on a 50 Hz line (its hum is at 100 Hz); the AC motors' hum and speeds scale with the line,
-    // so the motors' band plays at this machine's line frequency over the recording's.
-    const mains = this.sim.m.station?.mainsHz ?? 60;
-    if (motor && D) this.loops.push({ ...motor, bus: 2, ph: 0, g: 0, tg: 0, kind: 'motor', rate: mains / RECORDED_MAINS_HZ });
-    if (fan && S) this.loops.push({ ...fan, bus: 1, ph: 0, g: 0, tg: 0, kind: 'fan', rate: 1 });
+    // The generated hum, at the recording's idle level times the cuts' gain (its analysis is a median spectrum, without
+    // the room's rustling; set to the old loops' level). The recorded machine ran on a 50 Hz line (its hum is at
+    // 100 Hz); the AC motors' hum and speeds scale with the line, so the motors' tones play at this machine's line.
+    const hum = new WpHum(this.sr, { mainsHz: this.sim.m.station?.mainsHz ?? 60, scale: 1 });
+    const humScale = (this.unit * BED_SRC_RMS) / Math.sqrt(hum.motor.power + hum.fan.power);
+    this.hum = hum; this.humScale = humScale;
+    if (D) this.loops.push({ voice: hum.motor, bus: 2, g: 0, tg: 0, kind: 'motor' });
+    if (S) this.loops.push({ voice: hum.fan, bus: 1, g: 0, tg: 0, kind: 'fan' });
     this.loaded = true;
     this.primed = false;
   }
@@ -150,7 +156,7 @@ export class WpSampler {
     this.gain[v] = gain; this.bus[v] = 2; this.active[v] = 1;
   }
 
-  /** Loop targets from the mechanism's slow quantities, once a block. */
+  /** Hum targets from the mechanism's slow quantities, once a block. */
   block() {
     const sim = this.sim, D = sim.diskette, S = sim.station;
     for (const L of this.loops) {
@@ -174,6 +180,11 @@ export class WpSampler {
     this.block();
     const { pos, end, inc, gain, win, start, active, pcm, loops } = this;
     const [sL, sR, dL, dR] = pan;
+    if (this.humBuf.length < 2 * n) this.humBuf = new Float64Array(2 * n);
+    const hb = this.humBuf, nl = loops.length;
+    // The hum's voices, generated for the block (each runs on while silent, so it never restarts).
+    for (let l = 0; l < nl; l++) loops[l].voice.fill(hb, l * n, n);
+    const hk = this.humScale * this.humLift;
     let t = 0;
     for (let i = 0; i < n; i++) {
       while (t < this.nT && this.tI[t] === i) { this.play(this.tSet[t], this.tG[t]); t++; }
@@ -187,15 +198,11 @@ export class WpSampler {
         const np = p + inc[v];
         if (np >= end[v]) active[v] = 0; else pos[v] = np;
       }
-      for (let l = 0; l < loops.length; l++) {
-        const L = loops[l], ph = L.ph;
-        let nx = ph + L.rate;                     // a loop runs on while silent, so it comes back where it would be
-        if (nx >= L.n - 1) nx -= L.n - 1;
-        L.ph = nx;
+      for (let l = 0; l < nl; l++) {
+        const L = loops[l];
         if (L.tg === 0 && L.g < 1e-5) { L.g = 0; continue; }
         L.g += (L.tg - L.g) * SMOOTH;
-        const k = ph | 0, a = pcm[L.o + k];
-        const y = (a + (pcm[L.o + k + 1] - a) * (ph - k)) * L.g * this.unit * this.humLift;
+        const y = hb[l * n + i] * L.g * hk;
         if (L.bus === 1) ys += y; else yd += y;
       }
       outL[i] += sL * ys + dL * yd;

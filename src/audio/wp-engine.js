@@ -46,10 +46,10 @@ export class WpAudioEngine {
   setTimeScale(s) { this.timeScale = Math.max(0, Math.min(1, s)); }
   setEnabled(b) { this.enabled = !!b; }
   setPaperSpeed() {}
-  /** The recorded sprite (public/assets/audio/samples_wp): its cuts and loops replace the synthesised motors, fans,
-   * steps and head load (architecture.md 10.4). */
+  /** The recorded sprite (public/assets/audio/samples_wp): its cuts, and the hum generated from the recording's
+   * analysis, replace the synthesised motors, fans, steps and head load (architecture.md 10.4). */
   loadSamples(pcm, manifest) {
-    if (!manifest?.items?.some((it) => it.set === 'bed_motor')) return;     // not this machine's sprite
+    if (!manifest?.items?.some((it) => it.set === 'disk_seek')) return;     // not this machine's sprite
     this.sampler.load(pcm, manifest);
     const L = this.synth.levels;
     if (!this.sampled) { Object.assign(L, REPLACED); for (const k in SCALED) L[k] *= SCALED[k]; this.sampled = true; }

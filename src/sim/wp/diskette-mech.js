@@ -50,7 +50,7 @@ export class DisketteMech {
   blank() {
     return {
       media: null,                                     // { mediaId, type } of the diskette in the guide
-      s: 0, sv: 0, slideAwake: false, slideSleep: 0, slideHome: false, Fs: 0,
+      s: 0, sv: 0, slideAwake: false, slideSleep: 0, slideHome: false, inGuide: false, Fs: 0,
       a: 0, av: 0, leverAwake: false, leverSleep: 0, leverEnd: 0, leverSwitch: false, Fl: 0,
       N: 0, z: 0, Tc: 0,
       wm: 0, e: 0, wh: 0, hubAngle: 0, wd: 0, phi: 0,
@@ -69,7 +69,7 @@ export class DisketteMech {
     if (media) {
       if (d.media) return false;
       d.media = { mediaId: media.mediaId, type: media.type };
-      d.s = 0; d.sv = 0; d.wd = 0; d.phi = 0; d.z = 0;
+      d.s = 0; d.sv = 0; d.wd = 0; d.phi = 0; d.z = 0; d.inGuide = false;
       this.wakeSlide(d); this.wakeSpin(d);
       return true;
     }
@@ -83,7 +83,7 @@ export class DisketteMech {
   load(i, media) {
     const d = this.drives[i];
     d.media = { mediaId: media.mediaId, type: media.type };
-    d.s = this.home; d.sv = 0; d.slideHome = true;
+    d.s = this.home; d.sv = 0; d.slideHome = true; d.inGuide = true;
     d.a = this.def.lever.closed; d.av = 0; d.leverEnd = 1; d.leverSwitch = true;
     d.N = this.clampForce(d.a);
     d.phi = 0;
@@ -243,6 +243,9 @@ export class DisketteMech {
     const home = d.s > this.home - 1e-4;
     if (home && !d.slideHome) this.sim.ac(WAC.SLIDE_HOME, i, Math.abs(v));
     d.slideHome = home;
+    // The jacket's edge past the guide's lip, at the lever's plane: in, or out on its way to the hand.
+    const inGuide = d.s > S.leverPlane;
+    if (inGuide !== !!d.inGuide) { this.sim.ac(inGuide ? WAC.SLIDE_IN : WAC.SLIDE_OUT, i, Math.abs(vn)); d.inGuide = inGuide; }
     if (vn === 0 && d.Fs === 0) {
       if (++d.slideSleep > SLEEP_FRAMES) d.slideAwake = false;
     } else d.slideSleep = 0;

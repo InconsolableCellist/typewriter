@@ -180,6 +180,7 @@ export class PaperView {
   update() {
     const p = this.soft.paper;
     this.mesh.visible = !this.soft.sheetParked;
+    if (!this.mesh.visible) return;   // a parked sheet is not drawn: nothing to refine or upload until one is fed
     this.mesh.position.x = -(this.soft.carrierOffset ?? 0);
     this.refine();
     this.geo.getAttribute('position').needsUpdate = true;

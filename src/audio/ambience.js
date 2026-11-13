@@ -2,6 +2,8 @@
 // the distance. On the typewriters it has its own AudioContext, opened by the click that chooses the weather, and leaves
 // the worklet alone; the word processor hands it the kit's shared context (`context`), which exists only after the
 // first gesture, so a weather chosen before that is heard once attach() is called.
+import { versioned } from '../asset-version.js';
+
 const BASE = '/assets/audio/ambience/';
 const RAIN_LEVEL = { clear: 0, rain: 0.34, storm: 0.55 };
 const CROSSFADE_S = 3.5, FADE_S = 2.5;
@@ -64,7 +66,7 @@ export class Ambience {
   attach() { if (!this.ctx && this.weather !== 'clear') this.rain(); }
 
   deck() {
-    const el = new Audio(`${BASE}rain.ogg`);
+    const el = new Audio(versioned(`${BASE}rain.ogg`));   // not a fetch, so not rewritten by asset-version.js
     el.preload = 'auto';
     const gain = this.ctx.createGain(); gain.gain.value = 0;
     this.ctx.createMediaElementSource(el).connect(gain); gain.connect(this.rainBus);

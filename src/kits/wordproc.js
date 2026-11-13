@@ -44,33 +44,39 @@ import { installPdfViewer } from '../ui/wp-pdf-viewer.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 import { installStationControls, addHitProxy } from './wp/station.js';
 import { installAtmosphere } from './wp/atmosphere.js';
+import { compileBeforeFirstFrame, trackProgramLinks } from '../render/warmup.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
   const { canvas, params, machine } = ctx;
   const geometry = geometryFor(machine);
   const stage = createScene(canvas);
+  trackProgramLinks(stage.renderer);
   const { mats } = createMaterials();
   document.title = machine.name;
 
   const desk = new Desk({ scene: stage.scene, mats });
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
-  loadRoom(stage.scene, '/assets/hdri/combination_room_2k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
+  loadRoom(stage.scene, '/assets/hdri/combination_room_1k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
 
   // The units, each in its own group at its world origin. The printwheel's faces are the glyphs that print.
   const umats = createUnitMaterials();
-  const glyphs = await loadGlyphs('glyphs_wp');
+  const glyphsReady = ctx.glyphs ?? loadGlyphs('glyphs_wp');   // started by main.js
   const builders = {
     station: (u) => buildStation(u.size, umats),
     display: (u) => buildDisplay(u.size, umats, { tilt: machine.units.display.tilt, swivel: machine.units.display.swivel }),
     keyboard: (u) => buildKeyboard(u.size, machine.units.keyboard.slope, umats, { maxAniso: stage.renderer.capabilities.getMaxAnisotropy() }),
     diskette: (u) => buildDiskette(u.size, umats),
-    printer: (u) => buildPrinter(u.size, umats, { printer: machine.printer, glyphs, order: geometry.printer.wheel.order }),
+    printer: async (u) => buildPrinter(u.size, umats, { printer: machine.printer, glyphs: await glyphsReady, order: geometry.printer.wheel.order }),
   };
   const units = {}, parts = {}, views = {}, footprints = [];
   let displayFace = null;
-  for (const [name, u] of Object.entries(geometry.units)) {
-    const built = await builders[name](u);
+  // The five units' models load together; they join the scene in the definition's order.
+  const unitList = Object.entries(geometry.units);
+  const builtUnits = await Promise.all(unitList.map(([name, u]) => builders[name](u)));
+  const glyphs = await glyphsReady;
+  for (const [i, [name, u]] of unitList.entries()) {
+    const built = builtUnits[i];
     built.group.name = `unit-${name}`;
     built.group.position.fromArray(u.origin);
     stage.scene.add(built.group);
@@ -244,13 +250,18 @@ export async function mount(ctx) {
     crt.setPower(devices.power.on);
     crt.update(dt);
     atmosphere.update(dt);
+    stage.motion.observe({ state: sim.state, layout: sim.layout, soft: printer.soft, easing: atmosphere.environment.easing, glow: atmosphere.glow });
     stage.composer.render();
     markers.update();
     screenCard.render();
     frameTimes[nFt++ % frameTimes.length] = performance.now() - t0;
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
+    stage.govern(now);
   }
+  await compileBeforeFirstFrame(stage, [desk.mat]);   // behind the loading screen; the desk model is still on its way
   requestAnimationFrame(loop);
+  // The first sound's downloads (worklet chunk, sprites), at idle after the first frame.
+  import('./audio-prefetch.js').then((m) => m.prefetchAudioWhenIdle(machine, { worklet: !printer.sim.isMock && !params.has('localsim') })).catch(() => {});
 
   window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, packet, shelf, pdfViewer, reader, atmosphere, environment: atmosphere.environment, ambience: atmosphere.ambience };
   return window.__tw;

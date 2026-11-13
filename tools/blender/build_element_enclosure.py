@@ -576,6 +576,9 @@ def main():
     bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", export_yup=True, export_apply=False, export_texcoords=True,
                               export_normals=True, export_materials="EXPORT", use_selection=False)
     print("wrote", OUT)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from quantize_glb import quantize   # 0.05 mm positions, 16-bit normals (docs/assets.md, Models)
+    quantize(OUT, normal_bits=16)
     return objs
 
 

@@ -26,32 +26,27 @@ import { installEnvironment } from '../render/environment.js';
 import { DeskSway } from '../render/desk-sway.js';
 import { BallBlur } from '../render/ball-blur.js';
 import { Ambience } from '../audio/ambience.js';
+import { compileBeforeFirstFrame, trackProgramLinks } from '../render/warmup.js';
+// Always needed, so imported statically: their chunks are preloaded with this one instead of found one after another.
+import { createSimClient } from '../sim/client.js';
+import { SoftWorld } from '../soft/index.js';
+import { loadGlyphs as loadGlyphSet } from '../machine/glyphs.js';
 
-const sources = import.meta.glob(['../sim/client.js', '../soft/index.js']);
 let params, useMock, machine;
 
-async function loadGlyphs() {
-  try {
-    const m = await (import.meta.glob('../machine/glyphs.js')['../machine/glyphs.js']?.());
-    const g = await m.loadGlyphs();
-    if (g && g.data) return { chars: g.chars, data: g.data, N: g.N ?? 96, texelMm: g.texelMm ?? 0.05, raw: g };
-  } catch { /* fall through to the local reader */ }
-  const [meta, bin] = await Promise.all([
-    fetch('/assets/glyphs.json').then((r) => r.json()),
-    fetch('/assets/glyphs.bin').then((r) => r.arrayBuffer()),
-  ]);
-  return { ...meta, data: new Uint8Array(bin) };
+/** The slug faces, from main.js's early fetch when it made one (ctx.glyphs), in the shape the atlases and mock take. */
+async function loadGlyphs(early) {
+  const g = await (early ?? loadGlyphSet());
+  return { chars: g.chars, data: g.data, N: g.N ?? 96, texelMm: g.texelMm ?? 0.05, raw: g };
 }
 
 async function createBackends(m, g, glyphs) {
   if (useMock) return { sim: createMockSim({ machine: m, geometry: g }), soft: new MockSoft({ machine: m, geometry: g, glyphs }), real: false };
   let sim, soft;
   try {
-    const { createSimClient } = await sources['../sim/client.js']();
     sim = await createSimClient({ machine: m, geometry: g, glyphs: glyphs.raw ?? glyphs });
   } catch (e) { console.warn('sim client not available, using mock', e); }
   try {
-    const { SoftWorld } = await sources['../soft/index.js']();
     soft = new SoftWorld({ machine: m, geometry: g, glyphs: glyphs.raw ?? glyphs });
   } catch (e) { console.warn('soft world not available, using mock', e); }
   return {
@@ -70,9 +65,10 @@ export async function mount(ctx) {
   useMock = params.has('mock');
   const canvas = ctx.canvas;
   const stage = createScene(canvas);
+  trackProgramLinks(stage.renderer);
   const geometry = deriveGeometry(machine);
   const rig = deriveRig(machine, geometry);
-  const glyphs = await loadGlyphs();
+  const glyphs = await loadGlyphs(ctx.glyphs);
   const { mats } = createMaterials();
   const atlas = createAtlases(glyphs, geometry);
   const { sim, soft, real } = await createBackends(machine, geometry, glyphs);
@@ -90,21 +86,23 @@ export async function mount(ctx) {
   const keyWorld = stage.key.position.clone().sub(stage.key.target.position).normalize();
   const ribbon = new RibbonView({ soft, machine, mats, renderer: stage.renderer });
   ribbon.printPointWorld = geometry.printPoint;
-  loadStudioTextures(mats, paper.material, maxAniso, { lowTier: params.has('lowtex') || stage.renderer.capabilities.maxTextureSize < 4096 }).catch((e) => console.info('textures', e));
+  // The element machine draws only the steels, rubber, desk and paper of the shared sets (src/render/element-view.js).
+  const only = isElement ? ['chrome_steel', 'vulcanised_rubber', 'walnut_desk', 'paper_fibre'] : null;
+  loadStudioTextures(mats, paper.material, maxAniso, { only, lowTier: params.has('lowtex') || stage.renderer.capabilities.maxTextureSize < 4096 }).catch((e) => console.info('textures', e));
   stage.scene.add(paper.mesh, ribbon.mesh);
 
   stage.camera.layers.enable(1);   // the enclosure, which the print-point view looks past
   if (machine.defaultCamera) stage.camera.position.fromArray(machine.defaultCamera.position);
   const orbit = new Orbit(stage.camera, canvas, machine.defaultCamera?.target);
 
-  const head = new HeadView({ renderer: stage.renderer, scene: stage.scene, geometry, rig, element: document.getElementById('insetFront'), lamp: stage.rim });
+  const head = new HeadView({ renderer: stage.renderer, scene: stage.scene, geometry, rig, element: document.getElementById('insetFront'), lamp: stage.rim, stage });
   for (const b of document.querySelectorAll('#insets .fold')) b.addEventListener('click', () => b.closest('.card').classList.toggle('folded'));
 
   const enclosure = isElement ? new ElementEnclosure({ scene: stage.scene, mats: view.emats }) : new Enclosure({ scene: stage.scene, mats });
   if (isElement) { applyCavity(ELEMENT_CAVITY); head.followX = () => -soft.carrierOffset; }
   const desk = new Desk({ scene: stage.scene, mats });
   desk.load('/assets/models/desk.glb').catch((e) => console.info('desk', e));
-  loadRoom(stage.scene, '/assets/hdri/combination_room_2k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
+  loadRoom(stage.scene, '/assets/hdri/combination_room_1k.exr', parseFloat(params.get('room') ?? '3.0')).catch((e) => console.info('hdri', e));
 
   const panel = new Panel({
     machine,
@@ -187,19 +185,6 @@ export async function mount(ctx) {
   const frameTimes = new Float32Array(240);
   let ft = 0, nFt = 0, last = performance.now();
   let lastEnv = '';
-  // Lower the supersampling if frames persistently miss 60 Hz; never raises it again, to avoid hunting.
-  let govLast = 0, govN = 0, govSum = 0, govSlow = 0;
-  const govStart = performance.now();
-  function govern(now) {
-    const d = now - govLast; govLast = now;
-    if (d > 120 || d <= 0) { govN = 0; govSum = 0; return; }
-    govSum += d; govN++;
-    if (govN < 120) return;
-    const mean = govSum / govN; govN = 0; govSum = 0;
-    if (now < govStart + 15000) return;         // loading and first compiles do not count
-    govSlow = mean > 24 ? govSlow + 1 : 0;
-    if (govSlow >= 3 && stage.getQuality() > 0.62) { govSlow = 0; stage.setQuality(stage.getQuality() * 0.85); console.info('render quality', stage.getQuality().toFixed(2)); }
-  }
 
   let hintJam = false;
   const jamTheta = new Float32Array(geometry.nPrint);
@@ -229,12 +214,16 @@ export async function mount(ctx) {
     const jammed = stuck;
     if (jammed !== hintJam) { hintJam = jammed; hintEl.textContent = jammed ? 'typebars jammed \u00b7 drag a raised bar back down to clear it' : hintDefault; hintEl.classList.toggle('alert', jammed); }
     paper.keyDir.copy(keyWorld).transformDirection(stage.camera.matrixWorldInverse);
+    // Ink that arrives with nothing moving (a sheet laid in already typed) still has to reach the Print Point view.
+    if (soft.inkTexture?.dirty?.length || soft.colorMask?.dirty?.length || soft.ribbonTexture?.dirty?.length || deskProps.burn?.active) head.invalidate();
     paper.update(); ribbon.update();
     pages.update(dt);
     deskProps.update(dt);
     environment.update(dt, keyWorld);
     interaction.update();
     orbit.update(dt);
+    // What moved, for the shadow maps, the AO and the Print Point view (the scene's own check catches the rest).
+    stage.motion.observe({ state: sim.state, layout: sim.layout, soft, grabbing: sim.grabs?.size > 0 || !!interaction.drag, easing: environment.easing });
     if (timer) timer.begin();
     const shake = deskSway?.x ?? 0;
     stage.camera.position.x -= shake;   // everything on the table moves with it; shifting the viewer instead leaves the distant room still
@@ -243,7 +232,7 @@ export async function mount(ctx) {
     head.beforeRender = (cam) => paper.keyDir.copy(keyWorld).transformDirection(cam.matrixWorldInverse);
     head.render();
     if (timer) timer.end();
-    govern(now);
+    stage.govern(now);
     const elapsed = performance.now() - t0;
     frameTimes[ft++ % frameTimes.length] = elapsed; nFt++;
     if (nFt % 6 === 0) {
@@ -254,7 +243,11 @@ export async function mount(ctx) {
     }
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
   }
+  // Every program compiled behind the loading screen, including those of the models still on their way.
+  await compileBeforeFirstFrame(stage, [desk.mat, ...(isElement ? [view.emats.paint, view.emats.black, view.emats.rubberFoot] : [mats.japanGlb, mats.nickelGlb, mats.rubber, mats.japan])]);
   requestAnimationFrame(loop);
+  // The first sound's downloads (worklet chunk, sprites), at idle after the first frame.
+  import('./audio-prefetch.js').then((m) => { if (!unlocked) m.prefetchAudioWhenIdle(machine, { worklet: !!sim.unlockAudio && !sim.isMock }); }).catch(() => {});
 
   window.__tw = { deskSway, ballBlur, ambience, environment, sim, soft, view, paper, panel, orbit, stage, geometry, machine, rig, interaction, hands, enclosure, head, terminal, pages, deskProps };
 }

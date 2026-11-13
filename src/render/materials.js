@@ -1,6 +1,8 @@
 // PBR material library. Procedural grain is the fallback; files appear from the assets pipeline under
 // public/assets/textures/ and are picked up when present (see loadStudioTextures).
 import * as THREE from 'three';
+// Tile sizes and physical parameters of the authored sets, bundled: no request, and known before any texture arrives.
+import MATERIAL_TABLE from '../../public/assets/textures/materials.json';
 
 function noiseCanvas(size, fn) {
   const c = document.createElement('canvas');
@@ -103,7 +105,7 @@ export function createMaterials() {
     steelDark: phy({ color: 0x3e4045, roughness: 0.5, metalness: 1.0 }),
     blued: phy({ color: 0x24262c, roughness: 0.46, metalness: 1.0 }),   // black-oxide bars
     brass: phy({ color: 0xa2834b, roughness: 0.36, metalness: 1.0 }),
-    rubber: phy({ color: 0x0f0f10, roughness: 0.82, metalness: 0.0, envMapIntensity: 0.7 }),
+    rubber: std({ color: 0x0f0f10, roughness: 0.82, metalness: 0.0, envMapIntensity: 0.7 }),   // no physical feature (its set's ior 1.52 is F0 0.043 against 0.04)
     felt: phy({ color: 0x31382e, roughness: 1, metalness: 0 }),
     knob: phy({ color: 0x0c0c0e, roughness: 0.48, metalness: 0.0, clearcoat: 0.45, clearcoatRoughness: 0.38 }),
     table: phy({ color: 0x15161a, roughness: 0.6, metalness: 0.0, clearcoat: 0.25, clearcoatRoughness: 0.5, ...powderCoat(1 / POWDER_TILE) }),
@@ -165,16 +167,59 @@ async function roughnessChain(name, aniso) {
   return asTexture(mips[0], { aniso, mipmaps: mips });
 }
 
+// 1 x 1 stand-ins for the maps that arrive later. A material is created with them, so its shader program already has
+// the map, normal map, roughness and metalness map paths, and does not change (relink) when the real textures replace
+// them. Each is neutral: white albedo and roughness/metalness multiply by 1, the normal is exactly flat (half float).
+let PLACEHOLDERS = null;
+function placeholders() {
+  if (PLACEHOLDERS) return PLACEHOLDERS;
+  const one = (data, type, srgb) => {
+    const t = new THREE.DataTexture(data, 1, 1, THREE.RGBAFormat, type);
+    t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true;
+    return t;
+  };
+  const h = (x) => THREE.DataUtils.toHalfFloat(x);
+  PLACEHOLDERS = {
+    map: one(new Uint8Array([255, 255, 255, 255]), THREE.UnsignedByteType, true),
+    normal: one(new Uint16Array([h(0.5), h(0.5), h(1), h(1)]), THREE.HalfFloatType, false),
+    grey: one(new Uint8Array([255, 255, 255, 255]), THREE.UnsignedByteType, false),
+  };
+  return PLACEHOLDERS;
+}
+
+/** Gives `mat` a stand-in for each map that will arrive later and that it does not have yet (see placeholders()). */
+export function placeholderMaps(mat, { map = false, normal = false, roughness = false, metalness = false } = {}) {
+  const p = placeholders();
+  if (map && !mat.map) mat.map = p.map;
+  if (normal && !mat.normalMap) mat.normalMap = p.normal;
+  if (roughness && !mat.roughnessMap) mat.roughnessMap = p.grey;
+  if (metalness && !mat.metalnessMap) mat.metalnessMap = p.grey;
+  mat.needsUpdate = true;
+  return mat;
+}
+
 /** Physical parameters from materials.json that this renderer applies. */
 const PHYSICAL_KEYS = ['clearcoat', 'clearcoatRoughness', 'ior', 'envMapIntensity', 'sheen', 'sheenRoughness', 'specularIntensity', 'anisotropy', 'anisotropyRotation'];
+
+/** The tile size (m) of an authored set, from materials.json. */
+export function setTile(name, fallback) { return MATERIAL_TABLE[name]?.tile ?? fallback; }
+
+// Albedo, normal and the roughness mip chain of a set, fetched and decoded once however many materials use it.
+const plainSets = new Map();
+function loadPlainSet(name, aniso) {
+  if (!plainSets.has(name)) plainSets.set(name, Promise.all([mapTexture(name, 'albedo', aniso, true), mapTexture(name, 'normal', aniso, false), roughnessChain(name, aniso)]));
+  return plainSets.get(name);
+}
 
 /**
  * Puts an authored texture set (albedo, normal and the roughness mip chain) on several materials at once, each with
  * its own repeat, sharing one upload. `uses` is [{ mat, repeat: [u, v] }]; repeat is UV units per tile. The material's
- * colour multiplies the set's neutral albedo, so one set serves differently coloured parts.
+ * colour multiplies the set's neutral albedo, so one set serves differently coloured parts. Later calls for the same
+ * set reuse the first one's download and decode.
  */
 export async function applyTextureSet(name, uses, aniso = 8) {
-  const [a, n, r] = await Promise.all([mapTexture(name, 'albedo', aniso, true), mapTexture(name, 'normal', aniso, false), roughnessChain(name, aniso)]);
+  for (const { mat } of uses) placeholderMaps(mat, { map: true, normal: true, roughness: true });   // before the first await: in place for compileAsync
+  const [a, n, r] = await loadPlainSet(name, aniso);
   for (const { mat, repeat } of uses) {
     const rep = (t) => { if (!t) return null; const c = t.clone(); c.repeat.set(repeat[0], repeat[1]); c.needsUpdate = true; return c; };
     if (a) mat.map = rep(a);
@@ -187,8 +232,7 @@ export async function applyTextureSet(name, uses, aniso = 8) {
 /** `only` limits loading to the named sets (a machine that uses few of them downloads only those). */
 /** `extra` adds jobs ({ name, mat, keepColor }) at the set's GLB repeat, for a machine's own materials. */
 export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTier = false, only = null, extra = [] } = {}) {
-  let table = {};
-  try { table = await (await fetch(`${BASE}materials.json`)).json(); } catch { /* defaults below */ }
+  const table = MATERIAL_TABLE;
   const tile = (n, d) => table[n]?.tile ?? d;
   const glb = (n, d) => (T => [0.2 / T, 0.2 / T])(tile(n, d));
   const metres = (n, d) => (T => [1 / T, 1 / T])(tile(n, d));
@@ -225,8 +269,19 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
   jobs.push({ name: 'walnut_desk', mat: mats.desk, repeat: [0.2 / tile('walnut_desk', 2.2), 0.2 / tile('walnut_desk', 2.2)], sizes: lowTier ? { detail: 1024 } : {} });
   if (paperMaterial) jobs.push({ name: 'paper_fibre', mat: paperMaterial, repeat: [1, 1.29], keepColor: true, noAlbedo: true });
   for (const j of extra) jobs.push({ repeat: glb(j.name, 0.05), ...j });
-  for (const j of jobs) {
-    if (only && !only.includes(j.name)) continue;
+  const wanted = jobs.filter((j) => !only || only.includes(j.name));
+  // Every download and decode starts now, in parallel; only the hand-over to the materials (and so the GPU uploads)
+  // below goes one set at a time.
+  for (const j of wanted) loadSet(j.name, j).catch(() => {});
+  // Before the first await, so it is in place when the kit compiles the shaders: each material gets its final
+  // physical features (clearcoat, sheen, anisotropy...) and a stand-in for every map it will receive.
+  for (const j of wanted) {
+    const phys = table[j.name]?.physical ?? {};
+    for (const k of PHYSICAL_KEYS) if (phys[k] !== undefined && k in j.mat && !j.skip?.includes(k)) j.mat[k] = phys[k];
+    if (phys.sheenColor && j.mat.sheenColor) j.mat.sheenColor.setRGB(...phys.sheenColor);
+    placeholderMaps(j.mat, { map: !j.noAlbedo, normal: true, roughness: true, metalness: !!j.metal });
+  }
+  for (const j of wanted) {
     try {
       const [a, n, r, mt] = await loadSet(j.name, j);
       const phys = table[j.name]?.physical ?? {};
@@ -235,8 +290,6 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
       if (a && !j.noAlbedo) { j.mat.map = withRepeat(a, j.repeat); if (!j.keepColor) j.mat.color.setRGB(j.tint ?? 1, j.tint ?? 1, j.tint ?? 1); }
       if (mt) { j.mat.metalnessMap = withRepeat(mt, j.repeat); j.mat.metalness = 1; }
       else if (phys.metalness !== undefined) j.mat.metalness = phys.metalness;
-      for (const k of PHYSICAL_KEYS) if (phys[k] !== undefined && k in j.mat && !j.skip?.includes(k)) j.mat[k] = phys[k];
-      if (phys.sheenColor && j.mat.sheenColor) j.mat.sheenColor.setRGB(...phys.sheenColor);
       j.mat.needsUpdate = true;
     } catch (e) { console.info('texture skipped', j.name, e); }
     await new Promise((r2) => setTimeout(r2, 16));   // spread the GPU uploads over several frames

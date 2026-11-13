@@ -54,6 +54,9 @@ function makeShaft(p, ratio, period) {
 export class ElementAction {
   constructor(sim) {
     this.sim = sim; this.m = sim.m; this.geo = sim.g;
+    this.keyF = 0;   // keyForce's result
+    this.selV = 0; this.selDV = 0; this.selW = 0; this.detV = 0; this.detDV = 0;   // the selection cams, for stepDof
+    this.rockerF = 0;   // a number from the start: a field first left undefined holds boxed numbers, a new one per store
     const n = sim.g.nPrint;
     this.n = n;
     this.cells = sim.g.element.cells;
@@ -173,10 +176,11 @@ export class ElementAction {
   // ---- keyboard --------------------------------------------------------------------------
   slotFreeFor(k) { return this.ipKey < 0 || this.ipKey === k; }
 
-  /** Reaction on key k from its interposer or control linkage, plus any block by the compensator. */
-  keyForce(k, x, v) {
+  /** Reaction on key k from its interposer or control linkage, plus any block by the compensator, left in this.keyF
+   * (see TypebarAction.keyForce). */
+  keyForce(k) {
     this.bindKeys();
-    const sim = this.sim, T = sim.kTravel[k];
+    const sim = this.sim, T = sim.kTravel[k], x = sim.kx[k], v = sim.kv[k];
     const u = x / T;
     this.keyU[k] = u;
     const c = this.kind[k];
@@ -200,7 +204,7 @@ export class ElementAction {
       if (c === K_SHIFT && u > 0.4) sim.shiftLatch = 0;
     }
     F -= this.hump(u);
-    return F;
+    this.keyF = F;
   }
 
   hump(u) {
@@ -257,20 +261,23 @@ export class ElementAction {
   }
 
   // ---- step ------------------------------------------------------------------------------
-  step(h) {
+  step() {
+    const h = this.sim.h;
     const sim = this.sim, ports = sim.ports;
     this.motorT = 0;
     this.tripLogic();
-    this.driveCycle(h);
-    this.driveOp(h);
-    this.driveShift(h);
-    this.driveCorrectionLift(h);
-    this.driveSelection(h);
-    this.driveRocker(h);
-    this.driveReturn(h);
-    this.integrateShaft(this.cyc, h);
-    this.integrateShaft(this.op, h);
-    this.integrateShaft(this.shiftS, h);
+    // Each part reads the step from sim.h itself: a double passed to a call that is not inlined is boxed, a fresh heap
+    // number per call and substep (docs/perf-review.md 25).
+    this.driveCycle();
+    this.driveOp();
+    this.driveShift();
+    this.driveCorrectionLift();
+    this.driveSelection();
+    this.driveRocker();
+    this.driveReturn();
+    this.integrateShaft(this.cyc);
+    this.integrateShaft(this.op);
+    this.integrateShaft(this.shiftS);
     // Motor: Kloss torque, fan and bearing, belt and clutch reactions.
     const w = this.motorW;
     let T = this.motorT, Tm = 0;
@@ -395,7 +402,8 @@ export class ElementAction {
     return F;
   }
 
-  driveCycle(h) {
+  driveCycle() {
+    const h = this.sim.h;
     const S = this.cyc, sim = this.sim;
     if (!S.moving) return;
     const u = this.shaftU(S);
@@ -445,7 +453,8 @@ export class ElementAction {
     }
   }
 
-  driveCorrectionLift(h) {
+  driveCorrectionLift() {
+    const h = this.sim.h;
     if (this.cor === 0 && this.corV === 0 && this.corF === 0) return;
     let F = this.corF;
     this.corF = 0;
@@ -457,7 +466,8 @@ export class ElementAction {
     if (x <= 0 && vn <= 0 && F <= 0 && Math.abs(vn) < 1e-3) { this.cor = 0; this.corV = 0; }
   }
 
-  driveOp(h) {
+  driveOp() {
+    const h = this.sim.h;
     const S = this.op, sim = this.sim;
     if (!S.moving) return;
     const u = this.shaftU(S);
@@ -491,7 +501,8 @@ export class ElementAction {
     }
   }
 
-  driveShift(h) {
+  driveShift() {
+    const h = this.sim.h;
     const S = this.shiftS, sim = this.sim;
     if (!S.moving) return;
     const u = this.shaftU(S);
@@ -499,7 +510,8 @@ export class ElementAction {
   }
 
   /** Spin the shaft through its clutch; stop it on the check at the end of the turn. */
-  integrateShaft(S, h) {
+  integrateShaft(S) {
+    const h = this.sim.h;
     let T = S.tau;
     S.tau = 0;
     const sim = this.sim;
@@ -541,7 +553,13 @@ export class ElementAction {
 
   // ---- selection DOFs --------------------------------------------------------------------
   /** The nearest allowed detent notch on the tilt or rotate carrier. */
-  stepDof(st, h, target, targetRate, dTargetCam, D, dD, K, Tmax, step, lo, hi, J, kt, ct, visc, coul, kStop, cStop, dof) {
+  // The cam values come in fields set by driveSelection and the constants from the carrier's parameters P: each double
+  // passed as an argument was boxed, some thirty heap numbers a substep.
+  stepDof(st, P, sumN, lo, hi) {
+    const h = this.sim.h, step = P.step, sum = sumN * step;
+    const target = sum * this.selV, targetRate = sum * this.selDV * this.selW, dTargetCam = sum * this.selDV;
+    const D = this.detV, dD = this.detDV, K = P.detentStiffness, Tmax = P.detentMaxTorque, J = P.inertia;
+    const kt = P.tapeStiffness, ct = P.tapeDamping, visc = P.viscous, coul = P.bearingCoulomb, kStop = P.stopStiffness, cStop = P.stopDamping;
     const S = this.cyc;
     let x = st.x, v = st.v;
     let T = kt * (target - x) + ct * (targetRate - v);
@@ -560,10 +578,15 @@ export class ElementAction {
     if (x < min) { let F = kStop * (min - x) - cStop * v; if (F < 0) F = 0; T += F; }
     if (x > max) { let F = kStop * (x - max) + cStop * v; if (F < 0) F = 0; T -= F; }
     v += (T / J) * h;
-    st.x = x + v * h; st.v = v;
+    x += v * h;
+    // At rest both decay towards zero; flush them before they go subnormal (many times slower on x86).
+    if (v < 1e-20 && v > -1e-20) v = 0;
+    if (x < 1e-20 && x > -1e-20) x = 0;
+    st.x = x; st.v = v;
   }
 
-  driveSelection(h) {
+  driveSelection() {
+    const h = this.sim.h;
     const S = this.cyc;
     const sP = this.camSel, dP = this.camDet;
     let selV = 0, dSel = 0, detV = 0, dDet = 0;
@@ -575,15 +598,13 @@ export class ElementAction {
       if (detV < 0.01) this.detented = false;
     }
     const tP = this.tP, rP = this.rP;
-    const tiltStep = tP.step, rotStep = rP.step;
-    const tSum = this.tiltSum * tiltStep, rSum = this.rotSum * rotStep;
     this.tiltSt = this.tiltSt ?? { x: 0, v: 0, seated: false, notch: 0 };
     this.rotSt = this.rotSt ?? { x: 0, v: 0, seated: false, notch: 0 };
     this.tiltSt.x = this.tilt; this.tiltSt.v = this.tiltV; this.rotSt.x = this.rot; this.rotSt.v = this.rotV;
     this.tiltSt.seated = this.tiltSeated; this.tiltSt.notch = this.tiltNotch; this.rotSt.seated = this.rotSeated; this.rotSt.notch = this.rotNotch;
-    const wS = S.moving ? S.w : 0;
-    this.stepDof(this.tiltSt, h, tSum * selV, tSum * dSel * wS, tSum * dSel, detV, dDet, tP.detentStiffness, tP.detentMaxTorque, tiltStep, 0, 3, tP.inertia, tP.tapeStiffness, tP.tapeDamping, tP.viscous, tP.bearingCoulomb, tP.stopStiffness, tP.stopDamping);
-    this.stepDof(this.rotSt, h, rSum * selV, rSum * dSel * wS, rSum * dSel, detV, dDet, rP.detentStiffness, rP.detentMaxTorque, rotStep, -COL_HALF, COL_HALF, rP.inertia, rP.tapeStiffness, rP.tapeDamping, rP.viscous, rP.bearingCoulomb, rP.stopStiffness, rP.stopDamping);
+    this.selV = selV; this.selDV = dSel; this.selW = S.moving ? S.w : 0; this.detV = detV; this.detDV = dDet;
+    this.stepDof(this.tiltSt, tP, this.tiltSum, 0, 3);
+    this.stepDof(this.rotSt, rP, this.rotSum, -COL_HALF, COL_HALF);
     this.tilt = this.tiltSt.x; this.tiltV = this.tiltSt.v; this.tiltSeated = this.tiltSt.seated; this.tiltNotch = this.tiltSt.notch;
     this.rot = this.rotSt.x; this.rotV = this.rotSt.v; this.rotSeated = this.rotSt.seated; this.rotNotch = this.rotSt.notch;
     // Hemisphere: ball half-turn through its own tape off the shift cam; two detents.
@@ -607,7 +628,8 @@ export class ElementAction {
   }
 
   // ---- print rocker and contact -------------------------------------------------------------
-  driveRocker(h) {
+  driveRocker() {
+    const h = this.sim.h;
     const sim = this.sim, ports = sim.ports;
     let F = this.rockerF ?? 0;
     this.rockerF = 0;
@@ -725,7 +747,8 @@ export class ElementAction {
   }
 
   // ---- return, tab -------------------------------------------------------------------------
-  driveReturn(h) {
+  driveReturn() {
+    const h = this.sim.h;
     const sim = this.sim, S = this.op;
     if (this.opFunc === OP_RETURN && !this.returnLatched && S.moving && this.shaftU(S) >= this.retLatchPhase) { this.returnLatched = true; sim.escAwake = true; sim.escSleep = 0; }
     if (this.returnLatched) {
@@ -769,7 +792,6 @@ export class ElementAction {
   }
 
   guard() {
-    const ok = (x) => x - x === 0;
     let bad = false;
     for (const S of [this.cyc, this.op, this.shiftS]) if (!ok(S.phi) || !ok(S.w) || !ok(S.tau) || !ok(S.wind)) { S.phi = 0; S.w = 0; S.tau = 0; S.wind = 0; S.on = false; S.moving = false; bad = true; }
     if (!ok(this.motorW)) { this.motorW = this.wRated; bad = true; }
@@ -880,3 +902,6 @@ export class ElementAction {
     this.sim.dogRelief = this.relief;
   }
 }
+
+/** A finite number. Module level: guard() runs every 256 substeps and a closure there would be a new object each time. */
+function ok(x) { return x - x === 0; }

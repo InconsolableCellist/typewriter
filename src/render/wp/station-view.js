@@ -3,15 +3,16 @@
 // frame (origin on the surface it stands on, under its centre; x right, y up, z toward the typist) and the parts other
 // code drives, as the primitive builders in units.js did. See docs/displaywriter/models.md, "Display station".
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadGLTF } from '../gltf.js';
 import { glbUnitMaterials } from './units.js';
+import { mergeStaticMeshes, partObjects } from './merge-static.js';
 
 export const STATION_URL = '/assets/models/wp_station.glb';
 export const DISPLAY_URL = '/assets/models/wp_display.glb';
 const ROCK = 0.16;            // rad: the rocker's throw either side of centre (build_wp_station.py ROCK)
 
 async function load(url, mats) {
-  const gltf = await new GLTFLoader().loadAsync(url);
+  const gltf = await loadGLTF(url);
   const g = glbUnitMaterials(mats);
   const own = unitOwnMaterials(mats, g);
   const nodes = {};
@@ -41,7 +42,7 @@ function unitOwnMaterials(mats, g) {
     wp_mbadge: new THREE.MeshPhysicalMaterial({ map: moduleBadgeTexture(), roughness: 0.4, metalness: 0.3, clearcoat: 0.4, clearcoatRoughness: 0.25 }),
     wp_tag: new THREE.MeshStandardMaterial({ map: labelTexture(), roughness: 0.6, metalness: 0 }),
     wp_legend: new THREE.MeshStandardMaterial({ map: legendTexture(), roughness: 0.55, metalness: 0 }),
-    wp_window: new THREE.MeshPhysicalMaterial({ color: 0x2a1a16, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.45, depthWrite: false }),
+    wp_window: new THREE.MeshStandardMaterial({ color: 0x2a1a16, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.45, depthWrite: false }),
   };
   return mats.station;
 }
@@ -165,7 +166,9 @@ export async function buildStation(size, mats) {
     const k = typeof i === 'string' ? 'ABCDEFGH'.indexOf(i.toUpperCase()) : i;
     leds[k]?.traverse((o) => { if (o.isMesh) { o.material.emissiveIntensity = on ? 2.4 : 0; o.material.color.set(on ? 0xff3a20 : 0x3a0604); } });
   };
-  return { group, parts: { rocker, setRocker, leds, setLed } };
+  const parts = { rocker, setRocker, leds, setLed };
+  mergeStaticMeshes(group, partObjects(parts));
+  return { group, parts };
 }
 
 /**
@@ -188,5 +191,6 @@ export async function buildDisplay(size, mats, { tilt = [0, 20 * Math.PI / 180],
     setTilt: (a) => { tiltNode.rotation.x = -clamp(a, tilt); },       // positive leans the top back
     setSwivel: (a) => { swivelNode.rotation.y = clamp(a, swivel); },
   };
+  mergeStaticMeshes(group, partObjects(parts));
   return { group, parts, face: { ...f, parent: tiltNode } };
 }

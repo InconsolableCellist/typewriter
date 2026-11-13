@@ -796,3 +796,23 @@ test('the rising ribbon stays on the typist\'s side of the sheet at every lift, 
     }
   }
 });
+
+test('a parked sheet is not simulated, and the next one fed in starts from a clean reset', async () => {
+  const { world, state, layout: L } = await makeWorld();
+  world.parkSheet();
+  const sim = world.paperSim;
+  let substeps = 0;
+  const real = sim.substep.bind(sim);
+  sim.substep = (h, f) => { substeps++; real(h, f); };
+  const y0 = sim.y.slice(), count0 = sim.substepCount;
+  run(world, state, L, 0.3);
+  assert.equal(substeps, 0, 'no paper substeps while parked');
+  assert.ok(sim.substepCount > count0, 'its substep clock still runs');
+  assert.ok(sim.y.every((v, i) => v === y0[i]), 'it does not fall or settle while parked');
+  world.spawnSheet({ onTable: { offset: 0.005 } });
+  assert.equal(world.sheetParked, false);
+  assert.equal(sim.asleep, false);
+  assert.equal(sim.grabs.size, 0);
+  run(world, state, L, 0.3);
+  assert.ok(substeps > 0, 'a fed sheet is simulated again');
+});

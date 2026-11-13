@@ -13,10 +13,8 @@ export class Enclosure {
 
   async load(url) {
     try {
-      const head = await fetch(url, { method: 'HEAD' });
-      if (!head.ok || (head.headers.get('content-type') ?? '').includes('text/html')) return false;
-      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-      const gltf = await new GLTFLoader().loadAsync(url);
+      const { loadGLTF } = await import('./gltf.js');
+      const gltf = await loadGLTF(url);
       const byName = { enclosure_paint: this.mats.japanGlb, enclosure_trim: this.mats.nickelGlb };
       gltf.scene.traverse((o) => {
         o.layers.set(1);

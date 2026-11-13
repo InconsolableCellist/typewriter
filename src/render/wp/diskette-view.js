@@ -3,6 +3,7 @@
 // docs/displaywriter/models.md, "Diskette unit"). Nothing here moves by itself: the kit poses the levers and the
 // diskettes from the mechanism's snapshot (src/kits/wp/diskettes.js). The badge and every label are drawn at run time.
 import * as THREE from 'three';
+import { mergeStaticMeshes, partObjects } from './merge-static.js';
 
 export const DISKETTE_URL = '/assets/models/wp_diskette.glb';
 export const DISK = 0.2032;                 // m, an 8-inch diskette
@@ -143,8 +144,8 @@ function leverTexture(mark) {
  * whose result poses itself with `inSlot(i, depth)` and `inPlace(k)`.
  */
 export async function buildDiskette(size, mats, { url = DISKETTE_URL, driveMark = '1/2D' } = {}) {
-  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const gltf = await new GLTFLoader().loadAsync(url);
+  const { loadGLTF } = await import('../gltf.js');
+  const gltf = await loadGLTF(url);
   const root = gltf.scene;
   const node = (name, within = root) => {
     const o = within.getObjectByName(name);
@@ -248,5 +249,9 @@ export async function buildDiskette(size, mats, { url = DISKETTE_URL, driveMark 
     };
   }
 
-  return { group, parts: { levers, leverRange, slots, slotPaths, drives, covers, badge: node('wp_diskette_badge'), holder, places, makeDiskette } };
+  const parts = { levers, leverRange, slots, slotPaths, drives, covers, badge: node('wp_diskette_badge'), holder, places, makeDiskette };
+  const frames = partObjects(parts);
+  mergeStaticMeshes(group, frames);
+  mergeStaticMeshes(holder, frames);
+  return { group, parts };
 }

@@ -90,7 +90,11 @@ export function installAtmosphere({ stage, machine, crt, face, panel, audio, sto
       glow = out * glowSeen(environment.ambient);
       spill.intensity = SPILL_CD * glow;
       wash.intensity = WASH_CD * glow;
-      if (spill.intensity > 0.02 && environment.ambient < 0.7 && frame % SHADOW_EVERY === 0) spill.shadow.needsUpdate = true;
+      // Its shadow, only while the glow can be seen: faded in over the same range, and at 0 (a clear day) the PCSS
+      // search is skipped for every fragment in its cone. The light itself stays, so no program changes.
+      const seen = Math.min(1, Math.max(0, (spill.intensity - 0.02) / 0.03)) * Math.min(1, Math.max(0, (0.7 - environment.ambient) / 0.1));
+      spill.shadow.intensity = seen;
+      if (seen > 0 && frame % SHADOW_EVERY === 0) spill.shadow.needsUpdate = true;
     },
   };
 }

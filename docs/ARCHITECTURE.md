@@ -80,7 +80,7 @@ Strike event, emitted at the end of contact:
 maxIndent, restitution, skewRad, vibratorLift, ribbonInGap, trace:{dt, force:Float32Array, indent:Float32Array}}`
 
 ## Contract: glyphs (`src/machine/glyphs.js`, owned by src/soft)
-`public/assets/glyphs.bin` is 94 96x96 Uint8 height fields (the 80 machine slugs, then the characters added for terminal mode) (see `glyphs.json`, 0.05 mm texels, 255 = printing
+`public/assets/glyphs.gz.bin` is 94 96x96 Uint8 height fields, gzipped, (the 80 machine slugs, then the characters added for terminal mode) (see `glyphs.json`, 0.05 mm texels, 255 = printing
 face). `tools/bake_glyphs.py` documents the format. `loadGlyphs()` works in the browser and Node.
 
 ## Contract: SoftWorld (`src/soft/index.js`)

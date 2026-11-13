@@ -7,9 +7,38 @@ the machine centre. No text, logos or manufacturer names appear in any asset or 
 ## Licence caveat (check before any commercial use)
 The pinstripe decal and the source image of the `element_crinkle` paint textures come from **Qwen-Image 2.1**. 
 
+## Models: size and compression
+- **Quantization**, on export (KHR_mesh_quantization, `tools/blender/quantize_glb.py`, which the builders run;
+  `gltf_quantize.py` for the printer): positions 16-bit in 0.05 mm steps, normals 8-bit (16-bit for the typewriters'
+  frame and housings, whose polished trim would show normal error in reflections), UVs float. Each mesh moves onto a
+  child node `<name>_mesh` that holds the dequantizing scale, so a named node keeps its own transform and pivot.
+  `desk.glb` and `wp_diskette.glb` stay float: the tests read the desk's exact bounds, and the diskette view addresses
+  its named nodes as meshes.
+- **EXT_meshopt_compression**, at build time: `vite/assets.js` runs `tools/gen/compress_glb.mjs` (gltf-transform and
+  meshoptimizer, dev dependencies) on every model as it goes into `dist/`, lossless on the streams as they are, no
+  filters, and serves it gzipped as `.glb.gz.bin`, since no CDN compresses `model/gltf-binary`. The repository keeps the
+  plain files because Blender's importer needs a meshopt library the `bpy` wheel does not ship. Every view loads models
+  through `src/render/gltf.js`, which registers three's `MeshoptDecoder` and unpacks the gzip.
+
+| | Exported (float) | In the repository | Shipped, meshopt | Shipped, then gzip |
+|---|---|---|---|---|
+| `frame.glb` | 1524 KB | 1014 KB | 485 KB | 171 KB |
+| `enclosure.glb` | 1263 KB | 1021 KB | 540 KB | 242 KB |
+| `element_enclosure.glb` | 415 KB | 334 KB | 202 KB | 132 KB |
+| `desk.glb` | 16 KB | 16 KB | 12 KB | 6 KB |
+| five `wp_*.glb` | | 1715 KB | 1043 KB | 487 KB |
+
+`tests/models.test.js` compresses every file as the build does, decodes it with three's loader and compares node names,
+transforms, extras, materials, triangle counts and bounds (to 0.1 mm) with `tests/fixtures/models.json`, taken from the
+float exports. `frame.glb` drops its second UV set on export (`drop=("TEXCOORD_1",)`): the builder's primitives bring
+their own UV layer, which Blender exports as TEXCOORD_0, so the box projection described below lands in TEXCOORD_1,
+which no material reads. (So the frame's textures are placed by the primitives' UVs, not by the box projection; making
+the projection TEXCOORD_0 would change the look and wants a visual check.)
+
 ## Frame: `public/assets/models/frame.glb`
-A procedural black japanned open frame, 41 k triangles, 1.5 MB, metres, Y-up glTF. Node transforms are all
-identity, so vertices are already in machine coordinates.
+A procedural black japanned open frame, 41 k triangles, 1.0 MB (485 KB shipped), metres, Y-up glTF. Node transforms are all
+identity, so vertices are in machine coordinates once the quantizer's scale (on each node's `<name>_mesh` child, see
+Models: size and compression, above) is applied.
 
 | Node | Contents |
 |---|---|
@@ -61,7 +90,8 @@ end plates beyond the sampled knobs. The frame has no fulcrum wire, type guide, 
 renderer's placeholder drew some of these and would need to keep them or add its own.
 
 ## Enclosure: `public/assets/models/enclosure.glb`
-A formed sheet-steel shell, 47.8 k tris, 1.2 mm sheet with real thickness, all nodes identity, in machine coordinates.
+A formed sheet-steel shell, 47.8 k tris, 1.2 mm sheet with real thickness, all nodes identity, in machine coordinates
+(the meshes on `_mesh` children with the dequantizing scale).
 Nodes (remove any of them independently):
 
 | Node | Contents |
@@ -153,7 +183,12 @@ Authored procedurally by `tools/gen/materials.py`. Heights are in metres at the 
 Metals hold their measured F0 in albedo. `materials.json` holds the tile sizes and physical parameters for code to read.
 
 Files per set: `_albedo` (sRGB), `_normal` (linear, +G up), `_roughness`, `_metalness` (grey, three reads G and B of
-them), and `_roughness_mips` (below). 2048 px, seamless.
+them), and `_roughness_mips` (below). Seamless; 2048 px for the large surfaces (`powder_coat`, `walnut_desk`,
+`paper_fibre`) and 1024 px for the sets on small parts (`green_felt`, `nickel_polished`, `vulcanised_rubber`,
+`bead_blasted_aluminium`, `chrome_steel`, `blued_spring_steel`; `SMALL_PART` in `materials.py`): from the default camera a
+screen pixel covers about 0.37 mm while these hold 0.03 to 0.05 mm a texel, so mip 3 or 4 is what is sampled. They are
+authored at 2048 and filtered down like `walnut_desk`, roughness from level 1 of the chain, so the lost detail stays in
+the roughness. The word processor's `wp_pebble` and `wp_keycap` are 1024 px too.
 
 **Encoding.** AVIF (AV1, 4:4:4, 8 bit; greyscale maps are single channel), written straight from the float data by `save()` in
 `materials.py` at quality 80 (albedo, metalness) and 85 (normal, roughness, mip atlas). Chosen against the float source, not
@@ -168,18 +203,18 @@ a larger size, so it would only pay for GPU memory, not download.
 | Set | Tile T (m) | `MeshPhysicalMaterial` beyond the maps | Use / notes |
 |---|---|---|---|
 | `powder_coat` | 0.08 | `clearcoat 0.2, clearcoatRoughness 0.42, ior 1.5` | enclosure (default). Orange peel + 2.8 % metallic flake |
-| `wrinkle_paint` | 0.06 | `ior 1.5` | enclosure alternative. 1.35 mm labyrinth |
+| `wrinkle_paint` | 0.06 | `ior 1.5` | enclosure alternative. 1.35 mm labyrinth. Not shipped |
 | `bead_blasted_aluminium` | 0.04 | — | satin bare aluminium; F0 (0.913, 0.922, 0.924) |
 | `nickel_polished` | 0.06 | `envMapIntensity 1.1` | bright plate; F0 (0.660, 0.609, 0.526) |
-| `nickel_worn` | 0.10 | — | rubbed through to brass, then steel; corrosion pits are dielectric. Also served as `nickel_plating_*` |
+| `nickel_worn` | 0.10 | — | rubbed through to brass, then steel; corrosion pits are dielectric. Not shipped |
 | `chrome_steel` | 0.06 | `envMapIntensity 1.15` | trim; F0 (0.549, 0.556, 0.554) |
-| `key_glass` | 0.03 | `clearcoat 1, clearcoatRoughness 0.02, ior 1.52` | key caps; multiply the legend over the card |
+| `key_glass` | 0.03 | `clearcoat 1, clearcoatRoughness 0.02, ior 1.52` | key caps; multiply the legend over the card. Not shipped |
 | `blued_spring_steel` | 0.05 | `anisotropy 0.55` | springs; rolling lines run along U |
-| `japanned_enamel` | 0.20 | `clearcoat 1, clearcoatRoughness 0.07, ior 1.52` | the casting; chips show metalness |
+| `japanned_enamel` | 0.20 | `clearcoat 1, clearcoatRoughness 0.07, ior 1.52` | the casting; chips show metalness. Not shipped |
 | `vulcanised_rubber` | 0.10 | — | feet, platen |
 | `green_felt` | 0.08 | `sheen 0.35, sheenRoughness 0.65, sheenColor (0.1,0.26,0.13)` | felt |
 | `paper_fibre` | 0.2159 | — | sheet |
-| `ribbon_cloth` | 0.0248 | `sheen 0.3, sheenRoughness 0.5` | 40 threads at the definition's pitch |
+| `ribbon_cloth` | 0.0248 | `sheen 0.3, sheenRoughness 0.5` | 40 threads at the definition's pitch. Not shipped |
 | `walnut_desk` | 2.2 | dielectric, `clearcoat` 0.45, `clearcoatRoughness` 0.2 | French-polished walnut boards, authored at 4096 px and written at 2048 (1.07 mm/texel): albedo box-filtered in linear light, normals averaged and renormalised, roughness taken from level 1 of its Toksvig chain; grain along U, one tile covers the desk so it never repeats |
 
 Set `metalness: 1` and `roughness: 1` whenever a map drives them (three multiplies), and leave `material.color` white so
@@ -187,6 +222,9 @@ measured F0 and base colour are not altered. `repeat = uvMetresPerUnit / T`: for
 that is `0.2 / T`.
 
 `pinstripe_border.png` is a separate 2048 x 2048 RGBA decal (a gold line border with scrolled corners).
+
+Sets marked "Not shipped" and the pinstripe decal are drawn by no machine, so `materials.py` and `pinstripe.py` write
+them to `tools/gen/out/textures/` (ignored by git), not to `public/`, which is deployed as it is.
 
 ### Crinkle paint for `element1971`: `element_crinkle_{albedo,normal,roughness,roughness_mips}.avif`
 1024 px, tiling every 0.08 m. Made by `tools/gen/element_crinkle.py` from `tools/gen/raw/element_crinkle_s71002.png` (Qwen-Image 2.1 through
@@ -212,7 +250,7 @@ tex.colorSpace = THREE.NoColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrappin
 
 ### Regenerate
 ```sh
-python3 tools/gen/materials.py [set ...]   # procedural sets, materials.json and the nickel_plating alias
+python3 tools/gen/materials.py [set ...]   # procedural sets and materials.json
 python3 tools/gen/gen_raw.py               # Qwen source for the pinstripe
 python3 tools/gen/pinstripe.py             # RGBA decal
 ```
@@ -225,11 +263,11 @@ tests/e2e/xrun.sh node tools/gen/preview/studio.mjs out.png "mode=swatches"
 tests/e2e/xrun.sh node tools/gen/preview/studio.mjs out.png "mode=machine&paint=wrinkle_paint&cam=-0.5,0.32,0.55"
 ```
 
-## HDRI: `public/assets/hdri/combination_room_2k.exr`
+## HDRI: `public/assets/hdri/combination_room_1k.exr`
 | | |
 |---|---|
 | Asset | Combination Room, 2048 x 1024 Radiance HDR, 6.5 MB, md5 `1f43bc52010775159f5c4270c68596b9` |
-| Served as | Half-float OpenEXR, DWAB level 45, 2.5 MB: `python3 tools/gen/hdri_exr.py combination_room_2k.hdr` (`pip install OpenEXR`). Against the .hdr, after exposure 0.6 and a Reinhard curve, 57 dB PSNR, largest error 0.013 (about 3/255) |
+| Served as | 1024 x 512, box-filtered from the 2k file in linear light; half-float OpenEXR, DWAB level 45, 720 KB: `python3 tools/gen/hdri_exr.py combination_room_2k.hdr` (`pip install OpenEXR`; it also takes the earlier 2k EXR). The 2k EXR was 2.6 MB and, against the .hdr after exposure 0.6 and a Reinhard curve, 57 dB PSNR, largest error 0.013 (about 3/255) |
 | Source | https://polyhaven.com/a/combination_room, file `https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/combination_room_2k.hdr` |
 | Author | Sergej Majboroda |
 | Licence | CC0 1.0 (public domain dedication, no attribution required), stated on the asset's page; https://polyhaven.com/license |
@@ -239,12 +277,15 @@ A Victorian parlour with curtains and a large window. Measured in Blender: peak 
 no sun disc; the window holds about 37 % of the upper hemisphere's energy. In the file the window is at azimuth
 atan2(z, x) = +45 degrees.
 
-The one file does both jobs. A sharper backdrop was not needed: at a 29 degree lens the photograph is magnified so
+The one file does both jobs, and 1k is enough for both: the renderer samples it only through the prefiltered cube map
+(image light, and the backdrop at `backgroundBlurriness` 0.06), whose face is a quarter of the image width. From the 1k
+file that is 256 px, the same as the studio environment `createScene` starts with (`PMREMGenerator.fromScene`), so the
+lit programs, which three keys on the cube size, are not relinked when the photograph arrives. A sharper backdrop was not needed: at a 29 degree lens the photograph is magnified so
 far that a sharp copy would look wrong anyway, and blurred it reads as depth of field. See the settings below.
 
 ### Renderer settings
 ```js
-const tex = await new EXRLoader().loadAsync('/assets/hdri/combination_room_2k.exr');
+const tex = await new EXRLoader().loadAsync('/assets/hdri/combination_room_1k.exr');
 tex.mapping = THREE.EquirectangularReflectionMapping;
 scene.environment = tex;  scene.environmentIntensity = 0.6;   scene.environmentRotation.set(0, 3.0, 0);
 scene.background  = tex;  scene.backgroundIntensity  = 0.45;  scene.backgroundBlurriness = 0.06;  scene.backgroundRotation.set(0, 3.0, 0);

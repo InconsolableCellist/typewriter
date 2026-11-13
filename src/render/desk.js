@@ -2,7 +2,7 @@
 // keeps the room's reflections out of the gap, which is what stops the machine looking afloat. A system machine of
 // several units sets one footprint per unit (up to MAX_FOOTPRINTS).
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadGLTF } from './gltf.js';
 
 export const MAX_FOOTPRINTS = 4;
 
@@ -43,7 +43,7 @@ export class Desk {
   }
 
   async load(url) {
-    const gltf = await new GLTFLoader().loadAsync(url);
+    const gltf = await loadGLTF(url);
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;
       o.material = this.mat;

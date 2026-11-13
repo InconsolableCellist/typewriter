@@ -232,6 +232,13 @@ export class PaperSim {
 
   // ---- step
   /** One fixed substep. f = {cx, cy, cz (platen axis point), psi, omega, dcx, dcy, nipFactor, bailFactor}. */
+  /** A substep with nothing simulated, for a parked sheet: only its clock and last frame advance, as substep's would. */
+  skip(h, f) {
+    this.lastFrame = f;
+    this.lastH = h;
+    this.substepCount++;
+  }
+
   substep(h, f) {
     this.lastFrame = f;
     this.lastH = h;

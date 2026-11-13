@@ -106,6 +106,11 @@ export class ScreenCard {
     this.resizable(card.querySelector('.screen-resize'));
     new ResizeObserver(() => this.apply()).observe(panel);
     window.addEventListener('resize', () => this.apply());
+    // The picture's rectangle, read again only when the card's layout may have changed (apply(), a resize of the card
+    // or of its body), not every frame: the read can force a style recalculation.
+    this.rect = null;
+    new ResizeObserver(() => { this.rect = null; }).observe(card);
+    new ResizeObserver(() => { this.rect = null; }).observe(this.body);
     this.apply();
   }
 
@@ -115,6 +120,7 @@ export class ScreenCard {
   /** Width from the remembered size, or a default; the height follows the tube's shape and the room above the panel. */
   apply() {
     const { card, body, insets, state } = this;
+    this.rect = null;
     insets.style.display = state.visible ? '' : 'none';
     card.classList.toggle('folded', state.folded);
     if (!state.visible) return;
@@ -152,7 +158,7 @@ export class ScreenCard {
   /** Draws the picture into the card's rectangle of the canvas; call after the frame. */
   render() {
     if (!this.state.visible || this.state.folded) return;
-    const r = this.body.getBoundingClientRect();
+    const r = this.rect ??= this.body.getBoundingClientRect();
     if (r.width < 8 || r.height < 8) return;
     const renderer = this.renderer;
     this.material.uniforms.uPhosphor.value = this.crt.texture;

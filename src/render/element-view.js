@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import keycaps from './element-keycaps.json';
+import { placeholderMaps } from './materials.js';
 
 export const ELEMENT_ENCLOSURE_URL = '/assets/models/element_enclosure.glb';
 const BASE = '/assets/textures/';
@@ -18,12 +19,13 @@ export const ELEMENT_CAVITY = { enabled: true, centerX: 0, centerZ: 0.030, halfX
 
 /** The housing paint, keycap plastics and blacks. Crinkle maps load asynchronously; the materials work before they arrive. */
 export function createElementMaterials(mats, maxAniso = 8) {
-  const paint = new THREE.MeshPhysicalMaterial({ color: 0xbda98c, roughness: 0.56, metalness: 0, clearcoat: 0, ior: 1.5 });
+  const paint = new THREE.MeshStandardMaterial({ color: 0xbda98c, roughness: 0.56, metalness: 0 });   // no physical feature: standard (ior 1.5 is its F0 0.04)
   const black = new THREE.MeshPhysicalMaterial({ color: 0x0b0b0c, roughness: 0.4, metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.35 });
   const blackMatte = new THREE.MeshStandardMaterial({ color: 0x0a0a0b, roughness: 0.8, metalness: 0 });
-  const chrome = new THREE.MeshPhysicalMaterial({ color: 0xc8c9cb, roughness: 0.18, metalness: 1, envMapIntensity: 1.15 });
+  const chrome = new THREE.MeshStandardMaterial({ color: 0xc8c9cb, roughness: 0.18, metalness: 1, envMapIntensity: 1.15 });
   const cast = new THREE.MeshStandardMaterial({ color: 0x1a1b1d, roughness: 0.55, metalness: 0.35 });
   const keyPlastic = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.26, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 0.9 });
+  placeholderMaps(paint, { map: true, normal: true, roughness: true });   // the crinkle maps' slots, so its program is final now
   const out = { ...mats, paint, black, blackMatte, chrome, cast, keyPlastic, rubberFoot: mats.rubber };
   const TILE = 0.08, UV = 0.2;
   const load = async (name, srgb) => {
@@ -53,8 +55,8 @@ export class ElementEnclosure {
   }
 
   async load(url = ELEMENT_ENCLOSURE_URL) {
-    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-    const gltf = await new GLTFLoader().loadAsync(url);
+    const { loadGLTF } = await import('./gltf.js');
+    const gltf = await loadGLTF(url);
     const byName = { element_paint: this.mats.paint, element_black: this.mats.black, element_rubber: this.mats.rubberFoot };
     gltf.scene.traverse((o) => {
       o.layers.set(1);
@@ -612,6 +614,10 @@ export class ElementView {
     // Controls: one mesh each, sized from the shared table. Atlas rect lives in vertex uv: no instancing shader needed.
     this.controlMeshes = [];
     const plainCap = e.keyPlastic.clone(); plainCap.color.set(0x132019);
+    // One material for every control with a legend: its atlas rect is baked into the cap's uv, so the caps differ only
+    // in geometry (no per-key material, no aAtlas attribute and so no instancing shader).
+    const legendCap = capMat.clone();
+    legendCap.onBeforeCompile = () => {}; legendCap.customProgramCacheKey = () => 'element-keycap-plain';
     g.keys.forEach((k, i) => {
       if (k.kind === 'print') return;
       const c = keycaps.controls[k.id];
@@ -625,8 +631,7 @@ export class ElementView {
       }
       const stm = new THREE.BoxGeometry(c.w * 0.5, 0.012, c.d * 0.5).translate(0, -0.0155, 0);
       const group = new THREE.Group(); group.position.set(k.pos[0], k.pos[1], k.pos[2]);
-      const mat = a ? capMat.clone() : plainCap;
-      if (a) { mat.onBeforeCompile = () => {}; mat.customProgramCacheKey = () => 'element-keycap-plain'; }
+      const mat = a ? legendCap : plainCap;
       const mesh = this.addMesh(geo, mat, group);
       this.addMesh(stm, e.blackMatte, group);
       this.keysGroup.add(group);
@@ -785,7 +790,7 @@ export class ElementView {
     const collar = lathe([[0, -E.ballRadius * 0.98], [E.ballRadius * 0.40, -E.ballRadius * 0.98], [E.ballRadius * 0.42, -E.ballRadius * 0.95], [E.ballRadius * 0.42, -E.ballRadius * 0.86], [E.ballRadius * 0.34, -E.ballRadius * 0.82], [0, -E.ballRadius * 0.82]], 40);
     this.addMesh(collar, e.chrome, tube);
     // The ball.
-    const ballMat = new THREE.MeshPhysicalMaterial({ color: 0xcfd0cf, roughness: 0.3, metalness: 1, envMapIntensity: 1.1 });
+    const ballMat = new THREE.MeshStandardMaterial({ color: 0xcfd0cf, roughness: 0.3, metalness: 1, envMapIntensity: 1.1 });
     const ball = buildTypeBall(m, g, glyphs);
     const typedMat = ballMat.clone(); typedMat.normalMap = ball.normalTex; typedMat.normalScale.set(1.1, 1.1);
     const ballG = new THREE.Group(); ballG.name = 'type_element'; tube.add(ballG); this.ballGroup = ballG;
@@ -883,7 +888,7 @@ export class ElementView {
     const panel = new THREE.Shape();
     const px0 = -0.0165, px1 = 0.0165, py0 = 0.0085, py1 = 0.0285, pr = 0.0028;
     panel.moveTo(px0 + pr, py0); panel.lineTo(px1 - pr, py0); panel.quadraticCurveTo(px1, py0, px1, py0 + pr); panel.lineTo(px1, py1 - pr); panel.quadraticCurveTo(px1, py1, px1 - pr, py1); panel.lineTo(px0 + pr, py1); panel.quadraticCurveTo(px0, py1, px0, py1 - pr); panel.lineTo(px0, py0 + pr); panel.quadraticCurveTo(px0, py0, px0 + pr, py0);
-    this.addMesh(extrude(panel, 0.0003).translate(0, surface + 0.00035, 0), new THREE.MeshPhysicalMaterial({ color: 0xc2c6c2, roughness: 0.38 }), cart);
+    this.addMesh(extrude(panel, 0.0003).translate(0, surface + 0.00035, 0), new THREE.MeshStandardMaterial({ color: 0xc2c6c2, roughness: 0.38 }), cart);
     // The slot from the left hub toward the middle, and two arrows round the drive hub: moulded dark marks standing just proud of the plate.
     const slot = new THREE.Shape();
     const sx0 = -hubX + 0.0100, sx1 = -hubX + 0.0390, sh = 0.0036;
@@ -985,7 +990,7 @@ export class ElementView {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx);
-    const mat = new THREE.MeshPhysicalMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.12, metalness: 0, ior: 1.49, envMapIntensity: 1.0 });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, roughness: 0.12, metalness: 0, envMapIntensity: 1.0 });
     const holder = new THREE.Mesh(geo, mat); holder.name = 'card_holder'; holder.renderOrder = 8; holder.castShadow = false; holder.receiveShadow = false;
     carrier.add(holder); this.cardHolder = holder;
     this.pickables.push({ object: holder, low: true, part: () => ({ kind: 'info', label: 'Card holder', visual: () => null }) });
@@ -1110,7 +1115,7 @@ export class ElementView {
     const pts = [[0, 0.0235, -0.2385], [0, 0.021, -0.2470], [0.003, 0.012, -0.265], [0.01, 0.004, -0.30], [0.05, 0.0035, -0.38], [0.075, 0.0035, -0.47], [0.04, 0.0035, -0.56]].map((p) => new THREE.Vector3(...p));
     const curve = new THREE.CatmullRomCurve3(pts);
     const geo = new THREE.TubeGeometry(curve, 100, 0.0031, 10, false);
-    this.cord = this.addMesh(geo, new THREE.MeshPhysicalMaterial({ color: 0x24261f, roughness: 0.62 }), this.root, 'power_cord');
+    this.cord = this.addMesh(geo, new THREE.MeshStandardMaterial({ color: 0x24261f, roughness: 0.62 }), this.root, 'power_cord');
   }
 
   // ---------- highlight ----------

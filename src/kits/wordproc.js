@@ -34,6 +34,7 @@ import { makePicker, installWpPointer, makeHighlight } from '../interact/wp-poin
 import { installNavUi } from '../ui/wp-nav.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 import { installStationControls, addHitProxy } from './wp/station.js';
+import { ROW } from '../wp/screen.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -126,7 +127,7 @@ export async function mount(ctx) {
      unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
   const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
   keyboard.onSound = (e) => keySounds.play(e, simNow());
-  new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => unlockAudio() });
+  new WpKeyboardInput({ press: (i, f) => keyboard.press(i, f), now: simNow, onFirstKey: () => unlockAudio(), enterIsEnter: () => sys?.screen.cursor.on && sys.screen.cursor.row === ROW.PROMPT });
   window.addEventListener('pointerdown', () => unlockAudio(), { once: true });
   window.addEventListener('beforeunload', (e) => { if (sys.doc) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -222,7 +223,7 @@ function buildPanel(ctx, feeder, screenCard) {
   const el = document.getElementById('panel');
   el.innerHTML = `
     <div class="actions"><button id="a-feeder" aria-pressed="true" title="the printer's sheet feeder lays each sheet in; off, click the fresh paper to lay one">sheet feeder</button><button id="a-screen" title="the Screen card: the display's picture, whatever the camera shows">screen card</button><button id="a-keys" title="how the PC keyboard maps onto the machine's">keys</button></div>
-    <div class="note" id="keysNote" hidden>Letters, digits and punctuation: as marked · Alt: CODE · AltGr: ENTER · Enter: RETURN · Esc: CANCL ·
+    <div class="note" id="keysNote" hidden>Letters, digits and punctuation: as marked · Alt: CODE · Enter: ENTER at a prompt, RETURN in a document · AltGr or keypad Enter: ENTER · Esc: CANCL ·
       F1 REQST · F2 PRINT · F3 FIND · F4 GO TO · F5 MOVE · F6 LINE ADJ · F7 SPELL · F8 CHG FMT · F9 GET · F10 PAGE END ·
       Delete: DEL · End: END · Insert: MSG · PageDown / PageUp: screen down / up · keys with no PC match: click them ·
       Views (the machine never sees these): Ctrl+Shift+← / → next station · Ctrl+Shift+↓ back · Ctrl+Shift+↑ free view · or keypad 4 / 6, 2, 5</div>
@@ -241,7 +242,7 @@ function buildPanel(ctx, feeder, screenCard) {
   picker.value = ctx.machine.id;
   picker.addEventListener('change', () => ctx.onPick(picker.value));
   const hint = document.getElementById('hint');
-  if (hint) hint.textContent = 'type on your keyboard · Alt = CODE, AltGr = ENTER, Esc = CANCL · the edge arrows and the bar move the view · ◎ free view';
+  if (hint) hint.textContent = 'type on your keyboard · Enter answers prompts · Alt = CODE, Esc = CANCL · the edge arrows and the bar move the view · ◎ free view';
   return el;
 }
 

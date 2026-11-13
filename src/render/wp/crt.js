@@ -180,7 +180,7 @@ export class CRT {
     const uniforms = {
       uPhosphor: { value: this.texture },
       uGreen: { value: new THREE.Color(0.2, 1.0, 0.38) },
-      uRaster: { value: 0.012 },        // the unlit raster's glow: the brightness knob (HW 1.4), set just visible
+      uRaster: { value: 0.022 },        // the unlit raster's glow: the brightness knob (HW 1.4), set plainly visible
       uEmission: { value: 2.4 },
       uBright: { value: 1 },            // cathode emission from the heater's warmth
       uScale: { value: new THREE.Vector2(1, 1) },   // the raster's size as the deflection comes up or collapses
@@ -217,14 +217,21 @@ float crtHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.
           float rows = c.y * 400.0;
           float w = fwidth(rows);
           float line = mix(0.5 + 0.5 * pow(0.5 + 0.5 * cos(6.2831853 * rows), 0.7), 0.82, smoothstep(0.3, 0.6, w));
+          // Where the real lines are finer than the screen's pixels, a light line every other device row stands in, so the
+          // raster still reads as scanned at any distance without moire.
+          line *= mix(1.0, 0.88 + 0.12 * step(1.0, mod(gl_FragCoord.y, 2.0)), smoothstep(0.3, 0.6, w));
           float vign = 1.0 - 0.32 * r2 * 2.2;
           // Life: a slow mains beat rolling up the screen, the frame-to-frame shimmer, and the phosphor's grain.
-          float hum = 1.0 + 0.03 * sin(6.2831853 * (c.y - uTime * 0.21));
+          float hum = 1.0 + 0.045 * sin(6.2831853 * (c.y - uTime * 0.21));
+          // The phosphor's grain, and the video noise, which changes every field (60 a second).
           float grain = 0.94 + 0.12 * crtHash(floor(uv * vec2(1100.0, 760.0)));
+          float field = floor(uTime * 60.0);
+          float snow = crtHash(floor(uv * vec2(700.0, 480.0)) + vec2(field * 17.0, field * 31.0));
+          grain *= 0.9 + 0.2 * snow;
           float core = (0.78 * ph.r + 0.22 * ph.g) * line * grain;
           vec3 halo = textureLod(uPhosphor, c, 3.0).rgb * 0.16 + textureLod(uPhosphor, c, 5.0).rgb * 0.14 + textureLod(uPhosphor, c, 7.0).rgb * 0.1;
           float glow = (halo.r * 0.8 + halo.g * 0.2);
-          float raster = uRaster * line * (0.85 + 0.3 * grain - 0.25);
+          float raster = uRaster * line * (0.6 + 0.8 * snow);
           float near = 1.0 - smoothstep(-0.01, 0.05, edge);                   // the halo spreads a little past the raster
           float e = inside * uBright * hum * uFlicker * vign * (uEmission * core + raster) + 1.8 * uBright * glow * near;
           // Switched off, the deflection collapses first and leaves a bright spot in the centre that fades.

@@ -66,13 +66,16 @@ export class SoftWorld {
     this.acc -= nsub * SUBSTEP;
     if (nsub > MAX_SUBSTEPS_PER_STEP) { nsub = MAX_SUBSTEPS_PER_STEP; this.acc = 0; }
     if (nsub > 0) {
+      const parked = this.sheetParked;
       let f0 = this._frame(prev, cur, 0, 0, 0);
       for (let k = 1; k <= nsub; k++) {
         const f = this._frame(prev, cur, k / nsub, nsub, dt);
         f.dcx = f.cx - f0.cx; f.dcy = f.cy - f0.cy;
         if (this.fixedPlaten) { this.paperSim.shiftFrame(f.dcx); f.dcx = 0; this.paperSim.bodyShift = f.cx - this.m.platen.center[0]; }
         f.omega = (f.psi - f0.psi) / SUBSTEP;
-        this.paperSim.substep(SUBSTEP, f);
+        // A parked sheet is out of the machine and hidden; spawnSheet places and resets it when one is fed.
+        if (parked) this.paperSim.skip(SUBSTEP, f);
+        else this.paperSim.substep(SUBSTEP, f);
         this.ribbonSim.substep(SUBSTEP, f);
         f0 = f;
       }
@@ -142,8 +145,10 @@ export class SoftWorld {
   }
 
   _syncAll() {
-    this.paperSim.syncPositions();
-    this.paper.normalsDirty = true;
+    if (!this.sheetParked) {   // spawnSheet syncs a new sheet itself
+      this.paperSim.syncPositions();
+      this.paper.normalsDirty = true;
+    }
     this.ribbonSim.sync();
     this._refreshRibbonWindow();
   }

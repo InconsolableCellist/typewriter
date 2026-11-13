@@ -2,6 +2,9 @@
 // volume acceleration, so the filter is mostly a sub-audio roll-off and a very gentle high roll-off; the
 // room gives early reflections off a desk and walls and a short diffuse tail (a small quiet study).
 
+// Far below anything audible; decaying states are snapped to zero under it so they never go subnormal.
+const TINY = 1e-20;
+
 function delaySamples(ms, sr) { return Math.max(1, Math.round((ms / 1000) * sr)); }
 
 export class RadiationFilter {
@@ -13,10 +16,14 @@ export class RadiationFilter {
 
   tick(x) {
     // first order high pass (exact DC block) then one-pole low pass
-    const y = x - this.x1 + this.a * this.y1;
+    // States that decay to zero are flushed below 1e-20: subnormal floats are many times slower on x86.
+    let y = x - this.x1 + this.a * this.y1;
+    if (y < TINY && y > -TINY) y = 0;
     this.x1 = x; this.y1 = y;
-    this.lp = y + (this.lp - y) * this.b;
-    return this.lp;
+    let lp = y + (this.lp - y) * this.b;
+    if (lp < TINY && lp > -TINY) lp = 0;
+    this.lp = lp;
+    return lp;
   }
 }
 
@@ -104,7 +111,9 @@ export class Room {
     for (let i = 0; i < 4; i++) {
       let v = out[i] - sum;
       // One pole damping in the loop
-      fb[i] = fb[i] * this.fd + v * (1 - this.fd);
+      let f = fb[i] * this.fd + v * (1 - this.fd);
+      if (f < TINY && f > -TINY) f = 0;
+      fb[i] = f;
       const next = input + fb[i] * this.g[i];
       const L = lines[i];
       L[posL[i]] = next;

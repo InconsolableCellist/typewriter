@@ -3,6 +3,7 @@
 // unlockAudio the worklet carries on from the same mechanical state, sample accurate from then on.
 import { SUBSTEP_HZ } from './mechanics.js';
 import { createMechanism, createAudioEngine } from './host-factory.js';
+import { workletUrl } from './worklet-url.js';
 import { makeLayout } from './layout.js';
 import { loadSamples } from '../audio/samples.js';
 
@@ -208,7 +209,7 @@ class SimClient {
     if (this.host instanceof WorkletHost) return this;
     this.unlocking = true;   // presses made during the handover reach only the old host, so the terminal driver holds off
     if (audioContext.state === 'suspended') await audioContext.resume();
-    const { default: url } = await import('../audio/worklet.js?worker&url');
+    const url = await workletUrl(this.machine);   // this family's own worklet bundle
     await audioContext.audioWorklet.addModule(url);
     this.host.stopClock?.();   // the old host must not run on past the state it hands over, or early strikes double
     this.handover = []; this.handoverT0 = performance.now();

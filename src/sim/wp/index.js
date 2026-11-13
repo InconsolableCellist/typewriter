@@ -2,7 +2,7 @@
 // their controllers, the snapshot and the events, behind the same interface LocalHost and the worklet drive
 // MechanicalSim through. It hosts the printer (M5), the diskette unit (M7) and the station's power and fan; the keyboard
 // and the rest of the station join it later.
-import { SUBSTEP_HZ } from '../mechanics.js';
+import { SUBSTEP_HZ } from '../rate.js';
 import { makeWpLayout } from './layout.js';
 import { WP_PORT } from './ports.js';
 import { Inputs } from './inputs.js';

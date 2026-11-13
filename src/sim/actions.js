@@ -1,8 +1,9 @@
 // Print actions. MechanicalSim dispatches on machine.action.type so upstrike, typewheel or golfball
 // machines can be added without touching the common mechanism (keys, escapement, carriage, platen).
 // Action interface:
-//   keyForce(k, x, v)  -> reaction force on printing key k from the action linkage (N)
-//   step(h)            -> integrate the action DOFs and contacts for one substep
+//   keyForce(k)        -> reaction force on printing key k (at sim.kx[k], sim.kv[k]) from the action linkage (N),
+//                         left in action.keyF
+//   step()             -> integrate the action DOFs and contacts for one substep (of sim.h)
 //   setEnv()           -> recompute contact gap after env changes
 //   grabForce(i, f)    -> add grab generalised force to DOF i of the action (bar i torque, N m)
 //   position(i), velocity(i), wake(i)
@@ -33,6 +34,7 @@ const LAT_MAX = 0.02;       // m, a bent bar in the basket cannot go further tha
 export class TypebarAction {
   constructor(sim) {
     this.sim = sim;
+    this.keyF = 0;   // keyForce's result
     const { m: machine, g: geo } = sim;
     this.m = machine;
     this.geo = geo;
@@ -205,8 +207,11 @@ export class TypebarAction {
   position(i) { return this.theta[i]; }
   velocity(i) { return this.omega[i]; }
 
-  /** Force reaction on key k from the one-way link. The link can only pull. */
-  keyForce(k, x, v) {
+  /** Force reaction on key k from the one-way link, left in this.keyF. The link can only pull. The key's position and
+   * speed are read here and the force is not returned: a double passed to or returned from a call that is not inlined
+   * is boxed, a fresh heap number per key and substep. */
+  keyForce(k) {
+    const x = this.sim.kx[k], v = this.sim.kv[k];
     const T = this.keyTravel;
     const lever = this.lever[k];
     let u = x / T;
@@ -241,14 +246,16 @@ export class TypebarAction {
       if (tau < 0) tau = 0;
       this.tau[k] += tau;
       if (!this.awake[k]) this.wake(k);
-      return -tau * L;
+      this.keyF = -tau * L;
+      return;
     }
-    return 0;
+    this.keyF = 0;
   }
 
   grabForce(i, f) { this.tau[i] += f; if (!this.awake[i]) this.wake(i); }
 
-  step(h) {
+  step() {
+    const h = this.sim.h;
     const sim = this.sim, ports = sim.ports;
     const list = this.activeList;
     let nA = this.nActive;
@@ -264,7 +271,12 @@ export class TypebarAction {
 
     // Bar-bar contacts (segment-segment distance between shanks), before integrating.
     this.pairEnergy = 0;
-    if (nA >= 2 && !sim.unlimited) this.barBarContacts(h);
+    if (nA >= 2 && !sim.unlimited) this.barBarContacts();
+
+    // The vibrator lift does not change within this loop. Read once into a field, not returned per bar: a double
+    // returned from a call that is not inlined is boxed.
+    sim.updateVibrLift();
+    const lift = sim.vibrLiftNow;
 
     for (let ii = 0; ii < nA; ii++) {
       const i = list[ii];
@@ -293,7 +305,6 @@ export class TypebarAction {
       // The bar's heel carries the ribbon vibrator: as long as the bar is up, the ribbon is up, including
       // in free flight after a short press has already let the key go.
       {
-        const lift = sim.vibrLiftTarget();
         if (lift > 0 && th > 0.15 * this.thetaTravel[i]) {
           const rate = lift / (0.55 * this.thetaTravel[i]);
           let cam = (th - 0.15 * this.thetaTravel[i]) * rate;
@@ -501,7 +512,7 @@ export class TypebarAction {
     });
   }
 
-  barBarContacts(h) {
+  barBarContacts() {
     const nA = this.nActive, list = this.activeList;
     const { theta, lat, pivot, sDir, pDir, axis, thetaTravel, segs, inRange } = this;
     const L = this.Lbar, Ls = L - this.slugDepth, rc = L - this.slugDepth / 2, hs = this.slugHalf;
@@ -539,16 +550,17 @@ export class TypebarAction {
       for (let bi = ai + 1; bi < nA; bi++) {
         if (!inRange[bi]) continue;
         const a = list[ai], b = list[bi];
-        this.segPair(ai, bi, a, b, 1, 1, h);
-        this.segPair(ai, bi, a, b, 1, 0, h);
-        this.segPair(ai, bi, a, b, 0, 1, h);
-        this.segPair(ai, bi, a, b, 0, 0, h);
+        this.segPair(ai, bi, a, b, 1, 1);
+        this.segPair(ai, bi, a, b, 1, 0);
+        this.segPair(ai, bi, a, b, 0, 1);
+        this.segPair(ai, bi, a, b, 0, 0);
       }
     }
   }
 
   /** Contact between one segment of bar a and one of bar b (type 0 shank, 1 slug): true closest points. */
-  segPair(ai, bi, a, b, ta, tb, h) {
+  segPair(ai, bi, a, b, ta, tb) {
+    const h = this.sim.h;   // read here, not passed: a double argument is boxed
     const { segs, omega, latV, tau, latF, axis, n, segBox } = this;
     const ca = ai * 12 + (ta ? 6 : 0), cb = bi * 12 + (tb ? 6 : 0);
     if (segBox[ca] > segBox[cb + 1] || segBox[cb] > segBox[ca + 1]
@@ -680,7 +692,6 @@ export class TypebarAction {
 
   guard() {
     let tripped = false;
-    const ok = (x) => x - x === 0;
     for (let i = 0; i < this.n; i++) {
       if (!ok(this.theta[i]) || !ok(this.omega[i]) || !ok(this.lat[i]) || !ok(this.latV[i]) || !ok(this.tau[i]) || !ok(this.latF[i]) || !ok(this.bearingZ[i]) || !ok(this.guideZ[i])) {
         this.theta[i] = 0; this.omega[i] = 0; this.lat[i] = this.offLat[i]; this.latV[i] = 0; this.tau[i] = 0; this.latF[i] = 0; this.bearingZ[i] = 0; this.guideZ[i] = 0;
@@ -791,3 +802,6 @@ export function createAction(sim) {
       throw new Error(`Unknown action type '${type}': add it to createAction in src/sim/actions.js`);
   }
 }
+
+/** A finite number. Module level: guard() runs every 256 substeps and a closure there would be a new object each time. */
+function ok(x) { return x - x === 0; }

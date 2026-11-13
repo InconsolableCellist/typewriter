@@ -8,12 +8,13 @@ const SITE_BASE = '/assets/';
 /** An asset's bytes: fetched in the browser, read from public/assets/ in Node. */
 export async function readAsset(name) {
   if (typeof process !== 'undefined' && process.versions?.node) {
-    // Specifiers held in variables so browser bundlers never try to resolve these Node modules.
-    const fsMod = 'node:fs/promises', urlMod = 'node:url';
+    // Specifiers held in variables so browser bundlers never try to resolve these Node modules, and the path is joined
+    // by hand: a `new URL(..., import.meta.url)` here would make Vite emit a hashed copy of every file it could match.
+    const fsMod = 'node:fs/promises', urlMod = 'node:url', pathMod = 'node:path';
     const { readFile } = await import(/* @vite-ignore */ fsMod);
     const { fileURLToPath } = await import(/* @vite-ignore */ urlMod);
-    const path = fileURLToPath(new URL(`../../public/assets/${name}`, import.meta.url));
-    return new Uint8Array(await readFile(path));
+    const { dirname, join } = await import(/* @vite-ignore */ pathMod);
+    return new Uint8Array(await readFile(join(dirname(fileURLToPath(import.meta.url)), '../../public/assets', name)));
   }
   const r = await fetch(`${SITE_BASE}${name}`);
   if (!r.ok) throw new Error(`asset ${name}: HTTP ${r.status}`);

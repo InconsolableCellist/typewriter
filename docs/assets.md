@@ -168,18 +168,18 @@ a larger size, so it would only pay for GPU memory, not download.
 | Set | Tile T (m) | `MeshPhysicalMaterial` beyond the maps | Use / notes |
 |---|---|---|---|
 | `powder_coat` | 0.08 | `clearcoat 0.2, clearcoatRoughness 0.42, ior 1.5` | enclosure (default). Orange peel + 2.8 % metallic flake |
-| `wrinkle_paint` | 0.06 | `ior 1.5` | enclosure alternative. 1.35 mm labyrinth |
+| `wrinkle_paint` | 0.06 | `ior 1.5` | enclosure alternative. 1.35 mm labyrinth. Not shipped |
 | `bead_blasted_aluminium` | 0.04 | — | satin bare aluminium; F0 (0.913, 0.922, 0.924) |
 | `nickel_polished` | 0.06 | `envMapIntensity 1.1` | bright plate; F0 (0.660, 0.609, 0.526) |
-| `nickel_worn` | 0.10 | — | rubbed through to brass, then steel; corrosion pits are dielectric. Also served as `nickel_plating_*` |
+| `nickel_worn` | 0.10 | — | rubbed through to brass, then steel; corrosion pits are dielectric. Not shipped |
 | `chrome_steel` | 0.06 | `envMapIntensity 1.15` | trim; F0 (0.549, 0.556, 0.554) |
-| `key_glass` | 0.03 | `clearcoat 1, clearcoatRoughness 0.02, ior 1.52` | key caps; multiply the legend over the card |
+| `key_glass` | 0.03 | `clearcoat 1, clearcoatRoughness 0.02, ior 1.52` | key caps; multiply the legend over the card. Not shipped |
 | `blued_spring_steel` | 0.05 | `anisotropy 0.55` | springs; rolling lines run along U |
-| `japanned_enamel` | 0.20 | `clearcoat 1, clearcoatRoughness 0.07, ior 1.52` | the casting; chips show metalness |
+| `japanned_enamel` | 0.20 | `clearcoat 1, clearcoatRoughness 0.07, ior 1.52` | the casting; chips show metalness. Not shipped |
 | `vulcanised_rubber` | 0.10 | — | feet, platen |
 | `green_felt` | 0.08 | `sheen 0.35, sheenRoughness 0.65, sheenColor (0.1,0.26,0.13)` | felt |
 | `paper_fibre` | 0.2159 | — | sheet |
-| `ribbon_cloth` | 0.0248 | `sheen 0.3, sheenRoughness 0.5` | 40 threads at the definition's pitch |
+| `ribbon_cloth` | 0.0248 | `sheen 0.3, sheenRoughness 0.5` | 40 threads at the definition's pitch. Not shipped |
 | `walnut_desk` | 2.2 | dielectric, `clearcoat` 0.45, `clearcoatRoughness` 0.2 | French-polished walnut boards, authored at 4096 px and written at 2048 (1.07 mm/texel): albedo box-filtered in linear light, normals averaged and renormalised, roughness taken from level 1 of its Toksvig chain; grain along U, one tile covers the desk so it never repeats |
 
 Set `metalness: 1` and `roughness: 1` whenever a map drives them (three multiplies), and leave `material.color` white so
@@ -187,6 +187,9 @@ measured F0 and base colour are not altered. `repeat = uvMetresPerUnit / T`: for
 that is `0.2 / T`.
 
 `pinstripe_border.png` is a separate 2048 x 2048 RGBA decal (a gold line border with scrolled corners).
+
+Sets marked "Not shipped" and the pinstripe decal are drawn by no machine, so `materials.py` and `pinstripe.py` write
+them to `tools/gen/out/textures/` (ignored by git), not to `public/`, which is deployed as it is.
 
 ### Crinkle paint for `element1971`: `element_crinkle_{albedo,normal,roughness,roughness_mips}.avif`
 1024 px, tiling every 0.08 m. Made by `tools/gen/element_crinkle.py` from `tools/gen/raw/element_crinkle_s71002.png` (Qwen-Image 2.1 through
@@ -212,7 +215,7 @@ tex.colorSpace = THREE.NoColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrappin
 
 ### Regenerate
 ```sh
-python3 tools/gen/materials.py [set ...]   # procedural sets, materials.json and the nickel_plating alias
+python3 tools/gen/materials.py [set ...]   # procedural sets and materials.json
 python3 tools/gen/gen_raw.py               # Qwen source for the pinstripe
 python3 tools/gen/pinstripe.py             # RGBA decal
 ```

@@ -8,6 +8,7 @@ __pycache__/
 tools/gen/eval/
 tools/gen/preview/
 tools/gen/raw/
+tools/gen/out/
 tools/blender/previews/
 tools/audio/proofs/
 

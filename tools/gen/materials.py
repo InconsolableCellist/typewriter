@@ -4,7 +4,8 @@ derived from a photograph's luminance. Heights are in metres at a known tile siz
 
   python3 tools/gen/materials.py [set ...]
 
-Writes public/assets/textures/<set>_{albedo,normal,roughness,metalness}.avif (2048 px, tileable) and
+Writes public/assets/textures/<set>_{albedo,normal,roughness,metalness}.avif (2048 px, tileable; sets no machine
+draws, UNSHIPPED, go to tools/gen/out/textures/ instead) and
 <set>_roughness_mips.avif, a mip atlas (see docs/assets.md) whose roughness grows with the normal variance lost at
 each level, so glints turn into broader highlights at distance instead of aliasing.
 
@@ -13,7 +14,6 @@ roughness is perceptual; metalness 0..1. numpy, scipy, Pillow only.
 """
 import json
 import os
-import shutil
 import sys
 
 import numpy as np
@@ -22,6 +22,15 @@ from scipy import ndimage
 from scipy.spatial import cKDTree
 
 OUT = os.environ.get("TEXTURE_OUT") or os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "public", "assets", "textures"))
+# Sets no machine draws are written outside public/ (not deployed, not committed): kept for previews and later use.
+UNSHIPPED = {"wrinkle_paint", "nickel_worn", "key_glass", "japanned_enamel", "ribbon_cloth"}
+OUT_UNSHIPPED = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "textures"))
+
+
+def out_dir(name):
+    d = OUT_UNSHIPPED if name in UNSHIPPED and not os.environ.get("TEXTURE_OUT") else OUT
+    os.makedirs(d, exist_ok=True)
+    return d
 SIZE = 2048
 MAX_SIZE = 2048   # largest file written; a set authored larger (walnut_desk) is filtered down to this
 
@@ -218,11 +227,12 @@ def write(name, albedo_linear, normal, rough, metal, max_size=MAX_SIZE):
         normal = downsample_n(normal)
         normal /= np.linalg.norm(normal, axis=2, keepdims=True)
         chain = chain[1:]
-    save(os.path.join(OUT, f"{name}_albedo.avif"), linear_to_srgb(albedo_linear), "albedo")
-    save(os.path.join(OUT, f"{name}_normal.avif"), normal * 0.5 + 0.5, "normal")
-    save(os.path.join(OUT, f"{name}_roughness.avif"), chain[0], "roughness")
-    save(os.path.join(OUT, f"{name}_metalness.avif"), metal if metal.ndim == 2 else np.mean(metal, axis=2), "metalness")
-    save(os.path.join(OUT, f"{name}_roughness_mips.avif"), mip_atlas(chain), "roughness_mips")
+    out = out_dir(name)
+    save(os.path.join(out, f"{name}_albedo.avif"), linear_to_srgb(albedo_linear), "albedo")
+    save(os.path.join(out, f"{name}_normal.avif"), normal * 0.5 + 0.5, "normal")
+    save(os.path.join(out, f"{name}_roughness.avif"), chain[0], "roughness")
+    save(os.path.join(out, f"{name}_metalness.avif"), metal if metal.ndim == 2 else np.mean(metal, axis=2), "metalness")
+    save(os.path.join(out, f"{name}_roughness_mips.avif"), mip_atlas(chain), "roughness_mips")
     print(f"{name}: rough {chain[0].mean():.3f}..L5 {chain[5].mean():.3f}, normal z mean {normal[..., 2].mean():.4f}, "
           f"metal {np.mean(metal):.3f}, albedo {albedo_linear.reshape(-1, 3).mean(axis=0).round(3)}", flush=True)
 
@@ -620,11 +630,6 @@ def main():
             f()
     with open(os.path.join(OUT, "materials.json"), "w") as fh:
         json.dump(PARAMS, fh, indent=1)
-    # The renderer still asks for nickel_plating_*: serve the worn nickel under that name too.
-    for suffix in ("albedo", "normal", "roughness", "metalness", "roughness_mips"):
-        src = os.path.join(OUT, f"nickel_worn_{suffix}.avif")
-        if os.path.exists(src):
-            shutil.copyfile(src, os.path.join(OUT, f"nickel_plating_{suffix}.avif"))
 
 
 if __name__ == "__main__":

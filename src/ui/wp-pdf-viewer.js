@@ -1,5 +1,5 @@
-// IBM's own manual, read in the page: the browser's PDF viewer in a frame, the scan loaded straight from bitsavers (the
-// file is not copied to this site). A browser that cannot show a PDF inside a page (most phones) gets a button that
+// IBM's own manuals, read in the page: the browser's PDF viewer in a frame, each scan loaded straight from bitsavers
+// (no file is copied to this site). One viewer serves them all: open({ url, title }) shows that scan. A browser that cannot show a PDF inside a page (most phones) gets a button that
 // opens it in a new tab instead, and so does the header always. While the viewer is open no key reaches the machine:
 // keys typed into the frame stay in the frame, and the rest stop here in the capture phase (Esc closes).
 const CSS = `
@@ -21,41 +21,54 @@ const CSS = `
 @media (max-width: 520px) { #wpPdf .win { height: calc(100vh - 16px); width: calc(100vw - 12px); } #wpPdf header .t { font-size: 11px; } }
 `;
 
-/** Builds the viewer (hidden). url: the scan; title: its name. Returns { open(), close(), get isOpen }. */
-export function installPdfViewer({ url, title }) {
+/**
+ * Builds the viewer (hidden). `url` and `title`, optional, are what open() shows when called with nothing.
+ * Returns { open({ url, title }?), close(), get isOpen, get url }.
+ */
+export function installPdfViewer({ url: defaultUrl = null, title: defaultTitle = 'IBM manual' } = {}) {
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
   const inline = navigator.pdfViewerEnabled !== false;     // undefined in older browsers: try the frame
   const root = document.createElement('div');
   root.id = 'wpPdf'; root.hidden = true;
-  root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', title);
+  root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true');
   root.innerHTML = `
     <div class="win">
       <header><span class="t"></span><a class="ext" target="_blank" rel="noopener">open in a new tab</a>
         <button class="close" type="button" title="close (Esc)" aria-label="close">✕</button></header>
       <div class="frame"><div class="fallback"><div><p></p><a class="ext" target="_blank" rel="noopener">open the scanned manual</a></div></div></div>
     </div>`;
-  root.querySelector('.t').textContent = `${title} · scanned copy at bitsavers.org`;
-  for (const a of root.querySelectorAll('a.ext')) a.href = url;
   const note = root.querySelector('.fallback p');
   note.textContent = inline
-    ? 'Loading the scan from bitsavers.org (about 19 MB). If it does not appear, open it in a new tab.'
-    : 'This browser cannot show a PDF inside the page. The scan opens in a new tab (about 19 MB, from bitsavers.org).';
+    ? 'Loading the scan from bitsavers.org (10 to 20 MB). If it does not appear, open it in a new tab.'
+    : 'This browser cannot show a PDF inside the page. The scan opens in a new tab (10 to 20 MB, from bitsavers.org).';
   document.body.appendChild(root);
   const frameBox = root.querySelector('.frame');
-  let frame = null, open = false;
+  let frame = null, open = false, current = null;
 
-  const show = () => {
+  /** Points the header, the links and the frame at a scan. The frame is (re)made only when the scan changes. */
+  const load = (url, title) => {
+    root.setAttribute('aria-label', title);
+    root.querySelector('.t').textContent = `${title} · scanned copy at bitsavers.org`;
+    for (const a of root.querySelectorAll('a.ext')) a.href = url;
+    if (!inline || url === current) return;
+    current = url;
+    frame?.remove();
+    // Made on the first open of each scan: nothing is fetched from bitsavers until a binder is opened.
+    frame = document.createElement('iframe');
+    frame.title = title;
+    frame.src = `${url}#view=FitH`;
+    frameBox.appendChild(frame);
+  };
+
+  const show = (doc) => {
+    const url = doc?.url ?? defaultUrl;
+    if (!url) return;
+    load(url, doc?.title ?? defaultTitle);
+    if (!inline) current = url;
     if (open) return;
     open = true;
-    if (inline && !frame) {
-      // The frame is made on the first open only: nothing is fetched from bitsavers until the binder is opened.
-      frame = document.createElement('iframe');
-      frame.title = title;
-      frame.src = `${url}#view=FitH`;
-      frameBox.appendChild(frame);
-    }
     root.hidden = false;
     requestAnimationFrame(() => root.classList.add('on'));
     document.activeElement?.blur?.();
@@ -77,5 +90,5 @@ export function installPdfViewer({ url, title }) {
     if (e.key === 'Escape' && !e.repeat) { e.preventDefault(); hide(); }
   }, true);
   window.addEventListener('keyup', (e) => { if (taken.delete(e.code)) e.stopImmediatePropagation(); }, true);
-  return { open: show, close: hide, get isOpen() { return open; } };
+  return { open: show, close: hide, get isOpen() { return open; }, get url() { return current; } };
 }

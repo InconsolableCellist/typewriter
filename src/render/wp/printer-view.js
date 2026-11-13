@@ -4,6 +4,7 @@
 // two-digit display, the petal faces and the leadscrew's thread are drawn at run time (no images in the model).
 import * as THREE from 'three';
 import { texturedUnitMaterial } from './units.js';
+import { batchMeshes, mergeStaticMeshes, partObjects } from './merge-static.js';
 
 export const PRINTER_URL = '/assets/models/wp_printer.glb';
 
@@ -18,7 +19,11 @@ const PANEL = { x0: -0.214, x1: 0.212, y0: 0.0653, y1: 0.1218 };
 const LED_X = [-0.203, -0.182, -0.160, -0.139, -0.117], LED_Y = [0.0981, 0.0766];
 const FONT = '"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif';
 
-const plastic = (color, roughness = 0.5, extra = {}) => new THREE.MeshPhysicalMaterial({ color, roughness, metalness: 0, clearcoat: 0.05, ...extra });
+// A moulded plastic. A clearcoat under about 0.1 cannot be seen and costs a second specular lobe and environment
+// lookup, so the plain plastics are standard; a part that asks for a real coat (the panel keys) is physical.
+const plastic = (color, roughness = 0.5, extra = {}) => ((extra.clearcoat ?? 0) >= 0.1
+  ? new THREE.MeshPhysicalMaterial({ color, roughness, metalness: 0, ...extra })
+  : new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, ...extra }));
 const metal = (color, roughness) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 1 });
 
 function canvas(w, h) {
@@ -64,7 +69,7 @@ function panelTexture() {
 }
 
 /** A key cap's top: its colour with the legend in the upper left, as the photographs show. */
-function keyTexture(colour, legend) {
+function keyFace(colour, legend) {
   const S = 128, c = canvas(S, S), g = c.getContext('2d');
   g.fillStyle = `#${new THREE.Color(colour).getHexString()}`; g.fillRect(0, 0, S, S);
   g.fillStyle = legend.length === 1 ? '#f4f4f0' : '#f2f2ee';
@@ -73,7 +78,33 @@ function keyTexture(colour, legend) {
     g.font = `20px ${FONT}`; g.textAlign = 'left';
     legend.split('\n').forEach((ln, k) => g.fillText(ln, S * 0.12, S * 0.24 + k * 21));
   }
-  return canvasTexture(c);
+  return c;
+}
+
+/**
+ * The eight key faces on one texture, so the keys share one material and draw as one batch. Each 128 px face sits in
+ * a 256 px cell padded with its own colour, so the small mip levels the panel is seen at do not bleed a neighbour's
+ * colour into it. remap(geometry, i) is a copy of a key's geometry with its uv (0 to 1 over the face) moved into cell i.
+ */
+function keyAtlas() {
+  const F = 128, C = 256, cols = 4, rows = 2, W = C * cols, H = C * rows;
+  const c = canvas(W, H), g = c.getContext('2d');
+  KEY_COLOURS.forEach((col, i) => {
+    const x = (i % cols) * C, y = Math.floor(i / cols) * C;
+    g.fillStyle = `#${new THREE.Color(col).getHexString()}`; g.fillRect(x, y, C, C);
+    g.drawImage(keyFace(col, KEY_LEGENDS[i]), x + (C - F) / 2, y + (C - F) / 2);
+  });
+  const tex = canvasTexture(c);
+  const remap = (geometry, i) => {
+    const geo = geometry.clone(), uv = geo.getAttribute('uv');
+    if (!uv) return geo;
+    const x0 = ((i % cols) * C + (C - F) / 2) / W, y0 = (Math.floor(i / cols) * C + (C - F) / 2) / H;
+    const out = new Float32Array(uv.count * 2);
+    for (let k = 0; k < uv.count; k++) { out[k * 2] = x0 + uv.getX(k) * F / W; out[k * 2 + 1] = y0 + uv.getY(k) * F / H; }
+    geo.setAttribute('uv', new THREE.BufferAttribute(out, 2));
+    return geo;
+  };
+  return { tex, remap };
 }
 
 /** Two seven-segment digits, red, on the dark window; blank when `text` is empty. */
@@ -225,7 +256,8 @@ export async function buildPrinter(size, mats, opts = {}) {
     wp_cartlogo: new THREE.MeshStandardMaterial({ map: cartridgeLogoTexture(), transparent: true, roughness: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }),
   };
   const nodes = {};
-  const keyMats = KEY_COLOURS.map((c, i) => plastic(0xffffff, 0.38, { map: keyTexture(c, KEY_LEGENDS[i]), clearcoat: 0.25, clearcoatRoughness: 0.4 }));   // the colour is in the map
+  const keys = keyAtlas();
+  const keyMat = plastic(0xffffff, 0.38, { map: keys.tex, clearcoat: 0.25, clearcoatRoughness: 0.4 });   // the colour is in the map
   const ledMats = LED_COLOURS.map((c) => new THREE.MeshPhysicalMaterial({ color: new THREE.Color(c).multiplyScalar(0.18), emissive: c, emissiveIntensity: 0, roughness: 0.15, clearcoat: 1, transmission: 0 }));
   gltf.scene.traverse((o) => {
     if (o.name.startsWith('printer_')) nodes[o.name] = o;
@@ -233,7 +265,7 @@ export async function buildPrinter(size, mats, opts = {}) {
     o.castShadow = o.receiveShadow = true;
     const key = /printer_key(\d)/.exec(o.name)?.[1] ?? /printer_key(\d)/.exec(o.parent?.name ?? '')?.[1];
     const led = /printer_led(\d)/.exec(o.name)?.[1];
-    if (key !== undefined) o.material = keyMats[+key];
+    if (key !== undefined) { o.material = keyMat; o.geometry = keys.remap(o.geometry, +key); }
     else if (led !== undefined) { o.material = ledMats[+led]; o.castShadow = false; }
     else o.material = byName[o.material?.name] ?? o.material;
     if (o.material === byName.wp_glass) { o.castShadow = false; o.renderOrder = 2; }
@@ -248,6 +280,12 @@ export async function buildPrinter(size, mats, opts = {}) {
   const feederGate = nodes.printer_feeder_gate, trays = [nodes.printer_tray0, nodes.printer_tray1].filter(Boolean);
   for (const o of [feederGate, ...trays]) if (o) nodes.printer_feeder.attach(o);
   const panelKeys = [...Array(8)].map((_, i) => nodes[`printer_key${i}`]);
+  // The keys, one mesh each, are drawn as one batch; each mesh stays, hidden, to be picked and pressed.
+  if (panelKeys.every((k) => k?.isMesh && !k.children.length && k.parent === panelKeys[0].parent)) {
+    const batch = batchMeshes(panelKeys, keyMat);
+    batch.name = 'printer_keys';
+    panelKeys[0].parent.add(batch);
+  }
   const leds = [...Array(10)].map((_, i) => nodes[`printer_led${i}`]);
   const rest = new Map();
   for (const o of [carrier, wheel, hammer, ...panelKeys]) rest.set(o, o.position.clone());
@@ -257,6 +295,7 @@ export async function buildPrinter(size, mats, opts = {}) {
     leds, display: nodes.printer_display, feeder: nodes.printer_feeder, body: nodes.printer_body, ribbonKnob,
     feederGate, trays,
   };
+  mergeStaticMeshes(group, partObjects(parts));
   const lead = P?.carrier?.lead ?? 0.02116, powerTravel = P?.power?.travel ?? 0.35;
   let lastLeds = -1, lastDigits = null;
   return {

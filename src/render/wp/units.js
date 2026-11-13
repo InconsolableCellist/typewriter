@@ -9,15 +9,18 @@ import { applyTextureSet } from '../materials.js';
  * the repeat is 0.2 m over the set's tile.
  */
 export function createUnitMaterials({ aniso = 8 } = {}) {
-  const plastic = (color, { clearcoat = 0.06, sheen = 0.2 } = {}) => new THREE.MeshPhysicalMaterial({ color, roughness: 0.6, metalness: 0, ior: 1.49, clearcoat, clearcoatRoughness: 0.45, sheen, sheenRoughness: 0.6, sheenColor: new THREE.Color(0.85, 0.85, 0.82) });
+  // The pebble plastics keep their sheen (the soft grazing-angle halo of the grain), which needs the physical material.
+  // Their clearcoat (0.06) was dropped: under about 0.1 it cannot be seen and costs a second specular lobe per light and
+  // a second environment lookup in every fragment. The metals have no physical feature, so they are standard.
+  const plastic = (color, { clearcoat = 0, sheen = 0.2 } = {}) => new THREE.MeshPhysicalMaterial({ color, roughness: 0.6, metalness: 0, ior: 1.49, clearcoat, clearcoatRoughness: 0.45, sheen, sheenRoughness: 0.6, sheenColor: new THREE.Color(0.85, 0.85, 0.82) });
   const mats = {
     pearl: plastic(0xe4dfd0),                         // Pearl White covers (HW 1.8)
     pebble: plastic(0xb3b0a7),                        // Pebble Gray bases and trim: a light grey (PH inside.JPG, BRO p.18)
     dark: plastic(0x232220, { sheen: 0.1 }),          // bezels, panels, slots
     keycap: plastic(0xe9e5d8, { clearcoat: 0.12, sheen: 0.05 }),
     rubber: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }),
-    metal: new THREE.MeshPhysicalMaterial({ color: 0x9c9c98, roughness: 0.35, metalness: 1 }),
-    chrome: new THREE.MeshPhysicalMaterial({ color: 0xd6d7d8, roughness: 0.12, metalness: 1 }),
+    metal: new THREE.MeshStandardMaterial({ color: 0x9c9c98, roughness: 0.35, metalness: 1 }),
+    chrome: new THREE.MeshStandardMaterial({ color: 0xd6d7d8, roughness: 0.12, metalness: 1 }),
     glass: new THREE.MeshPhysicalMaterial({ color: 0x111312, roughness: 0.08, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03, ior: 1.52 }),
     label: new THREE.MeshStandardMaterial({ color: 0xc9c2ad, roughness: 0.8 }),
     led: new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0x000000, roughness: 0.4 }),

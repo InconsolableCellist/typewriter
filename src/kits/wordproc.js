@@ -244,13 +244,17 @@ export async function mount(ctx) {
     crt.setPower(devices.power.on);
     crt.update(dt);
     atmosphere.update(dt);
+    stage.motion.observe({ state: sim.state, layout: sim.layout, soft: printer.soft, easing: atmosphere.environment.easing, glow: atmosphere.glow });
     stage.composer.render();
     markers.update();
     screenCard.render();
     frameTimes[nFt++ % frameTimes.length] = performance.now() - t0;
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
+    stage.govern(now);
   }
   requestAnimationFrame(loop);
+  // The first sound's downloads (worklet chunk, sprites), at idle after the first frame.
+  import('./audio-prefetch.js').then((m) => m.prefetchAudioWhenIdle(machine, { worklet: !printer.sim.isMock && !params.has('localsim') })).catch(() => {});
 
   window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, packet, shelf, pdfViewer, reader, atmosphere, environment: atmosphere.environment, ambience: atmosphere.ambience };
   return window.__tw;

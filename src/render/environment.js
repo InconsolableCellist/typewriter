@@ -1,5 +1,7 @@
 // The room around the machine: time of day, weather, lightning, and a banker's lamp on the desk that comes on when it is dark.
 // window.__tw.environment: setTime(name or 0..1), setWeather(name), setLamp(on), flash(strength), onChange(fn).
+// A machine whose desk layout says `lamp: false` (the word processor) gets the room without the lamp or its overhead:
+// the dark is just dark, and the kit lights it itself (the CRT's glow, src/kits/wp/atmosphere.js).
 // Everything lighting-related is set here each frame from a smoothed state, so a change eases in and "day, clear" is exactly the base look.
 import * as THREE from 'three';
 import { setEnvTint, setContactDisc } from './look.js';
@@ -131,9 +133,16 @@ function installBackgroundTint() {
 
 const lerp = (a, b, k) => a + (b - a) * k;
 
-export function installEnvironment({ stage, interaction, panel, machine }) {
+/**
+ * stage: createScene()'s; machine: the definition. interaction (a picker for the lamp's chain) and panel (with
+ * bindEnvironment) are optional. A desk layout with an `extent` refits the key light's shadow as the sun moves.
+ */
+export function installEnvironment({ stage, interaction = null, panel = null, machine }) {
+  const hasLamp = machine?.deskLayout?.lamp !== false;
   const lampX = deskSpot(machine, 'lamp', LAMP_AT, -1).x;
   const { scene, renderer, key, rim, look } = stage;
+  const shadowExtent = machine?.deskLayout?.extent && stage.fitShadow ? machine.deskLayout.extent : null;
+  const fittedKey = new THREE.Vector3().copy(key.position);
   const bgTint = installBackgroundTint();
 
   // State the sliders drive: `target` jumps, `cur` eases toward it.
@@ -151,32 +160,35 @@ export function installEnvironment({ stage, interaction, panel, machine }) {
   const nearestTime = () => KEYS.reduce((best, k) => (Math.abs(k[0] - timeValue) < Math.abs(best[0] - timeValue) ? k : best))[1];
   const emit = () => { const s = { time: nearestTime(), weather, lamp: lampOn }; for (const f of listeners) { try { f(s); } catch (e) { console.warn(e); } } };
 
-  // The lamp.
-  const { lamp, glass, opal, bulbMat, bulb, chainPivot, ends, proxies } = buildLamp();
-  lamp.position.set(lampX, 0, LAMP_AT.z);
-  lamp.rotation.y = LAMP_YAW;
-  lamp.scale.setScalar(LAMP_SCALE);
-  setContactDisc(lampX, LAMP_AT.z, 0.069 * LAMP_SCALE);   // the base's outer radius
-  scene.add(lamp);
-  // Aimed from the bulb to the middle of the machine, wide enough for the pool to take in the keyboard and the sheet.
-  const spot = new THREE.SpotLight(0xffd2a0, 0, 2.2, 0.82, 0.8, 1);
-  lamp.updateMatrixWorld(true);
-  bulb.getWorldPosition(spot.position);
-  spot.target.position.set(0.02, 0.07, 0.06);
-  spot.castShadow = true;
-  spot.shadow.mapSize.set(1024, 1024);
-  spot.shadow.camera.near = 0.04; spot.shadow.camera.far = 1.3;
-  spot.shadow.bias = -0.0006; spot.shadow.normalBias = 0.0018;
-  spot.shadow.autoUpdate = false;
-  spot.shadow.needsUpdate = true;
-  scene.add(spot, spot.target);
-  // The overhead: unshadowed and soft, on the typing area only, so the lamp keeps its warm pool on the desk.
-  const overhead = new THREE.SpotLight(0xffe6c8, 0, 1.6, 0.55, 1, 2);
-  overhead.position.set(0, 0.72, 0.07);
-  overhead.target.position.set(0, 0.12, 0.03);
-  scene.add(overhead, overhead.target);
+  // The lamp, unless the desk has none.
+  const { lamp, glass, opal, bulbMat, bulb, chainPivot, ends, proxies } = hasLamp ? buildLamp() : {};
+  let spot = null, overhead = null;
+  if (hasLamp) {
+    lamp.position.set(lampX, 0, LAMP_AT.z);
+    lamp.rotation.y = LAMP_YAW;
+    lamp.scale.setScalar(LAMP_SCALE);
+    setContactDisc(lampX, LAMP_AT.z, 0.069 * LAMP_SCALE);   // the base's outer radius
+    scene.add(lamp);
+    // Aimed from the bulb to the middle of the machine, wide enough for the pool to take in the keyboard and the sheet.
+    spot = new THREE.SpotLight(0xffd2a0, 0, 2.2, 0.82, 0.8, 1);
+    lamp.updateMatrixWorld(true);
+    bulb.getWorldPosition(spot.position);
+    spot.target.position.set(0.02, 0.07, 0.06);
+    spot.castShadow = true;
+    spot.shadow.mapSize.set(1024, 1024);
+    spot.shadow.camera.near = 0.04; spot.shadow.camera.far = 1.3;
+    spot.shadow.bias = -0.0006; spot.shadow.normalBias = 0.0018;
+    spot.shadow.autoUpdate = false;
+    spot.shadow.needsUpdate = true;
+    scene.add(spot, spot.target);
+    // The overhead: unshadowed and soft, on the typing area only, so the lamp keeps its warm pool on the desk.
+    overhead = new THREE.SpotLight(0xffe6c8, 0, 1.6, 0.55, 1, 2);
+    overhead.position.set(0, 0.72, 0.07);
+    overhead.target.position.set(0, 0.12, 0.03);
+    scene.add(overhead, overhead.target);
+  }
 
-  if (interaction) {
+  if (interaction && hasLamp) {
     const part = () => ({ kind: 'lamp', label: `Banker's lamp (${lampOn ? 'on' : 'off'}): click to switch`, cursor: 'pointer', visual: () => null, onClick: () => { api.setLamp(!lampOn); swing.vz += 4.5; } });
     for (const object of proxies) interaction.picker.add({ object, part });
   }
@@ -211,11 +223,11 @@ export function installEnvironment({ stage, interaction, panel, machine }) {
       if (t === undefined || t === timeValue) return;
       timeValue = t;
       const dark = isDark(t);
-      if (dark !== wasDark) { wasDark = dark; api.setLamp(dark, true); }
+      if (dark !== wasDark) { wasDark = dark; if (hasLamp) api.setLamp(dark, true); }
       retarget(); emit();
     },
     setWeather(name) { if (!WEATHER[name] || name === weather) return; weather = name; retarget(); emit(); },
-    setLamp(on, silent) { lampOn = !!on; if (on) spot.shadow.needsUpdate = true; if (!silent) emit(); },
+    setLamp(on, silent) { if (!hasLamp) return; lampOn = !!on; if (on) spot.shadow.needsUpdate = true; if (!silent) emit(); },
     /** Lightning through the window side: a two or three stroke flicker over a few hundred ms. strength 0..1. */
     flash(strength = 1) {
       const s = Math.min(1.2, Math.max(0, strength));
@@ -230,7 +242,12 @@ export function installEnvironment({ stage, interaction, panel, machine }) {
     get time() { return nearestTime(); },
     get timeValue() { return timeValue; },
     presets: PRESET_T,
-    lampObject: lamp,
+    lampObject: lamp ?? null,
+    hasLamp,
+    /** The room's own light now, against a clear day (1): low at night and in a storm. Smoothed, without the flashes. */
+    get ambient() { return cur.env / TIME.day.env; },
+    /** How far into the dark the time of day is, 0 (day) to 1 (night), smoothed. */
+    get dark() { return cur.dark; },
     get weather() { return weather; },
     get lampOn() { return lampOn; },
     get flashValue() { return flashV; },
@@ -240,6 +257,7 @@ export function installEnvironment({ stage, interaction, panel, machine }) {
     get chainAngle() { return Math.hypot(swing.x, swing.z); },
     /** The desk under the lamp jumped by this world x velocity: the chain's bob stays behind. */
     deskKick(dvX) {
+      if (!hasLamp) return;
       const l = dvX * Math.cos(LAMP_YAW) / CHAIN_LENGTH, n = dvX * Math.sin(LAMP_YAW) / CHAIN_LENGTH;
       swing.vz -= l; swing.vx += n;
     },
@@ -252,7 +270,7 @@ export function installEnvironment({ stage, interaction, panel, machine }) {
       c.exposure = lerp(c.exposure, t.exposure, k);
       c.envTint.lerp(t.envTint, k); c.bgTint.lerp(t.bgTint, k); c.keyPos.lerp(t.keyPos, k);
       c.keyColor.lerp(t.keyColor, k); c.rimColor.lerp(t.rimColor, k);
-      if (swing.x || swing.z || swing.vx || swing.vz) {
+      if (hasLamp && (swing.x || swing.z || swing.vx || swing.vz)) {
         const g = 9.8 / CHAIN_LENGTH, h = Math.min(dt, 0.033);
         swing.vx += (-g * Math.sin(swing.x) - 2.2 * swing.vx) * h; swing.vz += (-g * Math.sin(swing.z) - 2.2 * swing.vz) * h;
         swing.x += swing.vx * h; swing.z += swing.vz * h;
@@ -285,6 +303,7 @@ export function installEnvironment({ stage, interaction, panel, machine }) {
       key.color.copy(c.keyColor);
       key.position.copy(c.keyPos);
       key.updateMatrixWorld();
+      if (shadowExtent && key.position.distanceToSquared(fittedKey) > 1e-6) { fittedKey.copy(key.position); stage.fitShadow(shadowExtent); }
       if (keyWorld) keyWorld.copy(key.position).sub(key.target.position).normalize();
       rimColor.copy(c.rimColor).lerp(flashRim, Math.min(1, flashV * 2));
       rim.color.copy(rimColor);
@@ -292,6 +311,7 @@ export function installEnvironment({ stage, interaction, panel, machine }) {
       renderer.toneMappingExposure = look.exposure * c.exposure;
 
       // Lamp output: the spot, the glowing shade, the bulb.
+      if (!hasLamp) return;
       const l = c.lamp;
       spot.intensity = l * SPOT_INTENSITY;
       overhead.intensity = c.dark * OVERHEAD_INTENSITY;

@@ -135,7 +135,7 @@ export class SceneWatch {
     if (o.isBatchedMesh) {
       const t = o._matricesTexture;
       if (t) this._buffer(t, t.image.data, t.version); else geo.push(NaN);   // unknown internals: always changed
-      geo.push(o._multiDrawCount ?? 0);
+      geo.push(o.instanceCount ?? o._instanceInfo?.length ?? 0);   // not _multiDrawCount: that follows each render's culling
     }
   }
 

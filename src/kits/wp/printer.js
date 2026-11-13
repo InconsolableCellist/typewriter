@@ -87,7 +87,10 @@ export async function installPrinter({ stage, machine, geometry, mats, group, si
   // lifts the cover to its stop, past upright, and lets go there, so it rests open.
   const P = machine.printer, L = sim.layout;
   const NAMES = { start: 'START', stop: 'STOP', printTest: 'PRINT TEST', cancel: 'CANCEL', load: 'LOAD', release: 'RELEASE', paperUp: 'PAPER UP', paperDown: 'PAPER DOWN' };
-  const hold = (dof, i, target, ms, opts = {}) => { const g = sim.grab(dof, i, { target, ...opts }); setTimeout(() => sim.release(g), ms); };
+  // A hand lets go after `ms` of the mechanism's own time, so a slow frame cannot cut a press or a lift short.
+  const releases = [];
+  const releaseAfter = (g, ms) => releases.push({ g, at: sim.state[L.time] + ms / 1000 });
+  const hold = (dof, i, target, ms, opts = {}) => releaseAfter(sim.grab(dof, i, { target, ...opts }), ms);
   controls.panelKeys.forEach((mesh, i) => {
     const name = P.panel.keys[i];
     pickables.push({ object: mesh, part: () => ({ label: `Printer: ${NAMES[name]}`, onClick: () => hold('panelKey', i, P.panel.travel * 1.3, 160) }) });
@@ -111,7 +114,7 @@ export async function installPrinter({ stage, machine, geometry, mats, group, si
       ribTarget = Math.max(ribTarget, motorAngle()) + d;
       sim.moveGrab(ribGrab, ribTarget);
     },
-    onDragEnd: () => { if (ribGrab !== null) { const g = ribGrab; ribGrab = null; setTimeout(() => sim.release(g), 120); } },
+    onDragEnd: () => { if (ribGrab !== null) { const g = ribGrab; ribGrab = null; releaseAfter(g, 120); } },
   }) });
   // The sheet feeder's gate: automatic or manual feed, the same flag as the panel's button.
   let gateA = feeder.on ? 0 : GATE_MANUAL;
@@ -135,6 +138,7 @@ export async function installPrinter({ stage, machine, geometry, mats, group, si
       const t = sim.state[sim.layout.time];
       const dt = lastT === null ? 0 : Math.min(0.25, Math.max(0, t - lastT));
       lastT = t;
+      for (let i = releases.length - 1; i >= 0; i--) if (t >= releases[i].at) { sim.release(releases[i].g); releases.splice(i, 1); }
       if (dt > 0) soft.step(dt, sim.state, sim.layout);
       const env = soft.env(), key = JSON.stringify(env);
       if (key !== lastEnv) { lastEnv = key; sim.setEnv(env); }

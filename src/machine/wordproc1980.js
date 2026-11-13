@@ -57,7 +57,10 @@ export default {
     extent: { halfX: 1.05, halfZ: 0.75 },      // shadow frustum and contact-shade bounds
     freshStack: { x: -0.76, z: 0.36 },          // in front of the printer
     pagePile: { x: -0.48, z: 0.36 },
-    ashtray: { on: 'diskette', at: [0, SIZE.diskette[1], 0.05] },
+    // On the diskette unit's top: the operator's manual toward the front, a little askew and just over the front edge,
+    // and the ashtray behind it, clear of it (tests/wp_manual.test.js).
+    manual: { on: 'diskette', at: [0.002, SIZE.diskette[1], 0.055], yaw: 0.035 },
+    ashtray: { on: 'diskette', at: [0, SIZE.diskette[1], -0.16] },
     disketteHolder: { x: 0.80, z: -0.05 },
     lamp: false,                                // no room for the desk lamp
     cablesOut: 'back',

@@ -10,6 +10,12 @@
 import { WAC } from '../sim/wp/ports.js';
 import { fanSteadyOmega } from '../sim/wp/station-mech.js';
 
+/**
+ * The hum loops play this much over the recording's balance. At the recorded -50 dBFS the idle machine, mostly a
+ * 100-120 Hz hum and fan air, was inaudible on laptop and phone speakers (the owner heard only the keys); in the room the
+ * fans and motors are plainly there. The lift touches only the two loops, not the steps, seeks, head loads or keys.
+ */
+export const HUM_LIFT_DB = 12;
 export const BED_DBFS = -50;    // the idle machine's RMS at the operator's chair, as wp-synth's assumed idle level
 /** Ratios measured in the recording (tools/audio/wp_levels.json), in dB against the idle machine's RMS. */
 export const RECORDED = {
@@ -72,6 +78,7 @@ export class WpSampler {
     if (D) { const d = D.blank(); D.steady(d); this.wmRun = d.wm; }
     this.fanRun = S ? fanSteadyOmega(S.def.fan) : 1;
     this.loops = [];
+    this.humLift = 10 ** (HUM_LIFT_DB / 20);
     // The recorded machine ran on a 50 Hz line (its hum is at 100 Hz); the AC motors' hum and speeds scale with the line,
     // so the motors' band plays at this machine's line frequency over the recording's.
     const mains = this.sim.m.station?.mainsHz ?? 60;
@@ -188,7 +195,7 @@ export class WpSampler {
         if (L.tg === 0 && L.g < 1e-5) { L.g = 0; continue; }
         L.g += (L.tg - L.g) * SMOOTH;
         const k = ph | 0, a = pcm[L.o + k];
-        const y = (a + (pcm[L.o + k + 1] - a) * (ph - k)) * L.g * this.unit;
+        const y = (a + (pcm[L.o + k + 1] - a) * (ph - k)) * L.g * this.unit * this.humLift;
         if (L.bus === 1) ys += y; else yd += y;
       }
       outL[i] += sL * ys + dL * yd;

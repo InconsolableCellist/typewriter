@@ -11,7 +11,7 @@ import { WordprocSim } from '../src/sim/wp/index.js';
 import { WpAudioEngine } from '../src/audio/wp-engine.js';
 import { LEVEL } from '../src/audio/wp-synth.js';
 import { createMechanism, createAudioEngine } from '../src/sim/host-factory.js';
-import { BED_DBFS, RECORDED } from '../src/audio/wp-sampler.js';
+import { BED_DBFS, RECORDED, HUM_LIFT_DB } from '../src/audio/wp-sampler.js';
 import { KeyVoicer, keyClass, BED_DBFS as KEY_BED_DBFS, PRESS_OVER_BED_DB, V_PRESS } from '../src/audio/wp-keys.js';
 import { KeyboardHost } from '../src/kits/wp/keyboard-host.js';
 import { KEY_BY_POS } from '../src/machine/wp-keys.js';
@@ -267,6 +267,7 @@ const level = (o, from = 0, to = o.L.length) => {
 
 test('the recorded sprite plays from the mechanism: steps, a seek and the head load, at the recorded levels', (t) => {
   const r = new Rig({ samples: true });
+  r.eng.sampler.humLift = 1;   // the recording's own balance (HUM_LIFT_DB lifts only the loops, for small speakers)
   r.render(1.0);
   assert.deepEqual(r.eng.sampler.counts, {}, 'nothing moves, nothing is triggered');
   const idle = level(r.render(0.5));
@@ -303,6 +304,7 @@ test('the recorded sprite plays from the mechanism: steps, a seek and the head l
 
 test('a strike stands over the idle machine as documented, and over a seek', (t) => {
   const r = new Rig({ samples: true });
+  r.eng.sampler.humLift = 1;
   r.render(1.0);
   const idle = level(r.render(0.5));
   let pk = -200;
@@ -380,4 +382,14 @@ test('the keyboard mechanism sounds its presses and releases, at the level measu
   const p = median('press'), rl = median('release');
   assert.ok(Math.abs(p - (BED_DBFS + PRESS_OVER_BED_DB)) < 2, `press ${p.toFixed(1)} dBFS`);
   assert.ok(rl < p - 2 && rl > BED_DBFS + RECORDED.keyReleasePeak - 4, `release ${rl.toFixed(1)} dBFS`);
+});
+
+test('the hum loops are lifted for small speakers, and only they', () => {
+  const r = new Rig({ samples: true });
+  r.render(1.0);
+  const lifted = level(r.render(0.5)).rms;
+  r.eng.sampler.humLift = 1;
+  r.render(0.3);
+  const plain = level(r.render(0.5)).rms;
+  assert.ok(Math.abs(lifted - plain - HUM_LIFT_DB) < 2, `lift ${(lifted - plain).toFixed(1)} dB`);
 });

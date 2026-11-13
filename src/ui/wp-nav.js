@@ -26,7 +26,7 @@ export function runAction(nav, action) {
 }
 
 /** Builds the arrows, the bar and the hover label. Returns { hint(text), show(hit, e) }. */
-export function installNavUi({ nav, highlight }) {
+export function installNavUi({ nav, highlight, markers = null }) {
   const make = (tag, attrs, html = '') => { const el = document.createElement(tag); Object.assign(el, attrs); el.innerHTML = html; return el; };
   const edge = (side) => {
     const b = make('button', { className: `nav-edge ${side}`, type: 'button', tabIndex: -1 }, `<span class="arrow">${side === 'left' ? '‹' : '›'}</span><span class="name"></span>`);
@@ -63,6 +63,7 @@ export function installNavUi({ nav, highlight }) {
       if (s.current && !w.free) b.setAttribute('aria-current', 'true');
       stations.appendChild(b);
     }
+    if (markers) stations.appendChild(button('◉', 'way markers: the circles that move the view (click to hide or show)', () => { markers.setShown(!markers.shown); render(nav.where()); }, 'marks', markers.shown));
     stations.appendChild(button('◎', 'free view: drag to orbit, right-drag or two fingers to pan, wheel or pinch to zoom (Ctrl+Shift+↑)', () => nav.toggleFree(), 'free', w.free));
     bar.appendChild(stations);
     const items = make('div', { className: 'row items' });
@@ -101,7 +102,7 @@ export function installNavUi({ nav, highlight }) {
       tip.style.display = label ? 'block' : 'none';
       if (label) { tip.textContent = label; tip.style.left = `${e.clientX + 14}px`; tip.style.top = `${e.clientY + 12}px`; }
     }
-    if (e.target?.style) e.target.style.cursor = !hit ? '' : hit.kind === 'nav' ? 'zoom-in' : 'pointer';
+    if (e.target?.style) e.target.style.cursor = !hit || hit.kind === 'nav' ? '' : 'pointer';
   };
   // A move clears the hover: what was under the pointer is somewhere else now.
   nav.onChange(() => { highlight?.(null); if (tip) tip.style.display = 'none'; });

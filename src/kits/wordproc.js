@@ -30,7 +30,9 @@ import { buildDiskette } from '../render/wp/diskette-view.js';
 import { buildStation, buildDisplay } from '../render/wp/station-view.js';
 import { buildPrinter } from '../render/wp/printer-view.js';
 import { ViewNav, viewSpec, poseOf, fallbackBoxes, LEGACY_CAMERAS } from '../interact/wp-views.js';
-import { makePicker, installWpPointer, makeHighlight } from '../interact/wp-pointer.js';
+import { makePicker, installWpPointer } from '../interact/wp-pointer.js';
+import { WayMarkers } from '../ui/wp-markers.js';
+import { createPostits } from '../render/wp/postits.js';
 import { installNavUi } from '../ui/wp-nav.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 
@@ -146,6 +148,13 @@ export async function mount(ctx) {
     paperPath: [units.printer],
   };
   for (const [n, objs] of Object.entries(named)) boxes[n] = boxOf(objs) ?? boxes[n];
+  // The operator's sticky notes, on the desk right of the keyboard, in front of the diskette unit.
+  const kb = boxes.keyboard, dk = boxes.diskette, deskY = kb.min[1];
+  const nx = Math.max(kb.max[0], dk.min[0]) + 0.055, nz = Math.max(dk.max[2], kb.min[2]) + 0.075;
+  const notes = createPostits({ scene: stage.scene, renderer: stage.renderer, spots: [
+    [nx, deskY, nz + 0.07, 0.10], [nx + 0.09, deskY, nz + 0.035, -0.06], [nx + 0.18, deskY, nz + 0.075, 0.07],
+  ] });
+  boxes.notes = notes.box;
   const startId = viewSpec(params.get('view'))?.id ?? LEGACY_CAMERAS[params.get('cam') ?? machine.defaultCamera] ?? 'desk';
   const frame = (id) => poseOf(id, boxes, camera.aspect, camera.fov);
   stage.resize(window.innerWidth, window.innerHeight);
@@ -158,9 +167,10 @@ export async function mount(ctx) {
     cameraPose: () => ({ position: camera.position.toArray(), target: orbit.target.toArray() }),
     context: { coverOpen: () => sim.state[sim.layout.cover] > machine.printer.cover.open / 2 },
   });
-  const highlight = makeHighlight(stage.scene);
-  const navUi = installNavUi({ nav, highlight });
-  const pickAt = makePicker({ camera, canvas, keys: parts.keyboard.keys, pickables, nav, boxes: () => boxes, solids: () => Object.values(units) });
+  // The camera moves only by the way markers, the bar and the edge arrows: a click on an object works it or nothing.
+  const markers = new WayMarkers({ nav, boxes: () => boxes, camera, canvas });
+  const navUi = installNavUi({ nav, highlight: null, markers });
+  const pickAt = makePicker({ camera, canvas, keys: parts.keyboard.keys, pickables, nav: { targets: () => [] }, boxes: () => boxes, solids: () => Object.values(units) });
   installWpPointer({
     canvas, orbit, nav, press: (i, f) => keyboard.press(i, f), hint: navUi.hint, show: navUi.show,
     pick: (e) => { const h = pickAt(e); if (h?.kind === 'key') h.label = keyLabel(h.key); return h; },
@@ -192,6 +202,7 @@ export async function mount(ctx) {
     crt.update(dt);
     spill.intensity = 0.02 + 0.25 * crt.litFraction;
     stage.composer.render();
+    markers.update();
     screenCard.render();
     frameTimes[nFt++ % frameTimes.length] = performance.now() - t0;
     window.__frameTimes = frameTimes; window.__frameCount = nFt;
@@ -207,7 +218,7 @@ function buildPanel(ctx, feeder, screenCard) {
   const el = document.getElementById('panel');
   el.innerHTML = `
     <div class="actions"><button id="a-feeder" aria-pressed="true" title="the printer's sheet feeder lays each sheet in; off, click the fresh paper to lay one">sheet feeder</button><button id="a-screen" title="the Screen card: the display's picture, whatever the camera shows">screen card</button><button id="a-keys" title="how the PC keyboard maps onto the machine's">keys</button></div>
-    <div class="note" id="keysNote" hidden>Letters, digits and punctuation: as marked · Alt: CODE · AltGr: ENTER · Enter: RETURN · Esc: CANCL ·
+    <div class="note" id="keysNote" hidden>Letters, digits and punctuation: as marked · Alt: CODE · AltGr (right Alt) or keypad Enter: ENTER · Enter: RET · Esc: CANCL ·
       F1 REQST · F2 PRINT · F3 FIND · F4 GO TO · F5 MOVE · F6 LINE ADJ · F7 SPELL · F8 CHG FMT · F9 GET · F10 PAGE END ·
       Delete: DEL · End: END · Insert: MSG · PageDown / PageUp: screen down / up · keys with no PC match: click them ·
       Views (the machine never sees these): Ctrl+Shift+← / → next station · Ctrl+Shift+↓ back · Ctrl+Shift+↑ free view · or keypad 4 / 6, 2, 5</div>
@@ -223,7 +234,7 @@ function buildPanel(ctx, feeder, screenCard) {
   picker.value = ctx.machine.id;
   picker.addEventListener('change', () => ctx.onPick(picker.value));
   const hint = document.getElementById('hint');
-  if (hint) hint.textContent = 'type on your keyboard · Alt = CODE, AltGr = ENTER, Esc = CANCL · the edge arrows and the bar move the view · ◎ free view';
+  if (hint) hint.textContent = 'type on your keyboard · right Alt = ENTER, Enter = RET, left Alt = CODE, Esc = CANCL · the circles, the edge arrows and the bar move the view · ◉ hides the circles · ◎ free view';
   return el;
 }
 

@@ -54,7 +54,7 @@ test('stations: a row of three units under the desk, the arrows walk it and undo
 });
 
 test('focus items: each station has its own, Back returns to the station, and the old presets map to views', () => {
-  assert.deepEqual(STATIONS.computer.items, ['screen', 'keyboard', 'controls', 'rear']);
+  assert.deepEqual(STATIONS.computer.items, ['screen', 'keyboard', 'notes', 'controls', 'rear']);
   assert.deepEqual(STATIONS.diskettes.items, ['slots', 'levers', 'file']);
   assert.deepEqual(STATIONS.printer.items, ['panel', 'mechanism', 'paperPath']);
   for (const [s, st] of Object.entries(STATIONS)) {
@@ -131,7 +131,7 @@ test('free view: switching on leaves the camera where it is; switching off glide
 test('click targets: the smallest box under the click, focus items before stations', () => {
   const { nav } = makeNav('computer');
   const targets = nav.targets();
-  assert.deepEqual(targets.filter((t) => t.kind === 'focus').map((t) => t.id), ['computer/screen', 'computer/keyboard', 'computer/controls', 'computer/rear']);
+  assert.deepEqual(targets.filter((t) => t.kind === 'focus').map((t) => t.id), ['computer/screen', 'computer/keyboard', 'computer/notes', 'computer/controls', 'computer/rear']);
   assert.deepEqual(targets.filter((t) => t.kind === 'station').map((t) => t.id), ['printer', 'diskettes']);
   const centre = (b) => b.min.map((v, i) => (v + b.max[i]) / 2);
   assert.equal(targetAt(centre(boxes.screen), targets, boxes).id, 'computer/screen');

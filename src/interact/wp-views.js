@@ -14,7 +14,7 @@ const deg = Math.PI / 180;
 export const STATIONS = {
   desk: { label: 'Desk', boxes: ['printer', 'station', 'display', 'keyboard', 'diskette'], view: { azim: 0, elev: 30 * deg, margin: 1.1 }, left: 'printer', right: 'diskettes', items: ['paper'] },
   printer: { label: 'Printer', boxes: ['printer'], view: { azim: 0, elev: 26 * deg, margin: 1.1 }, left: null, right: 'computer', items: ['panel', 'mechanism', 'paperPath'] },
-  computer: { label: 'Computer', boxes: ['station', 'display', 'keyboard'], view: { azim: 0, elev: 14 * deg, margin: 1.08 }, left: 'printer', right: 'diskettes', items: ['screen', 'keyboard', 'controls', 'rear'] },
+  computer: { label: 'Computer', boxes: ['station', 'display', 'keyboard'], view: { azim: 0, elev: 14 * deg, margin: 1.08 }, left: 'printer', right: 'diskettes', items: ['screen', 'keyboard', 'notes', 'controls', 'rear'] },
   diskettes: { label: 'Diskettes', boxes: ['diskette', 'file'], view: { azim: 0, elev: 16 * deg, margin: 1.1 }, left: 'computer', right: null, items: ['slots', 'levers', 'file'] },
 };
 
@@ -22,6 +22,7 @@ export const STATIONS = {
 export const FOCUS = {
   screen: { label: 'Screen', boxes: ['screen'], view: { azim: 0, elev: 6 * deg, margin: 1.5, minDistance: 0.32 } },
   keyboard: { label: 'Keyboard', boxes: ['keyboard'], view: { azim: 0, elev: 46 * deg, margin: 1.06 } },
+  notes: { label: 'Notes', boxes: ['notes'], view: { azim: 0, elev: 70 * deg, margin: 1.12, minDistance: 0.3 } },
   controls: { label: 'Controls', boxes: ['controls'], view: { azim: 20 * deg, elev: 12 * deg, margin: 1.5, minDistance: 0.34 } },
   rear: { label: 'Rear', boxes: ['station', 'display'], view: { azim: 180 * deg, elev: 20 * deg, margin: 1.12 } },
   slots: { label: 'Slots', boxes: ['slots'], view: { azim: 0, elev: 8 * deg, margin: 1.25, minDistance: 0.3 } },
@@ -81,6 +82,8 @@ export function fallbackBoxes(geometry, machine) {
     panel: part(u.printer, [0.72, 0.98], [0.75, 1], [0.6, 1]),
     mechanism: part(u.printer, [0.15, 0.85], [0.5, 1], [0.2, 0.75]),
     paperPath: unionBox([u.printer, part(u.printer, [0.1, 0.9], [1, 2.3], [0, 0.4])]),
+    // The sticky notes right of the keyboard (src/render/wp/postits.js; the kit replaces this with their own box).
+    notes: box([Math.max(u.keyboard.max[0], u.diskette.min[0]) + 0.01, 0, u.diskette.max[2] + 0.04], [Math.max(u.keyboard.max[0], u.diskette.min[0]) + 0.3, 0.012, u.diskette.max[2] + 0.2]),
     paper: L.freshStack && L.pagePile ? unionBox([around(L.freshStack, 0.15, 0.05), around(L.pagePile, 0.15, 0.05)]) : part(u.printer, [0, 1], [0, 0.1], [1, 1.4]),
   };
 }

@@ -59,18 +59,22 @@ export async function mount(ctx) {
 
   // The units, each in its own group at its world origin. The printwheel's faces are the glyphs that print.
   const umats = createUnitMaterials();
-  const glyphs = await loadGlyphs('glyphs_wp');
+  const glyphsReady = ctx.glyphs ?? loadGlyphs('glyphs_wp');   // started by main.js
   const builders = {
     station: (u) => buildStation(u.size, umats),
     display: (u) => buildDisplay(u.size, umats, { tilt: machine.units.display.tilt, swivel: machine.units.display.swivel }),
     keyboard: (u) => buildKeyboard(u.size, machine.units.keyboard.slope, umats, { maxAniso: stage.renderer.capabilities.getMaxAnisotropy() }),
     diskette: (u) => buildDiskette(u.size, umats),
-    printer: (u) => buildPrinter(u.size, umats, { printer: machine.printer, glyphs, order: geometry.printer.wheel.order }),
+    printer: async (u) => buildPrinter(u.size, umats, { printer: machine.printer, glyphs: await glyphsReady, order: geometry.printer.wheel.order }),
   };
   const units = {}, parts = {}, views = {}, footprints = [];
   let displayFace = null;
-  for (const [name, u] of Object.entries(geometry.units)) {
-    const built = await builders[name](u);
+  // The five units' models load together; they join the scene in the definition's order.
+  const unitList = Object.entries(geometry.units);
+  const builtUnits = await Promise.all(unitList.map(([name, u]) => builders[name](u)));
+  const glyphs = await glyphsReady;
+  for (const [i, [name, u]] of unitList.entries()) {
+    const built = builtUnits[i];
     built.group.name = `unit-${name}`;
     built.group.position.fromArray(u.origin);
     stage.scene.add(built.group);

@@ -26,31 +26,26 @@ import { installEnvironment } from '../render/environment.js';
 import { DeskSway } from '../render/desk-sway.js';
 import { BallBlur } from '../render/ball-blur.js';
 import { Ambience } from '../audio/ambience.js';
+// Always needed, so imported statically: their chunks are preloaded with this one instead of found one after another.
+import { createSimClient } from '../sim/client.js';
+import { SoftWorld } from '../soft/index.js';
+import { loadGlyphs as loadGlyphSet } from '../machine/glyphs.js';
 
-const sources = import.meta.glob(['../sim/client.js', '../soft/index.js']);
 let params, useMock, machine;
 
-async function loadGlyphs() {
-  try {
-    const m = await (import.meta.glob('../machine/glyphs.js')['../machine/glyphs.js']?.());
-    const g = await m.loadGlyphs();
-    if (g && g.data) return { chars: g.chars, data: g.data, N: g.N ?? 96, texelMm: g.texelMm ?? 0.05, raw: g };
-  } catch { /* fall through to the local reader */ }
-  const meta = await fetch('/assets/glyphs.json').then((r) => r.json());
-  let data = new Uint8Array(await fetch(meta.gzip ? '/assets/glyphs.gz.bin' : '/assets/glyphs.bin').then((r) => r.arrayBuffer()));
-  if (meta.gzip) data = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
-  return { ...meta, data };
+/** The slug faces, from main.js's early fetch when it made one (ctx.glyphs), in the shape the atlases and mock take. */
+async function loadGlyphs(early) {
+  const g = await (early ?? loadGlyphSet());
+  return { chars: g.chars, data: g.data, N: g.N ?? 96, texelMm: g.texelMm ?? 0.05, raw: g };
 }
 
 async function createBackends(m, g, glyphs) {
   if (useMock) return { sim: createMockSim({ machine: m, geometry: g }), soft: new MockSoft({ machine: m, geometry: g, glyphs }), real: false };
   let sim, soft;
   try {
-    const { createSimClient } = await sources['../sim/client.js']();
     sim = await createSimClient({ machine: m, geometry: g, glyphs: glyphs.raw ?? glyphs });
   } catch (e) { console.warn('sim client not available, using mock', e); }
   try {
-    const { SoftWorld } = await sources['../soft/index.js']();
     soft = new SoftWorld({ machine: m, geometry: g, glyphs: glyphs.raw ?? glyphs });
   } catch (e) { console.warn('soft world not available, using mock', e); }
   return {
@@ -71,7 +66,7 @@ export async function mount(ctx) {
   const stage = createScene(canvas);
   const geometry = deriveGeometry(machine);
   const rig = deriveRig(machine, geometry);
-  const glyphs = await loadGlyphs();
+  const glyphs = await loadGlyphs(ctx.glyphs);
   const { mats } = createMaterials();
   const atlas = createAtlases(glyphs, geometry);
   const { sim, soft, real } = await createBackends(machine, geometry, glyphs);

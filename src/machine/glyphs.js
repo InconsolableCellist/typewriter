@@ -38,10 +38,12 @@ export async function gunzip(bytes) {
  *   count:number, data:Uint8Array, indexOf:(c:string)=>number, face:(i:number)=>Uint8Array}>}
  */
 export async function loadGlyphs(set = 'glyphs') {
-  const metaBytes = await readAsset(`${set}.json`);
-  const meta = JSON.parse(new TextDecoder().decode(metaBytes));
+  // Both requests at once: every set is gzipped now (the plain .bin is read only for a set whose JSON says otherwise).
   // `.gz.bin`, not `.bin.gz`: servers label a .gz file Content-Encoding gzip and the browser would unpack it first.
-  const data = meta.gzip ? await gunzip(await readAsset(`${set}.gz.bin`)) : await readAsset(`${set}.bin`);
+  const gz = readAsset(`${set}.gz.bin`).then((b) => b, (e) => e);
+  const meta = JSON.parse(new TextDecoder().decode(await readAsset(`${set}.json`)));
+  let data;
+  if (meta.gzip) { const b = await gz; if (b instanceof Error) throw b; data = await gunzip(b); } else data = await readAsset(`${set}.bin`);
   const { N, chars } = meta;
   if (data.length !== N * N * chars.length) throw new Error(`glyph data size mismatch: ${data.length}`);
   return withGlyphApi({ ...meta, data });

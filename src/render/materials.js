@@ -237,8 +237,11 @@ export async function loadStudioTextures(mats, paperMaterial, aniso = 8, { lowTi
   jobs.push({ name: 'walnut_desk', mat: mats.desk, repeat: [0.2 / tile('walnut_desk', 2.2), 0.2 / tile('walnut_desk', 2.2)], sizes: lowTier ? { detail: 1024 } : {} });
   if (paperMaterial) jobs.push({ name: 'paper_fibre', mat: paperMaterial, repeat: [1, 1.29], keepColor: true, noAlbedo: true });
   for (const j of extra) jobs.push({ repeat: glb(j.name, 0.05), ...j });
-  for (const j of jobs) {
-    if (only && !only.includes(j.name)) continue;
+  const wanted = jobs.filter((j) => !only || only.includes(j.name));
+  // Every download and decode starts now, in parallel; only the hand-over to the materials (and so the GPU uploads)
+  // below goes one set at a time.
+  for (const j of wanted) loadSet(j.name, j).catch(() => {});
+  for (const j of wanted) {
     try {
       const [a, n, r, mt] = await loadSet(j.name, j);
       const phys = table[j.name]?.physical ?? {};

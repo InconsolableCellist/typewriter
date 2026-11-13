@@ -35,7 +35,8 @@ import { makePicker, installWpPointer } from '../interact/wp-pointer.js';
 import { WayMarkers } from '../ui/wp-markers.js';
 import { createPostits } from '../render/wp/postits.js';
 import { installNavUi } from '../ui/wp-nav.js';
-import { createManual } from '../render/wp/manual.js';
+import { createManual, MANUAL_URL } from '../render/wp/manual.js';
+import { createPacket } from '../render/wp/packet.js';
 import { installManualReader } from '../ui/wp-manual.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 import { installStationControls, addHitProxy } from './wp/station.js';
@@ -164,13 +165,18 @@ export async function mount(ctx) {
     [nx, deskY, nz + 0.07, 0.10], [nx + 0.09, deskY, nz + 0.035, -0.06], [nx + 0.18, deskY, nz + 0.075, 0.07],
   ] });
   boxes.notes = notes.box;
-  // The operator's manual on the diskette unit's top; a click opens it. The reader is installed before the view
-  // shortcuts so that, open, it takes every key ahead of them and of the machine (Esc is CANCL).
+  // IBM's manual on the diskette unit's top opens the scan on bitsavers; our quick-start packet on the desk opens the
+  // reader, which is installed before the view shortcuts so that, open, it takes every key ahead of them and of the
+  // machine (Esc is CANCL).
   const reader = installManualReader();
   const ml = machine.deskLayout.manual, du = units.diskette.position;
   const manual = createManual({ scene: stage.scene, renderer: stage.renderer, at: [du.x + ml.at[0], du.y + ml.at[1], du.z + ml.at[2]], yaw: ml.yaw });
   boxes.manual = manual.box;
-  pickables.push({ object: manual.hit, part: () => ({ label: 'Read the manual', onClick: () => reader.open() }) });
+  pickables.push({ object: manual.hit, part: () => ({ label: 'IBM Operator Reference Guide (opens the scanned manual)', onClick: () => window.open(MANUAL_URL, '_blank', 'noopener') }) });
+  const qs = machine.deskLayout.quickStart;
+  const packet = createPacket({ scene: stage.scene, renderer: stage.renderer, at: [qs.x, deskY, qs.z], yaw: qs.yaw });
+  boxes.packet = packet.box;
+  pickables.push({ object: packet.hit, part: () => ({ label: 'Quick start: read the packet', onClick: () => reader.open() }) });
   const startId = viewSpec(params.get('view'))?.id ?? LEGACY_CAMERAS[params.get('cam') ?? machine.defaultCamera] ?? 'desk';
   const frame = (id) => poseOf(id, boxes, camera.aspect, camera.fov);
   stage.resize(window.innerWidth, window.innerHeight);
@@ -232,7 +238,7 @@ export async function mount(ctx) {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, reader, atmosphere, environment: atmosphere.environment, ambience: atmosphere.ambience };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, packet, reader, atmosphere, environment: atmosphere.environment, ambience: atmosphere.ambience };
   return window.__tw;
 }
 

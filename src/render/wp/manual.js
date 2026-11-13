@@ -1,7 +1,8 @@
-// The operator's manual: a closed IBM ring binder lying on top of the diskette unit, a little askew. Built here, no
-// model file: two vinyl-covered boards with rounded corners, a rounded spine over the rings, and the page block
-// between them. The cover's lettering and the striped IBM logo are drawn on a canvas by us. Clicking it opens the
-// reading overlay (src/ui/wp-manual.js), whose pages are src/ui/wp-manual-pages.js.
+// IBM's own manual, S544-2036-0 Operator Reference Guide, Textpack 4 / Reportpack (Feb 1982): a closed ring binder
+// lying on top of the diskette unit, a little askew. Built here, no model file: two covered boards with rounded
+// corners, a rounded spine over the rings, and the page block between them. The cover and spine are drawn on a canvas
+// by us after the scan (no scanned image is used). Clicking it opens the scan on bitsavers in a new tab (MANUAL_URL);
+// our own quick-start packet is src/render/wp/packet.js.
 import * as THREE from 'three';
 
 const MM = 1e-3;
@@ -12,7 +13,9 @@ const CORNER = 7 * MM;               // the boards' rounded corners
 const SPINE_R = MANUAL_SIZE.h / 2;   // the spine's round over the rings
 const INSET = 3.5 * MM;              // the page block stands back from the boards' open edges
 
-const NAVY = '#1b2233';
+const BLUE = '#1a1fa6';     // the cover's IBM blue, from the scan
+/** The scanned manual on bitsavers: IBM's copyright, so we link to it rather than host it. */
+export const MANUAL_URL = 'https://bitsavers.org/pdf/ibm/6580_Displaywriter/S544-2036-0_IBM_Displaywriter_Operator_Reference_Guide_Textpack_4_Reportpack_Feb82.pdf';
 
 /** A rounded-rectangle shape, centred, in the shape's x/y plane. */
 function roundedRect(w, d, r) {
@@ -103,35 +106,64 @@ export function drawIbmLogo(g, x, y, h, color = '#f2f2ee') {
   return (mx + mw) * h;
 }
 
-/** The front cover, drawn: navy vinyl, a hinge crease by the spine, the titles and the logo. */
+/**
+ * The front cover of S544-2036-0 (Feb 1982), drawn after the scan: IBM blue, the striped logo top left, the title
+ * block set bold and flush right beside it, and below them three staggered rows of three chevron blocks, each a
+ * nest of lavender chevrons standing up off the page on dark sides. Proportions are fractions of the scanned cover.
+ */
 function drawCover(canvas) {
   const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
-  g.fillStyle = NAVY; g.fillRect(0, 0, W, H);
-  // A faint sheen toward the back and wear on the open corners.
+  g.fillStyle = BLUE; g.fillRect(0, 0, W, H);
   const sheen = g.createLinearGradient(0, 0, W, H);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.05)'); sheen.addColorStop(0.5, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(0,0,0,0.12)');
+  sheen.addColorStop(0, 'rgba(255,255,255,0.06)'); sheen.addColorStop(0.55, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(0,0,30,0.18)');
   g.fillStyle = sheen; g.fillRect(0, 0, W, H);
-  // The hinge: two pressed lines a little in from the spine edge (v = 0 is the front edge, at the canvas's bottom).
-  const hx = W * 0.105;
-  for (const [dx, a] of [[0, 0.5], [W * 0.012, 0.32]]) {
-    g.fillStyle = `rgba(0,0,0,${a})`; g.fillRect(hx + dx, 0, W * 0.006, H);
-    g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(hx + dx + W * 0.006, 0, W * 0.003, H);
-  }
-  // Titles, flush left from a margin right of the hinge, in the typeface of the period's covers.
-  const left = W * 0.2;
-  g.fillStyle = '#eceae2';
-  g.textBaseline = 'alphabetic';
-  g.font = `700 ${Math.round(W * 0.062)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
-  g.fillText('IBM Displaywriter System', left, H * 0.17, W * 0.74);
-  g.fillRect(left, H * 0.195, W * 0.72, Math.max(2, W * 0.004));
-  g.font = `400 ${Math.round(W * 0.052)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
-  g.fillText('Operator Reference', left, H * 0.25, W * 0.72);
-  g.font = `400 ${Math.round(W * 0.03)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
-  g.fillStyle = 'rgba(236,234,226,0.75)';
-  g.fillText('Textpack 4', left, H * 0.292);
-  // The logo, bottom right.
-  const lh = W * 0.085;
-  drawIbmLogo(g, W - left * 0.55 - lh * 3.02, H * 0.86, lh);
+  // The chevron blocks: in scan pixels (766 x 983), scaled to the canvas.
+  const sx = W / 766, sy = H / 983;
+  const block = (x0, y0) => {
+    const t = 15, depth = 78, step = 37;
+    const arms = [0, 1, 2, 3, 4].map((i) => ({ ax: x0 + 50 + i * step, ay: y0 + 95, h: 12 + i * 26 }));
+    const path = (a, dy) => { g.beginPath(); g.moveTo((a.ax - a.h) * sx, (a.ay - a.h + dy) * sy); g.lineTo(a.ax * sx, (a.ay + dy) * sy); g.lineTo((a.ax - a.h) * sx, (a.ay + a.h + dy) * sy); };
+    g.lineJoin = 'miter'; g.lineCap = 'butt'; g.lineWidth = t * sx;
+    // The sides: the stroke swept down.
+    for (const a of arms) for (let dy = depth; dy > 0; dy -= 2) { g.strokeStyle = dy > depth - 3 ? '#05062a' : '#0a0b3c'; path(a, dy); g.stroke(); }
+    for (const a of arms) { g.strokeStyle = '#5b44c8'; path(a, 0); g.stroke(); }
+    // Light catching the upper arms' top edges.
+    g.lineWidth = 2 * sx; g.strokeStyle = 'rgba(190,175,255,0.35)';
+    for (const a of arms) { g.beginPath(); g.moveTo((a.ax - a.h - 6) * sx, (a.ay - a.h - 7) * sy); g.lineTo((a.ax - 6) * sx, (a.ay - 7) * sy); g.stroke(); }
+  };
+  for (const [x0, y0] of [[150, 300], [52, 480], [150, 665]]) for (let c = 0; c < 3; c++) block(x0 + c * 200, y0);
+  // The logo and the titles.
+  drawIbmLogo(g, 128 * sx, 95 * sy, 31 * sy, '#e9e9f2');
+  g.fillStyle = '#f2f2f6'; g.textAlign = 'right'; g.textBaseline = 'alphabetic';
+  const fit = (text, weight, px, right, base, width, spacing = 0) => {
+    g.font = `${weight} ${Math.round(px * sy)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    if ('letterSpacing' in g) g.letterSpacing = `${spacing * sx}px`;
+    g.fillText(text, right * sx, base * sy, width * sx);
+  };
+  fit('IBM Displaywriter System', 700, 25, 750, 140, 330, 0.6);
+  fit('Operator Reference Guide', 700, 25, 750, 169, 330, 0.6);
+  fit('Textpack 4/Reportpack', 700, 15, 748, 199, 220, 1.4);
+  if ('letterSpacing' in g) g.letterSpacing = '0px';
+  g.textAlign = 'left';
+  // A trace of the hinge where the board bends by the spine.
+  g.fillStyle = 'rgba(0,0,20,0.35)'; g.fillRect(W * 0.012, 0, W * 0.006, H);
+}
+
+/** The spine, along its length: the title and the form number set sideways, and the logo at its foot. */
+function drawSpine(canvas) {
+  const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  g.fillStyle = BLUE; g.fillRect(0, 0, W, H);
+  g.save();
+  g.translate(W / 2, H); g.rotate(-Math.PI / 2);     // the text runs from the canvas's foot to its head
+  g.fillStyle = '#f0f0f6'; g.textBaseline = 'middle';
+  g.font = `700 ${Math.round(W * 0.16)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+  g.fillText('IBM Displaywriter System   Operator Reference Guide   Textpack 4/Reportpack', H * 0.2, 0, H * 0.62);
+  g.font = `400 ${Math.round(W * 0.12)}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+  g.fillText('S544-2036-0', H * 0.86, 0, H * 0.12);
+  g.restore();
+  g.save(); g.translate(W / 2, H * 0.1); g.rotate(-Math.PI / 2);
+  drawIbmLogo(g, -W * 0.33, -W * 0.11, W * 0.22, '#e9e9f2');
+  g.restore();
 }
 
 /** The page block's edges: off-white with the fine lines of the sheets and a tab divider or two. */
@@ -163,7 +195,7 @@ export function createManual({ scene, renderer, at, yaw = 0 }) {
   grain.wrapS = grain.wrapT = THREE.RepeatWrapping; grain.repeat.set(5, 6); grain.anisotropy = aniso;
 
   const vinyl = (map) => new THREE.MeshPhysicalMaterial({
-    color: map ? 0xffffff : NAVY, map: map ?? null, roughness: 0.62, roughnessMap: grain, bumpMap: grain, bumpScale: 0.6,
+    color: map ? 0xffffff : BLUE, map: map ?? null, roughness: 0.62, roughnessMap: grain, bumpMap: grain, bumpScale: 0.6,
     metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.55, sheen: 0.2, sheenColor: new THREE.Color(0x8090b0),
   });
   const plain = vinyl(null);
@@ -179,7 +211,12 @@ export function createManual({ scene, renderer, at, yaw = 0 }) {
   front.rotation.z = -0.004;
 
   // The spine: half a tube over the rings, closed at its ends, its flat inside facing the pages.
-  const spine = solid(new THREE.CylinderGeometry(SPINE_R, SPINE_R, d - 1.2 * MM, 28, 1, false, Math.PI, Math.PI), plain);
+  const spineCanvas = document.createElement('canvas'); spineCanvas.width = 160; spineCanvas.height = 1600;
+  drawSpine(spineCanvas);
+  const spineTex = new THREE.CanvasTexture(spineCanvas); spineTex.colorSpace = THREE.SRGBColorSpace; spineTex.anisotropy = aniso;
+  document.fonts?.ready?.then(() => { drawSpine(spineCanvas); spineTex.needsUpdate = true; });
+  // The round's u runs over the outside, u = 0.5 outermost; v along its length.
+  const spine = solid(new THREE.CylinderGeometry(SPINE_R, SPINE_R, d - 1.2 * MM, 28, 1, false, Math.PI, Math.PI), [vinyl(spineTex), plain, plain]);
   spine.rotation.x = Math.PI / 2;
   spine.position.set(-w / 2 + SPINE_R, h / 2, 0);
   // The page block.

@@ -1,4 +1,4 @@
-// The operator's manual on the diskette unit says what the software does: each keystroke sequence its pages quote,
+// Our quick-start packet says what the software does: each keystroke sequence its pages quote,
 // typed into the software, does what the page says (src/ui/wp-manual-pages.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,14 +11,21 @@ import { PAGES, SEQUENCES } from '../src/ui/wp-manual-pages.js';
 import { STATIONS, FOCUS, fallbackBoxes } from '../src/interact/wp-views.js';
 import { geometryFor } from '../src/machine/index.js';
 import wordproc1980 from '../src/machine/wordproc1980.js';
-import { MANUAL_SIZE } from '../src/render/wp/manual.js';
+import { MANUAL_SIZE, MANUAL_URL } from '../src/render/wp/manual.js';
+import { PACKET_SIZE, PACKET_TITLE } from '../src/render/wp/packet.js';
 
 const WORDS = new Uint8Array(zlib.gunzipSync(fs.readFileSync(new URL('../public/assets/wordlist_en.gz.bin', import.meta.url))));
 const plain = (html) => html.replace(/<[^>]+>/g, ' ').replace(/&gt;/g, '>').replace(/\s+/g, ' ');
 const page = (title) => plain(PAGES.find((p) => p.title === title).html);
 const screen = (sys) => Array.from({ length: 25 }, (_, r) => row(sys, r + 1)).join('\n');
 
-test('the binder: 6 to 10 pages, a contents page that lists the rest, our own short text', () => {
+test('the packet points to IBM\'s manual, which links to the scan on bitsavers rather than a copy of ours', () => {
+  assert.ok(page('Contents').includes('The full IBM manual is on the binder on the diskette unit'));
+  assert.equal(PACKET_TITLE, 'Quick Start: Displaywriter / Textpack 4');
+  assert.match(MANUAL_URL, /^https:\/\/bitsavers\.org\/pdf\/ibm\/6580_Displaywriter\/S544-2036-0_IBM_Displaywriter_Operator_Reference_Guide_Textpack_4_Reportpack_Feb82\.pdf$/);
+});
+
+test('the packet: 6 to 10 pages, a contents page that lists the rest, our own short text', () => {
   assert.ok(PAGES.length >= 6 && PAGES.length <= 10);
   assert.equal(PAGES[0].title, 'Contents');
   for (const p of PAGES.slice(1)) assert.ok(page('Contents').includes(p.title), `contents lists ${p.title}`);
@@ -188,4 +195,23 @@ test('the binder lies on the diskette unit, clear of the ashtray, with a Manual 
   assert.equal(FOCUS.manual.label, 'Manual');
   const b = fallbackBoxes(g, wordproc1980).manual;
   assert.ok(b.min[1] >= u.box.max[1] - 1e-9 && b.max[1] > b.min[1], 'its fallback box sits on the unit');
+});
+
+test('the packet lies on the desk, clear of the units, the sticky notes and the desk file, framed with the manual', () => {
+  const g = geometryFor(wordproc1980), L = wordproc1980.deskLayout, q = L.quickStart;
+  const c = Math.cos(q.yaw), s = Math.abs(Math.sin(q.yaw));
+  const hx = PACKET_SIZE.w / 2 * c + PACKET_SIZE.d / 2 * s, hz = PACKET_SIZE.w / 2 * s + PACKET_SIZE.d / 2 * c;
+  const box = { min: [q.x - hx, 0, q.z - hz], max: [q.x + hx, 0.01, q.z + hz] };
+  const overlap = (a, b) => a.min[0] < b.max[0] && a.max[0] > b.min[0] && a.min[2] < b.max[2] && a.max[2] > b.min[2];
+  assert.ok(box.min[0] >= -0.948 && box.max[0] <= 0.948 && box.min[2] >= -0.508 && box.max[2] <= 0.588, 'on the desk');
+  for (const [n, u] of Object.entries(g.units)) if (!u.on) assert.ok(!overlap(box, u.box), `clear of ${n}`);
+  // The notes as the kit lays them: three 3 in notes from right of the keyboard, in front of the diskette unit.
+  const kb = g.units.keyboard.box, dk = g.units.diskette.box;
+  const nx = Math.max(kb.max[0], dk.min[0]) + 0.055;
+  assert.ok(box.min[0] > nx + 0.18 + 0.0381 * 1.5, 'right of the sticky notes');
+  const f = L.disketteHolder;
+  assert.ok(box.min[2] > f.z + 0.08 || box.max[0] < f.x - 0.08, 'in front of the desk file');
+  assert.deepEqual(FOCUS.manual.boxes, ['manual', 'packet']);
+  assert.ok(STATIONS.diskettes.items.includes('quickstart'));
+  assert.ok(fallbackBoxes(g, wordproc1980).packet);
 });

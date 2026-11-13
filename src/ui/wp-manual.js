@@ -1,4 +1,4 @@
-// The operator's manual, open: an overlay of off-white pages set like a period IBM reference, one page at a time.
+// The quick-start packet, open: an overlay of off-white pages set like a period IBM reference, one page at a time.
 // ← and → (or a click on either half of the page, a swipe, the buttons) turn the pages; Esc or the close button
 // shuts it. Esc is also the machine's CANCL, so while the binder is open every key stops here, in the capture phase
 // on window, before the machine's keyboard (or the view shortcuts) can see it. Closed, it takes nothing.
@@ -20,9 +20,7 @@ const CSS = `
   background: radial-gradient(circle at 6px 50%, #2a2c33 0 4.5px, transparent 5px) 0 0 / 12px 33.3% repeat-y; opacity: 0.55; }
 #wpManual header { padding: 22px 30px 0 40px; display: flex; justify-content: space-between; align-items: baseline;
   font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #555; }
-#wpManual header .logo { font-weight: 700; letter-spacing: 0.02em; color: #1b2233;
-  background: repeating-linear-gradient(#1b2233 0 1.5px, transparent 1.5px 2.6px); -webkit-background-clip: text;
-  background-clip: text; -webkit-text-fill-color: transparent; font-size: 17px; line-height: 1; }
+#wpManual header .title { font-weight: 700; color: #1b2233; font-size: 13px; }
 #wpManual .body { flex: 1; overflow-y: auto; padding: 6px 30px 10px 40px; transition: transform 0.18s ease, opacity 0.18s ease; }
 #wpManual .body.out-l { transform: translateX(-24px); opacity: 0; }
 #wpManual .body.out-r { transform: translateX(24px); opacity: 0; }
@@ -74,12 +72,12 @@ export function installManualReader({ pages = PAGES } = {}) {
   document.head.appendChild(style);
   const root = document.createElement('div');
   root.id = 'wpManual'; root.hidden = true;
-  root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'IBM Displaywriter System Operator Reference');
+  root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Quick Start: Displaywriter / Textpack 4');
   root.innerHTML = `
     <div class="sheet">
       <div class="holes"></div>
       <button class="close" type="button" title="close (Esc)" aria-label="close">✕</button>
-      <header><span class="logo">IBM</span><span>Displaywriter System · Operator Reference</span></header>
+      <header><span class="title">Quick Start</span><span>Displaywriter / Textpack 4</span></header>
       <div class="body" aria-live="polite"></div>
       <footer><button class="prev" type="button" aria-label="previous page" title="previous page (←)">‹</button>
         <span class="num"></span><button class="next" type="button" aria-label="next page" title="next page (→)">›</button></footer>
@@ -147,7 +145,7 @@ export function installManualReader({ pages = PAGES } = {}) {
   });
   sheet.addEventListener('pointercancel', () => { down = null; });
 
-  // Every key while open is the binder's, none the machine's.
+  // Every key while open is the packet's, none the machine's.
   window.addEventListener('keydown', (e) => {
     if (!open) return;
     e.stopImmediatePropagation();
@@ -163,7 +161,7 @@ export function installManualReader({ pages = PAGES } = {}) {
     else if (e.key === 'ArrowUp') body.scrollBy(0, -40);
   }, true);
   window.addEventListener('keyup', (e) => {
-    // Only the releases of keys the binder took: a key already down for the machine still lets go there.
+    // Only the releases of keys the packet took: a key already down for the machine still lets go there.
     if (!swallowUp.delete(e.code)) return;
     e.stopImmediatePropagation();
   }, true);

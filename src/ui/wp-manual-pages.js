@@ -1,5 +1,5 @@
-// The pages of the operator's manual on the diskette unit (src/render/wp/manual.js opens them, src/ui/wp-manual.js
-// shows them). Our own short text, not IBM's: what THIS recreation does, key by key. Every keystroke sequence here is
+// The pages of our quick-start packet on the desk (src/render/wp/packet.js; src/ui/wp-manual.js shows them). IBM's
+// own manual is the binder on the diskette unit, which opens the scan on bitsavers. Our own short text, not IBM's: what THIS recreation does, key by key. Every keystroke sequence here is
 // typed into the software by tests/wp_manual.test.js, so the pages and the machine cannot drift apart.
 
 /** A key cap as the page prints it. */
@@ -25,7 +25,7 @@ export const PAGES = [
   {
     title: 'Contents',
     html: `
-      <p class="lead">This binder covers the everyday work of the Displaywriter: switching on, typing a document,
+      <p class="lead">This packet covers the everyday work of the Displaywriter: switching on, typing a document,
       changing it, printing it and checking its spelling.</p>
       <ol class="toc">
         <li data-page="1">The keyboard</li>
@@ -39,7 +39,9 @@ export const PAGES = [
       </ol>
       <p class="aside">On this desk the machine reads your PC keyboard. The page on the keyboard tells you which PC
       key stands for which Displaywriter key. Turn the pages with ← and →, a click or a swipe. Esc closes the
-      binder.</p>`,
+      packet.</p>
+      <p class="aside">The full IBM manual is on the binder on the diskette unit: the <i>IBM Displaywriter System
+      Operator Reference Guide, Textpack 4/Reportpack</i>, S544-2036-0. Click it to open IBM's scan.</p>`,
   },
   {
     title: 'The keyboard',

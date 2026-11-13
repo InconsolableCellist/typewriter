@@ -1,7 +1,10 @@
 // Pointer input for the word processor (docs/displaywriter/architecture.md 3.5). A press on a key holds it down; a
 // click on a control works it; neither ever moves the camera. A click on a highlighted object (a focus item, another
 // station) asks the view system to go there. Only in the free view do drags orbit and pan and the wheel or a pinch
-// zoom; at a station they leave the camera alone and say how to look around.
+// zoom; at a station they leave the camera alone and say how to look around. A control may also be dragged (a knob
+// turned, the display tilted) and, while the pointer is over it, worked by the wheel; its part() says how:
+// { label, onClick(), onDrag(dx, dy), onDragEnd(), onWheel(deltaY) }. A control with no onClick passes a click on to
+// the navigation target behind it, so a cabinet that tilts can still be clicked to look closer.
 import * as THREE from 'three';
 import { targetAt } from './wp-views.js';
 
@@ -26,15 +29,21 @@ export function makePicker({ camera, canvas, keys, pickables, solids, nav, boxes
       let o = hit.object, entry = null;
       while (o && !entry) { entry = live.find((p) => p.object === o); o = o.parent; }
       const part = entry?.part();
-      if (part) return { kind: 'control', entry, label: part.label };
+      if (part) {
+        const fallback = part.onClick ? null : navAt();
+        return { kind: 'control', entry, part, label: part.label, fallback: fallback?.target ?? null };
+      }
     }
+    return navAt();
+  };
+  function navAt() {
     const targets = nav.targets();
     if (!targets.length) return null;
     const solid = ray.intersectObjects(solids(), true)[0];
     if (!solid) return null;
     const target = targetAt(solid.point.toArray(), targets, boxes());
     return target ? { kind: 'nav', target } : null;
-  };
+  }
 }
 
 /**
@@ -67,7 +76,7 @@ export function installWpPointer({ canvas, pick, press, orbit, nav, show = () =>
     lx = e.clientX; ly = e.clientY; moved = 0;
     const hit = e.button === 0 ? pick(e) : null;
     if (hit?.kind === 'key') { held = hit.key; press(held, 1.2); mode = 'key'; return; }
-    if (hit?.kind === 'control') { click = hit; mode = 'control'; return; }
+    if (hit?.kind === 'control') { click = hit; click.part ??= hit.entry.part(); mode = 'control'; return; }
     if (hit?.kind === 'nav') { click = hit; mode = 'nav'; return; }
     click = null;
     if (nav.free) { mode = e.button === 2 || e.shiftKey ? 'pan' : 'rotate'; orbit.dragging = true; orbit.vTheta = 0; orbit.vPhi = 0; } else mode = 'idle';
@@ -90,6 +99,7 @@ export function installWpPointer({ canvas, pick, press, orbit, nav, show = () =>
     }
     const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
     moved += Math.abs(dx) + Math.abs(dy);
+    if (mode === 'control') { if (moved >= CLICK_PX) click?.part?.onDrag?.(dx, dy, e); return; }
     if (mode === 'pan') orbit.pan(dx, dy);
     else if (mode === 'rotate') orbit.rotate(dx, dy);
     else if (mode === 'idle' && moved > 24) { hint('Free view (the ◎ button, or Ctrl+Shift+↑) to look around'); mode = 'hinted'; }
@@ -99,9 +109,13 @@ export function installWpPointer({ canvas, pick, press, orbit, nav, show = () =>
     pointers.delete(e.pointerId);
     if (pointers.size > 0) { if (mode === 'pinch') mode = 'idle'; return; }
     if (mode === 'key' && held !== null) { const k = held; setTimeout(() => press(k, 0), 40); held = null; }
+    if (mode === 'control') click?.part?.onDragEnd?.();
     if (click && moved < CLICK_PX && e.type === 'pointerup') {
-      if (click.kind === 'control') click.entry.part()?.onClick?.();
-      else if (click.kind === 'nav') { show(null, e); nav.go(click.target.id); }
+      if (click.kind === 'control') {
+        const part = click.entry.part();
+        if (part?.onClick) part.onClick();
+        else if (click.fallback) { show(null, e); nav.go(click.fallback.id); }
+      } else if (click.kind === 'nav') { show(null, e); nav.go(click.target.id); }
     }
     click = null; mode = null; pinch = null; orbit.dragging = false;
   };
@@ -110,6 +124,9 @@ export function installWpPointer({ canvas, pick, press, orbit, nav, show = () =>
   offs.push(on('pointerleave', (e) => { if (!pointers.has(e.pointerId)) show(null, e); }));
   offs.push(on('wheel', (e) => {
     e.preventDefault();
+    const hit = pick(e);
+    const wheel = hit?.kind === 'control' ? (hit.part ?? hit.entry.part())?.onWheel : null;
+    if (wheel) { wheel(e.deltaY); return; }
     if (!nav.free) { hint('Free view (the ◎ button, or Ctrl+Shift+↑) to zoom and look around'); return; }
     const r = canvas.getBoundingClientRect();
     orbit.zoom(Math.exp(e.deltaY * 0.0012), ((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);

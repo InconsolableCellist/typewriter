@@ -33,6 +33,9 @@ def out_dir(name):
     return d
 SIZE = 2048
 MAX_SIZE = 2048   # largest file written; a set authored larger (walnut_desk) is filtered down to this
+# Sets on small parts (felt pads, plating, rubber, springs, spools): seen at mip 3 or 4 from the default camera, so
+# authored at SIZE and filtered down to 1024 px, a quarter of the download and GPU memory (docs/perf-review.md, 12).
+SMALL_PART = 1024
 
 # AVIF (AV1, 4:4:4) quality per map, chosen against the float source: each map's error is at or below what the
 # previous JPEG files (q92-95) had, at a quarter to a tenth of the size. See docs/assets.md.
@@ -302,7 +305,7 @@ def bead_blasted_aluminium():
     tint = 0.97 + 0.015 * spectral(r, 80, 300)
     alb = col(F0["aluminium"], tint * (0.94 + 0.05 * pits))
     rough = 0.47 + 0.05 * (1 - pits) + 0.018 * spectral(r, 60, 240)
-    write("bead_blasted_aluminium", alb, n, np.clip(rough, 0.36, 0.62), np.ones((SIZE, SIZE), np.float32))
+    write("bead_blasted_aluminium", alb, n, np.clip(rough, 0.36, 0.62), np.ones((SIZE, SIZE), np.float32), max_size=SMALL_PART)
 
 
 def _scratch_layers(r, count, length, width, angle=None, spread=np.pi):
@@ -321,7 +324,7 @@ def nickel_polished():
     haze = np.clip(0.5 + 0.5 * spectral(r, 90, 700) * 0.6, 0, 1)
     alb = col(F0["nickel"], np.clip(1.0 - 0.03 * haze, 0, 1))
     rough = 0.115 + 0.035 * haze + 0.19 * np.clip(micro, 0, 1) + 0.11 * np.clip(fine, 0, 1)
-    write("nickel_polished", alb, n, np.clip(rough, 0.09, 0.42), np.ones((SIZE, SIZE), np.float32))
+    write("nickel_polished", alb, n, np.clip(rough, 0.09, 0.42), np.ones((SIZE, SIZE), np.float32), max_size=SMALL_PART)
 
 
 def nickel_worn():
@@ -362,7 +365,7 @@ def chrome_steel():
     n = normal_from_height(h, T)
     alb = col(F0["chrome"], 1 - pits * 0.5)
     rough = 0.055 + 0.012 * spectral(r, 90, 500) + 0.13 * np.clip(micro, 0, 1) + pits * 0.25
-    write("chrome_steel", alb, n, np.clip(rough, 0.04, 0.4), np.ones((SIZE, SIZE), np.float32))
+    write("chrome_steel", alb, n, np.clip(rough, 0.04, 0.4), np.ones((SIZE, SIZE), np.float32), max_size=SMALL_PART)
 
 
 def key_glass():
@@ -391,7 +394,7 @@ def blued_spring_steel():
     straw = col((0.09, 0.115, 0.20))
     alb = deep * (1 - temper[..., None]) + straw * temper[..., None]
     rough = 0.30 + 0.05 * spectral(r, 90, 500) + 0.06 * np.abs(lines)
-    write("blued_spring_steel", alb, n, np.clip(rough, 0.2, 0.5), np.ones((SIZE, SIZE), np.float32))
+    write("blued_spring_steel", alb, n, np.clip(rough, 0.2, 0.5), np.ones((SIZE, SIZE), np.float32), max_size=SMALL_PART)
 
 
 def japanned_enamel():
@@ -426,7 +429,7 @@ def vulcanised_rubber():
     bloom = smooth(-0.4, 1.3, spectral(r, 200, 900))
     alb = col((0.015, 0.015, 0.016)) * (1.0 + 0.25 * bloom)[..., None]
     rough = 0.78 + 0.08 * bloom + 0.02 * spectral(r, 25, 120)
-    write("vulcanised_rubber", alb, n, np.clip(rough, 0.6, 0.95), np.zeros((SIZE, SIZE), np.float32))
+    write("vulcanised_rubber", alb, n, np.clip(rough, 0.6, 0.95), np.zeros((SIZE, SIZE), np.float32), max_size=SMALL_PART)
 
 
 def green_felt():
@@ -440,7 +443,7 @@ def green_felt():
     shade = 0.75 + 0.5 * np.clip(0.5 + 0.2 * f, 0, 1)
     alb = col((0.022, 0.085, 0.040)) * shade[..., None]
     rough = 0.95 + 0.03 * spectral(r, 12, 80)
-    write("green_felt", alb, n, np.clip(rough, 0.85, 1.0), np.zeros((SIZE, SIZE), np.float32))
+    write("green_felt", alb, n, np.clip(rough, 0.85, 1.0), np.zeros((SIZE, SIZE), np.float32), max_size=SMALL_PART)
 
 
 def paper_fibre():

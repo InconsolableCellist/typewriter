@@ -153,7 +153,12 @@ Authored procedurally by `tools/gen/materials.py`. Heights are in metres at the 
 Metals hold their measured F0 in albedo. `materials.json` holds the tile sizes and physical parameters for code to read.
 
 Files per set: `_albedo` (sRGB), `_normal` (linear, +G up), `_roughness`, `_metalness` (grey, three reads G and B of
-them), and `_roughness_mips` (below). 2048 px, seamless.
+them), and `_roughness_mips` (below). Seamless; 2048 px for the large surfaces (`powder_coat`, `walnut_desk`,
+`paper_fibre`) and 1024 px for the sets on small parts (`green_felt`, `nickel_polished`, `vulcanised_rubber`,
+`bead_blasted_aluminium`, `chrome_steel`, `blued_spring_steel`; `SMALL_PART` in `materials.py`): from the default camera a
+screen pixel covers about 0.37 mm while these hold 0.03 to 0.05 mm a texel, so mip 3 or 4 is what is sampled. They are
+authored at 2048 and filtered down like `walnut_desk`, roughness from level 1 of the chain, so the lost detail stays in
+the roughness. The word processor's `wp_pebble` and `wp_keycap` are 1024 px too.
 
 **Encoding.** AVIF (AV1, 4:4:4, 8 bit; greyscale maps are single channel), written straight from the float data by `save()` in
 `materials.py` at quality 80 (albedo, metalness) and 85 (normal, roughness, mip atlas). Chosen against the float source, not

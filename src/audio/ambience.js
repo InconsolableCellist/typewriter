@@ -1,5 +1,7 @@
 // The room's weather, heard: a long rain loop, and thunder that arrives after the flash by the time sound takes to cross
-// the distance. It has its own AudioContext, opened by the click that chooses the weather, and leaves the worklet alone.
+// the distance. On the typewriters it has its own AudioContext, opened by the click that chooses the weather, and leaves
+// the worklet alone; the word processor hands it the kit's shared context (`context`), which exists only after the
+// first gesture, so a weather chosen before that is heard once attach() is called.
 const BASE = '/assets/audio/ambience/';
 const RAIN_LEVEL = { clear: 0, rain: 0.34, storm: 0.55 };
 const CROSSFADE_S = 3.5, FADE_S = 2.5;
@@ -28,8 +30,9 @@ export function planStrike(rng = Math.random) {
 }
 
 export class Ambience {
-  constructor({ environment, rng = Math.random }) {
+  constructor({ environment, rng = Math.random, context = null }) {
     this.env = environment; this.rng = rng;
+    this.shared = context;                    // () => an AudioContext, or null while there is none yet
     this.weather = 'clear';
     this.enabled = true;
     this.timers = new Set();
@@ -41,9 +44,12 @@ export class Ambience {
     return id;
   }
 
+  /** Opens the sound; false while a shared context is not there yet. */
   open() {
-    if (this.ctx) { this.ctx.resume?.(); return; }
-    const ctx = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (this.ctx) { this.ctx.resume?.(); return true; }
+    const ctx = this.shared ? this.shared() : new (window.AudioContext || window.webkitAudioContext)();
+    if (!ctx) return false;
+    this.ctx = ctx;
     ctx.resume?.();
     this.master = ctx.createGain(); this.master.gain.value = this.enabled ? 1 : 0; this.master.connect(ctx.destination);
     this.rainBus = ctx.createGain(); this.rainBus.gain.value = 0; this.rainBus.connect(this.master);
@@ -51,7 +57,11 @@ export class Ambience {
     this.live = 0;
     this.watch = setInterval(() => this.loopRain(), 200);
     this.thunder = fetch(`${BASE}thunder.ogg`).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).catch((e) => { console.warn('thunder not loaded', e); return null; });
+    return true;
   }
+
+  /** The shared context has just come up: start the rain for a weather chosen before it. */
+  attach() { if (!this.ctx && this.weather !== 'clear') this.rain(); }
 
   deck() {
     const el = new Audio(`${BASE}rain.ogg`);
@@ -86,8 +96,14 @@ export class Ambience {
     this.weather = name;
     for (const id of this.timers) clearTimeout(id);
     this.timers.clear();
+    this.rain();
+    if (name === 'storm') this.later(2 + 6 * this.rng(), () => this.strike());   // the flashes run with or without sound
+  }
+
+  rain() {
+    const name = this.weather;
     if (name === 'clear' && !this.ctx) return;
-    this.open();
+    if (!this.open()) return;
     const level = RAIN_LEVEL[name], t = this.ctx.currentTime, bus = this.rainBus.gain;
     bus.cancelScheduledValues(t); bus.setValueAtTime(bus.value, t); bus.linearRampToValueAtTime(level, t + FADE_S);
     const deck = this.decks[this.live];
@@ -95,7 +111,6 @@ export class Ambience {
       deck.gain.gain.value = 1;
       deck.el.play().catch((e) => console.warn('rain did not start', e));
     } else if (level === 0) this.later(FADE_S + 0.1, () => { for (const d of this.decks) d.el.pause(); });
-    if (name === 'storm') this.later(2 + 6 * this.rng(), () => this.strike());
   }
 
   strike() {
@@ -107,6 +122,7 @@ export class Ambience {
   }
 
   async roll(s) {
+    if (!this.ctx) return;
     const buffer = await this.thunder;
     if (!buffer) return;
     const { ctx } = this, part = THUNDER_PARTS[s.part], t = ctx.currentTime;

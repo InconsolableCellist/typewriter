@@ -78,6 +78,41 @@ function drawSky(c, t, weather) {
   }
 }
 
+/** The time-of-day strip and the weather buttons, as both kits' panels show them. */
+export function envRowHtml() {
+  return `<div class="env-row">
+        <canvas id="env-sky" role="slider" aria-label="time of day" title="drag to set the time of day"></canvas>
+        <div class="env-wx" role="group" aria-label="weather">${Object.entries(WEATHER_ICONS).map(([n, icon]) => `<button data-w="${n}" aria-pressed="false" title="${n}" aria-label="${n}">${icon}</button>`).join('')}</div>
+      </div>`;
+}
+
+/** Binds the strip and buttons inside `root` to an environment (src/render/environment.js). */
+export function bindEnvRow(root, env) {
+  const sky = root.querySelector('#env-sky'), buttons = [...root.querySelectorAll('.env-wx button')];
+  const draw = () => {
+    drawSky(sky, env.timeValue, env.weather);
+    sky.setAttribute('aria-valuetext', env.time);
+    sky.title = `${env.time}: drag to set the time of day`;
+    for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.w === env.weather));
+  };
+  // Settles on a preset when close to one, so "day" is reachable exactly.
+  const at = (e) => {
+    const r = sky.getBoundingClientRect();
+    let t = Math.min(1, Math.max(0, (e.clientX - r.left - SKY_PAD) / (r.width - 2 * SKY_PAD)));
+    for (const p of Object.values(env.presets)) if (Math.abs(t - p) < 0.018) t = p;
+    env.setTime(t);
+  };
+  let held = false;
+  sky.addEventListener('pointerdown', (e) => { e.preventDefault(); held = true; sky.setPointerCapture(e.pointerId); at(e); });
+  sky.addEventListener('pointermove', (e) => { if (held) at(e); });
+  const release = () => { held = false; };
+  sky.addEventListener('pointerup', release); sky.addEventListener('pointercancel', release);
+  for (const b of buttons) b.addEventListener('click', () => { env.setWeather(b.dataset.w); b.blur(); });   // typing must not land on a button
+  env.onChange(draw);
+  new ResizeObserver(draw).observe(sky);
+  draw();
+}
+
 export class Panel {
   constructor({ sim, soft, machine, onFreeBars, onResetPaper, onResetAll, onAshtray }) {
     // Sliders are live and push their value at start-up, so each starts from the selected machine's own number.
@@ -139,10 +174,7 @@ export class Panel {
       <div class="actions"><button id="a-paper">reset paper</button><button id="a-ribbon">reset ribbon</button><button id="a-free">free bars</button><button id="a-all">reset all</button></div>
       <div class="actions"><button id="a-unlimited" aria-pressed="false" title="no speed limit and no typebar collisions; not realistic">unlimited typing</button><button id="a-ashtray" aria-pressed="true" title="the ashtray, cigarette and lighter on the desk">ashtray</button></div>
       <div class="actions"><select id="a-machine" title="machine" aria-label="machine"></select></div>
-      <div class="env-row">
-        <canvas id="env-sky" role="slider" aria-label="time of day" title="drag to set the time of day"></canvas>
-        <div class="env-wx" role="group" aria-label="weather">${Object.entries(WEATHER_ICONS).map(([n, icon]) => `<button data-w="${n}" aria-pressed="false" title="${n}" aria-label="${n}">${icon}</button>`).join('')}</div>
-      </div>
+      ${envRowHtml()}
       <details class="params" open>
         <summary>parameters</summary>
         <div class="note" id="slowNote" hidden>acoustics are nearly silent at slow time scales</div>
@@ -151,31 +183,7 @@ export class Panel {
   }
 
   /** The horizon strip and weather buttons; they follow the environment if it changes from elsewhere. */
-  bindEnvironment(env) {
-    const sky = this.el.querySelector('#env-sky'), buttons = [...this.el.querySelectorAll('.env-wx button')];
-    const draw = () => {
-      drawSky(sky, env.timeValue, env.weather);
-      sky.setAttribute('aria-valuetext', env.time);
-      sky.title = `${env.time}: drag to set the time of day`;
-      for (const b of buttons) b.setAttribute('aria-pressed', String(b.dataset.w === env.weather));
-    };
-    // Settles on a preset when close to one, so "day" is reachable exactly.
-    const at = (e) => {
-      const r = sky.getBoundingClientRect();
-      let t = Math.min(1, Math.max(0, (e.clientX - r.left - SKY_PAD) / (r.width - 2 * SKY_PAD)));
-      for (const p of Object.values(env.presets)) if (Math.abs(t - p) < 0.018) t = p;
-      env.setTime(t);
-    };
-    let held = false;
-    sky.addEventListener('pointerdown', (e) => { e.preventDefault(); held = true; sky.setPointerCapture(e.pointerId); at(e); });
-    sky.addEventListener('pointermove', (e) => { if (held) at(e); });
-    const release = () => { held = false; };
-    sky.addEventListener('pointerup', release); sky.addEventListener('pointercancel', release);
-    for (const b of buttons) b.addEventListener('click', () => { env.setWeather(b.dataset.w); b.blur(); });   // typing must not land on a button
-    env.onChange(draw);
-    new ResizeObserver(draw).observe(sky);
-    draw();
-  }
+  bindEnvironment(env) { bindEnvRow(this.el, env); }
 
   send(path, value) { this.sent.set(path, value); this.sim.setParam(path, value); }
 

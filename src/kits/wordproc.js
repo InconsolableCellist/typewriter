@@ -39,6 +39,7 @@ import { createManual } from '../render/wp/manual.js';
 import { installManualReader } from '../ui/wp-manual.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
 import { installStationControls, addHitProxy } from './wp/station.js';
+import { installAtmosphere } from './wp/atmosphere.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -127,7 +128,7 @@ export async function mount(ctx) {
   // The keys' own sound comes from the keyboard's mechanism, which runs here on the main thread: a sampler on the same
   // AudioContext plays the recorded beam spring cuts at each stem's felt and top-stop contacts (architecture 10.4).
   const keySounds = new WpKeySampler(machine.audio?.keys);
-  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx) { keySounds.attach(speaker.ctx); creak.attach(speaker.ctx); }
+  const unlockAudio = () => { speaker.unlock(); if (speaker.ctx) { keySounds.attach(speaker.ctx); creak.attach(speaker.ctx); atmosphere.attachAudio(); }
     if (speaker.ctx && !printer.sim.isMock && !unlockAudio.done && !params.has('localsim')) {   // ?localsim keeps the mechanism on the main thread (machines with no audio device, tests)
      unlockAudio.done = true; printer.sim.unlockAudio(speaker.ctx).catch((e) => console.warn(e)); } };
   const keyboard = new KeyboardHost((e) => sys.deviceEvent(e), simNow);
@@ -144,12 +145,6 @@ export async function mount(ctx) {
   const face = new THREE.Mesh(makeTubeFace(displayFace.w, displayFace.h, displayFace.radius), crt.material);
   face.position.set(displayFace.x, displayFace.y, displayFace.z);
   faceParent.add(face);
-  // The screen's own light on the keyboard and desk: shadowless, from a little in front of the glass.
-  const spill = new THREE.SpotLight(0x66ff99, 0, 1.5, 1.1, 0.9, 2);
-  spill.position.set(displayFace.x, displayFace.y, displayFace.z + 0.03);
-  spill.target.position.set(displayFace.x, displayFace.y - 0.4, displayFace.z + 0.6);
-  faceParent.add(spill.target);
-  faceParent.add(spill);
   stage.fitShadow(machine.deskLayout.extent);
 
   // Where the camera stands: stations, focus items and the free view (architecture 3.5). It moves only when asked.
@@ -203,6 +198,8 @@ export async function mount(ctx) {
   const screenCard = new ScreenCard({ renderer: stage.renderer, crt, insets: document.getElementById('insets'), panel: document.getElementById('panel') });
 
   const panel = buildPanel(ctx, printer.feeder, screenCard);
+  // Time of day, weather and the screen's green glow on the keyboard and desk (the room's light at night).
+  const atmosphere = installAtmosphere({ stage, machine, crt, face: { ...displayFace, parent: faceParent }, panel, audio: () => speaker.ctx, storage: safeStorage() });
 
   // A new window shape frames the same view again, at once: the station's head-on view depends on it.
   const resize = () => { stage.resize(window.innerWidth, window.innerHeight); if (!nav.free) orbit.flyTo(frame(nav.id), 1e-3); };
@@ -226,7 +223,7 @@ export async function mount(ctx) {
     pages.update(dt);
     crt.setPower(devices.power.on);
     crt.update(dt);
-    spill.intensity = 0.02 + 0.25 * crt.litFraction;
+    atmosphere.update(dt);
     stage.composer.render();
     markers.update();
     screenCard.render();
@@ -235,7 +232,7 @@ export async function mount(ctx) {
   }
   requestAnimationFrame(loop);
 
-  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, reader };
+  window.__tw = { stage, machine, geometry, units, parts, desk, orbit, nav, boxes, screenCard, panel, crt, screen, get sys() { return sys; }, keyboard, devices, printer, pages, diskettes, sim, soft: printer.soft, station, switchPower, manual, reader, atmosphere, environment: atmosphere.environment, ambience: atmosphere.ambience };
   return window.__tw;
 }
 

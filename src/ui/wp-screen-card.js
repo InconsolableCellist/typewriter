@@ -35,8 +35,11 @@ void main() {
   vec2 ph = texture(uPhosphor, c).rg;
   float rows = c.y * 400.0;
   float w = fwidth(rows);
-  float line = mix(0.55 + 0.45 * pow(0.5 + 0.5 * cos(6.2831853 * rows), 0.7), 0.86, smoothstep(0.3, 0.6, w));
-  line *= mix(1.0, 0.88 + 0.12 * step(1.0, mod(gl_FragCoord.y, 2.0)), smoothstep(0.3, 0.6, w));
+  // The 400 scan lines, drawn as dark gaps. Where they are finer than about 3.5 screen pixels they would only shimmer,
+  // so every 2nd, 4th, ... gap is drawn instead: still locked to the raster, always visible, never a moire.
+  float k = exp2(ceil(log2(max(1.0, w * 3.5))));
+  float band = 0.5 + 0.5 * cos(6.2831853 * rows / k);
+  float line = 1.0 - 0.32 * pow(band, 6.0);
   float vign = 1.0 - 0.3 * r2 * 2.2;
   float hum = 1.0 + 0.04 * sin(6.2831853 * (c.y - uTime * 0.21));
   float grain = 0.95 + 0.1 * hash(floor(vUv * vec2(1100.0, 760.0)));

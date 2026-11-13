@@ -9,6 +9,7 @@ import { unionBox } from '../interact/wp-views.js';
 const KEY = 'wpMarkers';
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 L19 12 H14.5 V20 H9.5 V12 H5 Z"/></svg>';
 const TURN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7 A7 7 0 1 1 5 13" fill="none" stroke-width="2.6" stroke-linecap="round"/><path d="M2.5 4.5 L8.5 5 L6.5 10.5 Z"/></svg>';
+const IDLE_MS = 2500;          // the pointer still this long: the circles and edge arrows fade
 const AHEAD = 0.16;             // within this fraction of the window's shorter side from its centre, a marker is ahead
 
 export function markersShown() {
@@ -25,8 +26,18 @@ export class WayMarkers {
     document.body.appendChild(this.root);
     this.items = [];
     this.v = new THREE.Vector3();
-    nav.onChange(() => this.rebuild());
+    nav.onChange(() => { this.rebuild(); this.wake(); });
     this.rebuild();
+    // The circles and the edge arrows fade out when the pointer has been still a moment, and back at its first move.
+    this.idleTimer = 0;
+    for (const ev of ['pointermove', 'pointerdown', 'wheel', 'touchstart']) window.addEventListener(ev, () => this.wake(), { passive: true });
+    this.wake();
+  }
+
+  wake() {
+    document.body.classList.remove('nav-idle');
+    clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => document.body.classList.add('nav-idle'), IDLE_MS);
   }
 
   setShown(on) {

@@ -215,10 +215,11 @@ float crtHash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.
           // 400 scan lines with dark gaps; where a line is under two pixels on screen they fade to their mean (no moire).
           float rows = c.y * 400.0;
           float w = fwidth(rows);
-          float line = mix(0.5 + 0.5 * pow(0.5 + 0.5 * cos(6.2831853 * rows), 0.7), 0.82, smoothstep(0.3, 0.6, w));
-          // Where the real lines are finer than the screen's pixels, a light line every other device row stands in, so the
-          // raster still reads as scanned at any distance without moire.
-          line *= mix(1.0, 0.88 + 0.12 * step(1.0, mod(gl_FragCoord.y, 2.0)), smoothstep(0.3, 0.6, w));
+          // The 400 scan lines, drawn as dark gaps. Where they are finer than about 3.5 screen pixels they would only shimmer,
+          // so every 2nd, 4th, ... gap is drawn instead: still locked to the raster, always visible, never a moire.
+          float k = exp2(ceil(log2(max(1.0, w * 3.5))));
+          float band = 0.5 + 0.5 * cos(6.2831853 * rows / k);
+          float line = 1.0 - 0.32 * pow(band, 6.0);
           float vign = 1.0 - 0.32 * r2 * 2.2;
           // Life: a slow mains beat rolling up the screen, the frame-to-frame shimmer, and the phosphor's grain.
           float hum = 1.0 + 0.045 * sin(6.2831853 * (c.y - uTime * 0.21));

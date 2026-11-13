@@ -124,3 +124,5 @@ html, body { margin: 0; height: 100%; background: #08080a; overflow: hidden; fon
 #navMarkers .way:hover .ring { background: rgba(12,13,15,.82); transform: scale(1.08); }
 #navMarkers .way:hover .name { opacity: 1; }
 @media (hover: none) { #navMarkers .name { opacity: .9; } }
+#navMarkers, .nav-edge { transition: opacity .4s; }
+body.nav-idle #navMarkers, body.nav-idle .nav-edge { opacity: 0; pointer-events: none; }

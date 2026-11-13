@@ -207,7 +207,7 @@ test('closing the lever clamps the diskette, it spins up, and the drive is ready
   r.run(0.6, (x) => x.disk((e) => e.ev === 'ready').length > 0, (s) => { if (tSpeed < 0 && d.wd > 0.99 * d.wh) tSpeed = s.t; });
   const ready = r.disk((e) => e.ev === 'ready');
   assert.equal(ready.length, 1);
-  assert.deepEqual({ drive: ready[0].drive, mediaId: ready[0].mediaId, type: ready[0].type }, { drive: 1, mediaId: 'WORK01', type: '2D' });
+  assert.deepEqual({ drive: ready[0].drive, mediaId: ready[0].mediaId, type: ready[0].type, mediaType: ready[0].mediaType }, { drive: 1, mediaId: 'WORK01', type: 'device', mediaType: '2D' });
   assert.ok(tSpeed > 0 && tSpeed - tSwitch < 0.3, `up to speed ${tSpeed - tSwitch} s after the switch`);
   const dt = ready[0].t - tSwitch;
   assert.ok(dt > D.adapter.minPeriod && dt < 0.6, `ready ${dt} s after the lever closed`);
@@ -436,4 +436,19 @@ test('the client carries disk commands and their completions', async () => {
   const e = device.find((x) => x.dev === 'disk' && x.id === 9);
   assert.ok(e && !e.ok && e.error === 'notReady', 'an empty drive is not ready');
   assert.ok(Number.isInteger(client.layout.headTrack));
+});
+
+test('a power cycle: the drives drop ready, come back ready as device events, with the diskette named', () => {
+  const sim = fresh({ drives: [{ mediaId: 'CMBDSK', type: '2D' }, WORK] }), r = new Run(sim);
+  r.run(1);
+  sim.command({ dev: 'station', op: 'power', on: false });
+  r.run(4);
+  assert.equal(sim.diskStatus(0).ready, false);
+  r.events.length = 0;
+  sim.command({ dev: 'station', op: 'power', on: true });
+  r.run(3, () => r.disk((e) => e.ev === 'ready').length === 2);
+  const ready = r.disk((e) => e.ev === 'ready');
+  assert.equal(ready.length, 2, 'both drives report ready within 3 s of power on');
+  for (const e of ready) assert.equal(e.type, 'device', 'the event keeps its type, so the host passes it on');
+  assert.deepEqual(ready.map((e) => [e.drive, e.mediaId, e.mediaType]), [[0, 'CMBDSK', '2D'], [1, 'WORK01', '2D']]);
 });

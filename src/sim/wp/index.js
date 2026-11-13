@@ -75,7 +75,10 @@ export class WordprocSim {
 
   /** A device event from the adapter, with the identity of the diskette the kit put in that drive. */
   diskEvent(e) {
-    const out = { type: 'device', dev: 'disk', ...e };
+    // The adapter's `type` is the diskette's format ('2D'); it must not overwrite the event's own type, or the host would
+    // not pass the event on as a device event (after a power cycle the software never heard the drives come ready).
+    const { type: mediaType, ...rest } = e;
+    const out = { type: 'device', dev: 'disk', ...rest, ...(mediaType ? { mediaType } : null) };
     if (e.ev === 'ready') out.mediaId = this.diskette.drives[e.drive].media?.mediaId ?? null;
     return out;
   }

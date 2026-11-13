@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { glbUnitMaterials } from './units.js';
+import { mergeStaticMeshes, partObjects } from './merge-static.js';
 
 export const STATION_URL = '/assets/models/wp_station.glb';
 export const DISPLAY_URL = '/assets/models/wp_display.glb';
@@ -165,7 +166,9 @@ export async function buildStation(size, mats) {
     const k = typeof i === 'string' ? 'ABCDEFGH'.indexOf(i.toUpperCase()) : i;
     leds[k]?.traverse((o) => { if (o.isMesh) { o.material.emissiveIntensity = on ? 2.4 : 0; o.material.color.set(on ? 0xff3a20 : 0x3a0604); } });
   };
-  return { group, parts: { rocker, setRocker, leds, setLed } };
+  const parts = { rocker, setRocker, leds, setLed };
+  mergeStaticMeshes(group, partObjects(parts));
+  return { group, parts };
 }
 
 /**
@@ -188,5 +191,6 @@ export async function buildDisplay(size, mats, { tilt = [0, 20 * Math.PI / 180],
     setTilt: (a) => { tiltNode.rotation.x = -clamp(a, tilt); },       // positive leans the top back
     setSwivel: (a) => { swivelNode.rotation.y = clamp(a, swivel); },
   };
+  mergeStaticMeshes(group, partObjects(parts));
   return { group, parts, face: { ...f, parent: tiltNode } };
 }

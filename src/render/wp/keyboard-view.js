@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { KEYS, KEY_UNIT as U } from '../../machine/wp-keys.js';
 import { CASE, deckOrigin, keyRect } from './keyboard-layout.js';
+import { batchMeshes, mergeStaticMeshes, partObjects } from './merge-static.js';
 
 export const KEYBOARD_URL = '/assets/models/wp_keyboard.glb';
 
@@ -311,6 +312,7 @@ function makeAtlas(caps, maxAniso) {
 
 // ---------- the keyboard ----------
 
+
 function keyShape(key) {
   const r = keyRect(key);
   const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
@@ -354,6 +356,11 @@ export async function buildKeyboard(size, slope, mats, { url = KEYBOARD_URL, max
     deck.add(m);
     return m;
   });
+  // All the caps in one BatchedMesh: one draw a pass instead of 84. Each cap keeps its own hidden mesh, which the
+  // picker raycasts and the kit moves along `pressDir`; the batch follows them.
+  const caps = batchMeshes(keys, capMat);
+  caps.name = 'keycaps';
+  deck.add(caps);
   // The keycap plastic's grain once the unit materials' textures arrive, on the caps' own box uvs (uv1).
   Promise.resolve(mats.ready).then(() => {
     for (const k of ['normalMap', 'roughnessMap']) {
@@ -389,7 +396,9 @@ export async function buildKeyboard(size, slope, mats, { url = KEYBOARD_URL, max
   } catch (e) { console.info('keyboard case', e); }
 
   const pressDir = new THREE.Vector3(0, -1, 0);   // in the deck's frame: down the stems, normal to the slope
-  return { group, parts: { keys, deck, pressDir, ...caseParts } };
+  const parts = { keys, deck, pressDir, ...caseParts };
+  mergeStaticMeshes(group, partObjects(parts));
+  return { group, parts };
 }
 
 // ---------- the information card ----------

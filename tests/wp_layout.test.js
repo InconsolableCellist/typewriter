@@ -12,9 +12,9 @@ const standing = Object.entries(g.units).filter(([, u]) => !u.on);
 
 const overlap = (a, b) => a.min[0] < b.max[0] && b.min[0] < a.max[0] && a.min[2] < b.max[2] && b.min[2] < a.max[2];
 
-test('registry: the word processor is registered, unlisted, and has a kit', () => {
+test('registry: the word processor is registered, listed in the picker, and has a kit', () => {
   assert.equal(MACHINES.wordproc1980, wordproc1980);
-  assert.ok(UNLISTED.has('wordproc1980'));
+  assert.ok(!UNLISTED.has('wordproc1980'), 'the Displaywriter is in the machine picker');
   assert.equal(typeof KITS[wordproc1980.action.type], 'function');
   for (const m of Object.values(MACHINES)) assert.equal(typeof KITS[m.action.type], 'function', m.id);
 });

@@ -33,7 +33,7 @@ import { ViewNav, viewSpec, poseOf, fallbackBoxes, LEGACY_CAMERAS } from '../int
 import { makePicker, installWpPointer, makeHighlight } from '../interact/wp-pointer.js';
 import { installNavUi } from '../ui/wp-nav.js';
 import { ScreenCard } from '../ui/wp-screen-card.js';
-import { installStationControls } from './wp/station.js';
+import { installStationControls, addHitProxy } from './wp/station.js';
 
 /** ctx = { canvas, params, machine, machines, onPick(id) } */
 export async function mount(ctx) {
@@ -99,6 +99,9 @@ export async function mount(ctx) {
   let poweredAt = cold ? null : -60;   // warm: long past its self-test
   if (cold) sim.command({ dev: 'station', op: 'power', on: false });   // its fan and the drive motors stand still
   const rocker = parts.station.rocker;
+  // Both power switches are small: each gets a pick target a little larger than its well (the owner could not hit it).
+  addHitProxy(rocker, 0.009);
+  addHitProxy(parts.printer.power, 0.009);
   const setRocker = () => parts.station.setRocker(devices.power.on);
   setRocker();
   // The spelling word list is fetched only when Spelling Tasks first loads (architecture 12.3).

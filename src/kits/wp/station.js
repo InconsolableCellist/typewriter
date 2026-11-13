@@ -118,3 +118,29 @@ function hingeOnBackEdge(obj) {
   const base = pivot.quaternion.clone(), q = new THREE.Quaternion(), X = new THREE.Vector3(1, 0, 0);
   return { set: (a) => { pivot.quaternion.copy(base).multiply(q.setFromAxisAngle(X, -a)); } };
 }
+
+/**
+ * A larger, invisible pick target for a small control: a box round `obj`'s meshes (in its own frame, so it moves with
+ * it) grown by `pad` m on every side. The raycaster tests it although it is never drawn; the picker walks up from it to
+ * the control's pickable. Returns the proxy mesh.
+ */
+export function addHitProxy(obj, pad = 0.008) {
+  obj.updateWorldMatrix(true, true);
+  const box = new THREE.Box3(), inv = new THREE.Matrix4().copy(obj.matrixWorld).invert(), m = new THREE.Matrix4();
+  obj.traverse((o) => {
+    if (!o.isMesh) return;
+    o.geometry.computeBoundingBox();
+    box.union(o.geometry.boundingBox.clone().applyMatrix4(m.multiplyMatrices(inv, o.matrixWorld)));
+  });
+  if (box.isEmpty()) box.setFromCenterAndSize(new THREE.Vector3(), new THREE.Vector3(0.02, 0.02, 0.02));
+  box.expandByScalar(pad);
+  const size = box.getSize(new THREE.Vector3()), centre = box.getCenter(new THREE.Vector3());
+  const proxy = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
+  proxy.name = `${obj.name}_hit`;
+  proxy.position.copy(centre);
+  proxy.visible = false;               // never drawn; Raycaster does not look at `visible`
+  proxy.castShadow = proxy.receiveShadow = false;
+  obj.add(proxy);
+  proxy.updateWorldMatrix(false, false);
+  return proxy;
+}

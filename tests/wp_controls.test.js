@@ -207,3 +207,33 @@ test('pointer: a drag on a control turns it and never orbits, the wheel turns it
   r.send('wheel', 100, 100, { deltaY: -100, preventDefault() {} });
   assert.deepEqual(log.at(-1), ['wheel', -100]);
 });
+
+test('power switches: a pick just off the small rocker still finds it, through its invisible hit proxy, before any view box', async () => {
+  const THREE = await import('three');
+  const { addHitProxy } = await import('../src/kits/wp/station.js');
+  const { makePicker } = await import('../src/interact/wp-pointer.js');
+  const scene = new THREE.Scene();
+  const rocker = new THREE.Group(); rocker.name = 'powerRocker';
+  rocker.add(new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.008, 0.015), new THREE.MeshBasicMaterial()));
+  rocker.position.set(0.2, 0.17, 0.1);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.17, 0.4), new THREE.MeshBasicMaterial());
+  body.position.set(0, 0.08, -0.1);
+  scene.add(rocker, body);
+  scene.updateMatrixWorld(true);
+  const proxy = addHitProxy(rocker, 0.009);
+  assert.equal(proxy.visible, false);
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 10);
+  camera.position.set(0.2, 0.6, 0.5); camera.lookAt(0.2, 0.17, 0.1); camera.updateMatrixWorld(true);
+  const canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 800 }) };
+  const pickables = [{ object: rocker, part: () => ({ label: 'Power: switch off', onClick: () => {} }) }];
+  const nav = { targets: () => [{ id: 'computer/controls', kind: 'focus', label: 'Controls', boxes: ['controls'] }] };
+  const pick = makePicker({ camera, canvas, keys: [], pickables, nav, boxes: () => ({ controls: { min: [-1, -1, -1], max: [1, 1, 1] } }), solids: () => [body] });
+  // 6 mm past the paddle's end: off the paddle itself, inside the proxy.
+  const p = new THREE.Vector3(0.2 + 0.017 + 0.006, 0.17, 0.1).project(camera);
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2(p.x, p.y), camera);
+  assert.equal(ray.intersectObject(rocker.children[0]).length, 0, 'the paddle alone is missed');
+  const hit = pick({ clientX: (p.x + 1) / 2 * 800, clientY: (1 - p.y) / 2 * 800 });
+  assert.equal(hit?.kind, 'control', 'the proxy catches it, not the Controls box behind');
+  assert.equal(hit.label, 'Power: switch off');
+});

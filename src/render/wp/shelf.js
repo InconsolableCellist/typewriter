@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { drawIbmLogo, grainCanvas } from './manual.js';
-import { SHELF_BINDERS, SHELF_LOOSE, BINDER, BINDERS, CASE, binderPoses, loosePoses, shelfLabel } from './shelf-items.js';
+import { SHELF_BINDERS, SHELF_LOOSE, BINDER, BINDERS, CASE, binderPoses, loosePoses, shelfLabel, scanUrl } from './shelf-items.js';
 
 const MM = 1e-3;
 const BOARD = 2.4 * MM;                 // a binder's board with its vinyl
@@ -56,11 +56,19 @@ function drawSpine(g, r, b) {
   const lh = Math.min(w * 0.22, 26);
   drawIbmLogo(g, x + (w - lh * 3.05) / 2, y + h * 0.035, lh, INK);
   g.fillStyle = INK; g.fillRect(x + w * 0.15, y + h * 0.035 + lh + h * 0.02, w * 0.7, Math.max(2, h * 0.002));
+  // A binder whose scan can be read here wears a green band under its logo, a sticker marking the copy to read.
+  if (scanUrl(b)) {
+    const by = y + h * 0.105, bh = h * 0.055;
+    g.fillStyle = '#1f9d55'; g.fillRect(x, by, w, bh);
+    g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    fit(g, 'READ', 700, Math.min(bh * 0.62, w * 0.24), x + w / 2, by + bh * 0.52, w * 0.86);
+    g.textAlign = 'left';
+  }
   // The rest down the spine, read with the head to the right (the way a spine is read on the shelf).
   g.save();
-  g.translate(x + w / 2, y + h * 0.13);
+  g.translate(x + w / 2, y + h * 0.18);
   g.rotate(Math.PI / 2);
-  const L = h * 0.83;                                   // the length available
+  const L = h * 0.78;                                   // the length available
   g.textBaseline = 'middle'; g.textAlign = 'left';
   const lines = b.title.length;
   const ts = Math.min(w * (lines > 1 ? 0.2 : 0.26), 36);

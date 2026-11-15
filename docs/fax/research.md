@@ -1,7 +1,11 @@
 # Fax machine: research notes
 
-Notes behind `plan.md`, gathered 2026-11-15 in a cloud session. Everything is summarised in my own words; numbers
+Notes behind `plan.md`, gathered 2026-11-15 in cloud sessions. Everything is summarised in my own words; numbers
 and short labels are quoted as facts.
+
+**The machine has since been chosen: the Sharp FO-70.** Section 8 holds everything found about it. Sections 2 to 4
+were written before the choice, around a machine of 1988; they stand as background, and where they disagree with
+section 8 (V.17 and the 1988 editions in section 4, the candidates in section 3), section 8 and `plan.md` rule.
 
 **How far to trust this file.** Most of the hosts that hold fax manuals were blocked from the session (section 1), so
 **no service manual has been read yet**. Three kinds of statement appear below and are marked:
@@ -24,6 +28,7 @@ and short labels are quoted as facts.
 | `www.itu.int`, `www.rfc-editor.org` | Blocked |
 | `developers.cloudflare.com`, `www.cloudflare.com` | Blocked (figures below come from search summaries of those pages) |
 | `www.computerhistory.org`, `www.thehenryford.org`, `vt100.net` | Blocked |
+| Second session, for the FO-70: `manualzz.com`, `sharp.manymanuals.com`, `www.manuallib.com`, `manualshive.com`, `audio.manualsonline.com`, `www.manualsdir.com`, `www.scribd.com`, `global.sharp`, `www.sharpsa.co.za`, `www.ebay.com`, `i.ebayimg.com`, `www.worthpoint.com`, `picclick.com`, `www.youtube.com`, `freesound.org`, and the search engines' own pages | Blocked, with `curl` and with the fetch tool alike |
 
 Web search worked and returned summaries and addresses, which is how the documents in section 2 were located.
 **The next session needs these hosts allowed**, or the owner can download the PDFs and drop them in
@@ -35,6 +40,8 @@ www.itu.int  www.rfc-editor.org  datatracker.ietf.org
 bitsavers.org  www.mirrorservice.org  ftp.mirrorservice.org
 developers.cloudflare.com
 freesound.org  www.youtube.com (reference recordings, to listen and measure only)
+manualzz.com  sharp.manymanuals.com  www.manuallib.com  manualshive.com  global.sharp  (the FO-70's manuals)
+www.ebay.com  i.ebayimg.com  www.worthpoint.com  (listing photographs, for reference only)
 ```
 
 ## 2. Documents located
@@ -48,7 +55,7 @@ freesound.org  www.youtube.com (reference recordings, to listen and measure only
 | R-FSM | *Ricoh FAX77 / FAX80 / FAX85 Field Service Manual* | https://manualmachine.com/ricoh/facsimilefax80/22319847-field-service-manual | No. Search summary gives: thermal printing with automatic cutter, roll 216 mm x 100 m; 12.8 x 15.3 x 6.9 in, 9 kg; test-page times 20 / 14 / 13 s; FAX77 has MH and MR, the others add MMR and ECM |
 | R-G3 | Ricoh *Group 3 Facsimile* basic training manual (scanner, thermal printing, coding, protocol, modems) | https://manualmachine.com/ricoh/g3basic/8593812-basiceur | No. **Wanted whatever machine is chosen**: it is a manufacturer's own explanation of how a G3 machine works |
 | S-220 | *Sharp FO-220 Operation Manual*, 133 pages. "Compact, desktop digital unit"; talks to Group 3 and Group 2 machines; FINE and HALF-TONE modes, TALK and POLLING | https://www.manualslib.com/manual/490235/Sharp-Fo-220.html | No. Date not established |
-| S-70 | *Sharp FO-50 / FO-70 Service Manual*, 102 pages: general description, mechanism blocks (operation panel, scanner frame, CIS unit, drive unit, head frame and thermal head), diagrams, drive units for the tear-off model (FO-50) and the cutter model (FO-70) | https://www.manualslib.com/manual/970612/Sharp-Fo-70.html ; https://elektrotanya.com/sharp_fo-50_fo-70.pdf/download.html | No. One listing carries "(c) 1999", so this is a 1990s machine, not a 1980s one |
+| S-70 | *Sharp FO-50 / FO-70 Service Manual*, 102 pages. **The chosen machine: see section 8** for its editions, contents and the operation manual | https://www.manualslib.com/manual/970612/Sharp-Fo-70.html ; https://elektrotanya.com/sharp_fo-50_fo-70.pdf/download.html | No (hosts blocked). Contents list and specification lines through search summaries |
 | M-900 | *Murata M-900* user manual, 16 pages | https://www.manualslib.com/manual/297250/Murata-M-900.html | No |
 | B-100 | Brother FAX-100 schematics | https://manualmachine.com/brother/100/5136228-schematic/ | No |
 | P-F90 | Panasonic KX-F90: two photographs on white on Wikimedia Commons (`File:Panasonic KX-F90.jpg` and a crop) | https://commons.wikimedia.org/wiki/Category:Fax_machines_with_white_background | Listed, not viewed |
@@ -161,7 +168,11 @@ All **[M]** unless marked; each gets a clause number in M0.
   1200 baud; scrambler 1 + x^-6 + x^-7 with guards against repeating patterns; a long training sequence.
   (A search summary doubted the 1600 baud figure by reading a table for the 2400 bit/s mode; the Recommendation
   decides.)
-- V.17 (1991) and V.34 are later than the machine and out of scope.
+- V.17 (1991) and V.34: not needed. (Written when the machine was to be of 1988. The FO-70 is of about 1999 but is
+  a 9600 bit/s machine, so the conclusion stands; see section 8.2.)
+- For the FO-70 the page also has a third resolution, super fine at 15.4 lines/mm, with K = 8 for Modified READ and
+  bit 41 of the extended DIS/DCS field to announce it; both **[M]**, to be checked against T.4 and T.30 of 1993 to
+  1996.
 
 **The line (North America).**
 - Dial tone 350 + 440 Hz at -13 dBm; audible ringing 440 + 480 Hz, 2 s on and 4 s off; busy 480 + 620 Hz, 0.5 s on
@@ -211,3 +222,105 @@ A Durable Object is billed for 128 MB while awake, so 13,000 GB-s is about 28 ho
 
 No free recording of a 1980s thermal machine's mechanism was found. The owner's own recording is the best source
 (plan, section 6).
+
+## 8. The Sharp FO-70 (the machine chosen)
+
+Gathered 2026-11-15 in a second cloud session, after the owner chose the machine. **No FO-70 document was read at
+source.** Every manual host was blocked again (section 1), so what follows comes from web search summaries, which
+quote lines of the manuals and their contents lists. The marks used in this section:
+
+- **[S]** a search summary quoted the named document. Good for a number or a label; the surrounding context was not
+  seen, and a summary can attach a line to the wrong model.
+- **[R]** read directly (only the Wikimedia Commons API could be).
+- **[M]** memory, **[A]** assumption, as elsewhere.
+
+### 8.1 Documents
+
+| Id | Document | Where | Seen how |
+|---|---|---|---|
+| S-70 | *Sharp FO-50 / FO-70 Service Manual*, 102 pages (ManualsLib also lists 96- and 78-page editions). Marked for after-sales service only. Contents: chapter 1 general description with **specifications on page 3** and the operation panel; troubleshooting with an **error code table on page 31**; circuit descriptions of the control PWB, TEL/LIU PWB, power supply PWB and CIS unit; mechanism blocks (operation panel, CIS unit and scanner frame, drive unit frame, head frame unit, head frame and thermal head); "Drive Unit (Non Cutter Model) (FO-50)" and "Drive Unit (Cutter Model) (FO-70)"; parts | https://www.manualslib.com/manual/970612/Sharp-Fo-70.html ; https://elektrotanya.com/sharp_fo-50_fo-70.pdf/download.html (3.7 MB) ; https://manualzz.com/doc/1143979/sharp-fo-70-service-manual ; https://manualshive.com/manual/sharp/fo-50/368223 | **[S]** contents list and scattered lines |
+| S-70A | The same manual in market editions: No. 00ZFO50A//SME for the FO-50A / FO-70A, No. 00ZFO50RA/SME for the FO-50RA / FO-70RA | https://manualmachine.com/sharp/fo70/20314811-service-manual ; https://manualmachine.com/sharp/fo50/5058513-service-manual | **[S]** |
+| S-70-99 | A 78-page FO-70 service manual carrying "(c) 1999 BY SHARP CORPORATION"; the same page names the FO-50TH and UX-8TH / UX-40TH variants | https://sharp.manymanuals.com/fax-machines/FO-70/service-manual-14316/62 | **[S]** |
+| S-90A | *Sharp FO-90A / FO-70AAR / FO-50AAR Service Manual*. Says its chapters 1, 3, 7 and 8 are partly common with the FO-70AAR and refers to the earlier FO-70 manual. Source of the CIS description and of the compression line | https://www.manualslib.com/manual/848417/Sharp-Fo-90a.html ; https://manualzz.com/doc/725882/sharp-fo-90a-service-manual | **[S]** |
+| S-UX40 | *Sharp UX-40 / FO-50DE Service Manual*, No. 00ZUX40DE/SME; the UX-8 and UX-40 are listed as related to the FO-50 and FO-70 | https://www.manualslib.com/manual/783995/Sharp-Ux-40.html | **[S]** title only |
+| S-70-OM | *Sharp FO-50 / FO-70 Facsimile Operation Manual*. Chapters: installation, sending documents, receiving documents, making copies, making telephone calls, answering machine connection, special functions (Caller ID, Distinctive Ring, blocking reception of unwanted faxes, polling), printing reports and lists. Also a combined FO-10 / FO-50 / FO-70 edition for 220 to 240 V. A US manual site hosts a copy too | https://www.manualslib.com/manual/490299/Sharp-Fo-50.html ; https://www.manualslib.com/manual/3129338/Sharp-Fo-50.html ; https://manualmachine.com/sharp/f050/1313249-user-manual ; https://www.manuallib.com/download/73BA05A5609D0E9268B7A3F00335FFBA.pdf ; https://audio.manualsonline.com/manuals/mfg/sharp/f050_f070.html ; https://archive.org/download/manualsonline-id-2a6cc5f7-8a85-4276-979a-2dfc84c73a44/2a6cc5f7-8a85-4276-979a-2dfc84c73a44.pdf ; https://manuals.online/sharp/fax-machine/fo-70/user-manual/24yz2 | **[S]** contents and specification lines |
+| S-70-QR | A quick reference guide for the FO-50 / FO-70 | https://www.scribd.com/document/469681612/Sharp-Facsimile | **[S]** description only |
+| S-71 | The successors: *Sharp FO-71 Service Manual* (modem block: Conexant CX20438) and Sharp's product pages and brochures for the UX-41 / FO-51 and UX-61 / FO-71 (brochure dated May 2002; 448 KB memory, substitute reception of up to 17 pages; MH / MR / H2; 9600 to 2400 bit/s; 304 x 236 x 122 mm, about 2.6 kg) | https://www.manualslib.com/manual/2315986/Sharp-Fo-71.html ; https://global.sharp/products/facsimile/ux-41_fo-51/ ; https://global.sharp/products/facsimile/ux-61_fo-71/ | **[S]**. Sibling machines: evidence for the family, **not** for the FO-70 |
+| S-50-ZA | A South African retailer's page for the FO-50: 304 W x 236 D x 122 H mm, about 2.6 kg, 16-digit LCD, 35 speed-dial numbers, scan and print width 210 mm, 30 m roll | https://www.sharpsa.co.za/shop/sharp-fo50-fax-machine/ | **[S]** |
+
+### 8.2 Specifications
+
+| Item | Value | Mark and source |
+|---|---|---|
+| Paper cutting | FO-10 and FO-50: tear off by hand. FO-70: automatic cutter | **[S]** S-70-OM |
+| Modem speed | 9600 bit/s with automatic fallback to lower speeds | **[S]** S-70-OM, S-90A |
+| Modulation | V.29 (9600, 7200) and V.27ter (4800, 2400), signalling by V.21 | **[A]**: the standard set for a 9600 machine; no summary named the Recommendations. V.17 would have been advertised as 14 400 |
+| Compression | MR, MH, Sharp (H2) | **[S]** S-70, S-90A. No MMR |
+| Error correction mode | Not mentioned in any line found for the FO-50, FO-70, FO-51 or FO-71 | **[A]** absent |
+| Resolution | Horizontal 8 pels/mm. Vertical: standard 3.85, fine and halftone 7.7, super fine 15.4 lines/mm | **[S]** S-70 |
+| Halftone | 64 levels | **[S]** S-70-OM |
+| Scanning | Contact image sensor: monochrome, 1728 pixels, 8 dots/mm; made of sensor, rod lens, LED light source, light-conductive plate and control circuit. Effective scanning width 210 mm max. | **[S]** S-90A (CIS), S-70-OM (width) |
+| Document feeder | Up to 5 pages of 20 lb paper, face down | **[S]** S-70-OM |
+| Recording | Thermal head on thermal paper. Starter roll 10 m; recommended replacement FO-20PR, 30 m | **[S]** S-70-OM. Roll width not seen: 210 or 216 mm **[A]** |
+| Transmission time | Approx. 15 seconds | **[S]**. By Sharp's usual footnote this is for its own special mode on a standard chart at standard resolution, without the protocol **[M]** |
+| Page memory | **Not established.** No line found. The FO-71 has 448 KB | **[A]** none or very little |
+| Display | 16-digit LCD | **[S]** S-70-OM, S-90A |
+| Automatic dialling | Rapid keys: 5 numbers. Speed dialling: 35 numbers | **[S]** S-70-OM |
+| Keys named | SPEED DIAL (dials by a two-digit number); REDIAL (the last number); SPEAKER (listen to the line and fax tones through the speaker); HOLD/SEARCH (search the auto-dial numbers, or hold a call); RESOLUTION/RECEPTION MODE (resolution when a document is in the feeder, reception mode otherwise); the display "shows messages and prompts during operation and programming" | **[S]** S-70-OM, S-90A. The rest of the panel (FUNCTION, COPY/HELP, START, STOP, volume) is **[A]** from sibling Sharp panels |
+| Telephone | A handset "to make ordinary phone calls, or to transmit and receive faxes manually" | **[S]** S-70-OM |
+| Reception modes | FAX mode (answers on the set number of rings and receives); TEL/FAX mode (for both faxes and voice calls). TEL and A.M. modes expected | **[S]** for the two named; **[A]** for the others |
+| Answering machine | None built in; a chapter on connecting one | **[S]** S-70-OM |
+| Mains | 220 to 240 V AC, 50/60 Hz (the FO-10 / FO-50 / FO-70 edition) | **[S]** |
+| Dimensions and weight | 304 x 236 x 122 mm, about 2.6 kg (FO-50 by a retailer; identical figures on Sharp's page for the FO-51) | **[S]** S-50-ZA, S-71 |
+| Year 2000 | The manual notes that the machine is Year 2000 compliant | **[S]** |
+| Modem chip | Not established for the FO-70. The FO-71 uses a Conexant CX20438. One summary of S-90A carried "Operating Mode: 200 mW (Basic), 275 mW (-V option)", which reads like a modem data sheet line quoted in the circuit description | **[S]**, weak |
+| Colour | Not established | **[A]** |
+
+### 8.3 The year
+
+Not established to the year. The evidence: "(c) 1999" on one service manual edition (S-70-99); the Year 2000 notice
+in the operation manual, which dates the manual to about 1998 or 1999; the successors' brochure of May 2002; a
+contact image sensor and a Conexant-era modem in the family. **A late-1990s design, introduced about 1998 to 1999.**
+No press notice, price or review of the time was found. The question in the brief, "is it a 1990s design", is
+answered yes, at the very end of the decade.
+
+### 8.4 Market variants
+
+Service manual editions exist for suffixes A, RA, AAR, TH and DE, and an FO-10 / FO-50 / FO-70 operation manual for
+220 to 240 V. A South African retailer still lists the FO-50. Sharp's small thermal machines sold in the United
+States at the time carried UX numbers **[M]**. One copy of the operation manual sits on a US manual site, and its
+special functions (Caller ID, Distinctive Ring) fit North America or Australia. **Whether a 120 V North American
+FO-70 existed is not established**; the plan's decision 24 carries it.
+
+### 8.5 Mechanism
+
+Only the service manual's block names are known **[S]**: operation panel; scanner frame with the CIS unit; drive
+unit frame, in a non-cutter form (FO-50) and a cutter form (FO-70); head frame unit with the thermal head. From
+memory of small Sharp thermal machines **[M]**, to be checked: one stepping motor drives both the document feed and
+the recording platen through a planetary gear that changes over with the motor's direction; the operation panel is
+the upper half of the scanner and lifts to load paper and clear jams; the roll lies loose in a compartment; there is
+no exit tray.
+
+### 8.6 Photographs
+
+| Item | Licence | Mark |
+|---|---|---|
+| Wikimedia Commons: **no file for the FO-50 or FO-70**. Searches for "Sharp fax", "Sharp FO fax", "Sharp UX fax" and for a Sharp fax category returned one Sharp machine only | | **[R]** |
+| `File:SHARP Fax UX-D63CL.jpg`, by Mr.ちゅらさん, 28 May 2020, 3840 x 2160. A Japanese home fax of a later generation | CC BY-SA 4.0 | **[R]**. Not a reference for the FO-70 |
+| `File:Panasonic KX-F90.jpg`, by Pittigrilli, retouched by Georgfotoart, 2006: a small home machine of the early 1990s on white | CC BY-SA 4.0 | **[R]**. The nearest free picture of a machine of this class |
+| `Category:Fax machines with white background` also holds two of a Canon Fax-B115, a Canon Laser Class 710 and a Samsung SF-370 | To check | **[R]** list only |
+| Listing photographs (eBay, WorthPoint, PicClick) | Reference only | None located by search; the hosts are blocked |
+| The manuals' own line drawings and exploded views | Reference only | Not seen |
+
+### 8.7 Sounds
+
+Nothing found: no recording and no video of an FO-50 or FO-70 in use. YouTube and Freesound are blocked from here,
+and search returned only manuals.
+
+### 8.8 What M0 must read first
+
+1. S-70 page 3 (specifications): modulation named, ECM or not, memory or not, roll width, power, weight.
+2. S-70's drive unit pages: how many motors, the gear trains, the cutter's drive.
+3. S-70's cover and last page: document number, date, market.
+4. S-70 page 31 and S-70-OM's troubleshooting: error codes and display messages.
+5. S-70-OM's panel figure: every key and legend; the reception modes; the reports.

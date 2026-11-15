@@ -10,7 +10,7 @@
 //
 // Receiver, per line sample
 //   1. carrier detect on a 5 ms power average, on at -43 dBm0, off at -48 dBm0 after 25 ms below [M thresholds;
-//      A hold-off];
+//      A hold-off]; also on only 6 dB above the noise floor, off 3 dB above it or 10 dB below the trained level [A];
 //   2. mix to baseband at the nominal carrier; a matched square-root raised-cosine filter (+-4 symbols);
 //   3. gain control: the matched output's power is tracked while the carrier is new and the gain frozen once the
 //      training's alternation is recognised (the equaliser trims it after);
@@ -112,6 +112,7 @@ export class PskTransmitter {
   }
 }
 
+const RAW_W = 48;
 const ST_IDLE = 0, ST_SEARCH = 1, ST_ALT = 2, ST_TRAIN = 3, ST_DATA = 4;
 export const RX_STATES = ['idle', 'search', 'alternation', 'training', 'data'];
 
@@ -140,6 +141,7 @@ export class PskReceiver {
     this.onLevel = dbm0ToRms(onDbm0) ** 2; this.offLevel = dbm0ToRms(offDbm0) ** 2;
     this.offHold = Math.round(0.025 * rate);
     this.cd = false; this.offRun = 0;
+    this.floor = 0; this.floorA = 1 / (0.5 * rate); this.refPw = 0;
     // Down-mix and matched filter.
     this.car = carrierTable(profile.carrier, rate);
     this.n = 0;
@@ -157,7 +159,7 @@ export class PskReceiver {
     // Timing.
     this.tNext = 0; this.half = 0;     // half: 0 next is an on-time sample, 1 a midpoint
     this.midRe = 0; this.midIm = 0; this.prevRe = 0; this.prevIm = 0;
-    this.kt = 0; this.ktInt = 0; this.tDrift = 0;
+    this.kt = 0; this.ktInt = 0; this.tDrift = 0; this.eOn = 0; this.eMid = 0;
     // Equaliser (T/2 spaced).
     const N = 2 * eqSymbols + 1;
     this.N = N; this.centre = eqSymbols;        // the centre tap's delay in T/2 samples is N-1-centre... see _eq
@@ -191,6 +193,9 @@ export class PskReceiver {
       if (K.re[i] * ar + K.im[i] * ai < 0) { this.i0 = i; break; }
     }
     this.knownLen = K.re.length;
+    this.rawRe = new Float64Array(RAW_W); this.rawIm = new Float64Array(RAW_W); this.rawPos = 0;
+    this.dRe = new Float64Array(RAW_W); this.dIm = new Float64Array(RAW_W);
+    this.trainAcc = 0; this.trainN = 0; this.checkAt = -1;
     this.altLen = profile.altLen;
     // Statistics.
     this.stats = { state: 'idle', carrier: false, trained: false, trainingMseDb: NaN, mseDb: NaN, symbols: 0, bits: 0, gainDb: 0, retrains: 0, timing: 0 };
@@ -202,7 +207,7 @@ export class PskReceiver {
     this.state = ST_IDLE; this.agcFrozen = false; this.zp = 0; this.gain = 1;
     this.wRe.fill(0); this.wIm.fill(0); this.xRe.fill(0); this.xIm.fill(0);
     this.theta = 0; this.omega = 0; this.altCount.fill(0); this.altSeen = 0;
-    this.half = 0; this.tNext = this.n + 2;
+    this.half = 0; this.tNext = this.n + 2; this.eOn = 0; this.eMid = 0;
     this.stats.trained = false;
   }
 
@@ -214,13 +219,18 @@ export class PskReceiver {
       const v = x[offset + i];
       // 1. carrier detect
       this.pw += this.pwA * (v * v - this.pw);
+      // The noise floor: follows the power down at once and up slowly, only while no training has been found, so a
+      // noisy line does not hold the carrier detector on [A].
+      if (this.state <= ST_SEARCH) {
+        if (this.pw < this.floor) this.floor = this.pw; else this.floor += this.floorA * (this.pw - this.floor);
+      }
       if (!this.cd) {
-        if (this.pw > this.onLevel) {
+        if (this.pw > this.onLevel && this.pw > 4 * this.floor) {
           this.cd = true; this.offRun = 0; this.stats.carrier = true;
           this.reset(); this._setState(ST_SEARCH);
           if (this.sink.carrier) this.sink.carrier(true);
         }
-      } else if (this.pw < this.offLevel) {
+      } else if (this.pw < this.offLevel || this.pw < 2 * this.floor || (this.state === ST_DATA && this.pw < 0.1 * this.refPw)) {
         if (++this.offRun >= this.offHold) {
           this.cd = false; this.stats.carrier = false;
           this._setState(ST_IDLE);
@@ -271,11 +281,21 @@ export class PskReceiver {
     const adj = Math.max(-0.3, Math.min(0.3, kt * e));
     this.tNext += adj; this.stats.timing += adj;
     this.prevRe = re; this.prevIm = im;
+    // Coarse timing while searching: if the midpoints carry far more energy than the on-time samples (sampling the
+    // alternation at its zero crossings, where Gardner's loop is slowest to leave), swap the two roles [A].
+    if (this.state === ST_SEARCH) {
+      this.eOn += 0.3 * (re * re + im * im - this.eOn);
+      this.eMid += 0.3 * (this.midRe * this.midRe + this.midIm * this.midIm - this.eMid);
+      if (this.eMid > 3 * this.eOn && this.eMid > 0.05) { this.half = 0; this.eOn = this.eMid; this.eMid = 0; }
+    }
     this._symbol(re, im);
   }
 
   _symbol(re, im) {
     const K = this.p.known;
+    // Keep the last raw symbols for the alignment check.
+    this.rawPos = (this.rawPos + 1) % RAW_W;
+    this.rawRe[this.rawPos] = re; this.rawIm[this.rawPos] = im;
     if (this.state === ST_SEARCH) {
       // Steps between raw symbols, against the alternation's two possible steps.
       const sr = re * this.lastRawRe + im * this.lastRawIm, si = im * this.lastRawRe - re * this.lastRawIm;
@@ -319,7 +339,51 @@ export class PskReceiver {
       return;
     }
     this.rawIndex++;
+    if (this.state === ST_TRAIN && this.rawIndex === this.checkAt) {
+      // Alignment check [A]: a training that is not converging after RAW_W symbols was locked to the wrong place in
+      // the sequence (noise faked or hid the alternation's end). Find the place by correlating the symbol-to-symbol
+      // steps of the last RAW_W raw symbols with the known sequence's, and restart the equaliser there.
+      if (this.trainN && this.trainAcc / this.trainN / this.symPow > 0.2 && !this._realign()) {
+        this.reset(); this._setState(ST_SEARCH); return;
+      }
+    }
     this._equalise();
+  }
+
+  _realign() {
+    const K = this.p.known, W = RAW_W, L = this.knownLen;
+    // Steps of the raw window, oldest first.
+    const dr = this.dRe, di = this.dIm;
+    for (let m = 1; m < W; m++) {
+      const a = (this.rawPos + 1 + m) % W, b = (this.rawPos + m) % W;
+      dr[m] = this.rawRe[a] * this.rawRe[b] + this.rawIm[a] * this.rawIm[b];
+      di[m] = this.rawIm[a] * this.rawRe[b] - this.rawRe[a] * this.rawIm[b];
+    }
+    let best = -1, bestScore = 0;
+    for (let c = W; c < L - 120; c++) {
+      let sr = 0, si = 0, na = 0, nb = 0;
+      for (let m = 1; m < W; m++) {
+        const j = c - (W - 1) + m;                      // K index of window position m
+        const kr = K.re[j] * K.re[j - 1] + K.im[j] * K.im[j - 1], ki = K.im[j] * K.re[j - 1] - K.re[j] * K.im[j - 1];
+        sr += dr[m] * kr + di[m] * ki; si += di[m] * kr - dr[m] * ki;
+        na += dr[m] * dr[m] + di[m] * di[m]; nb += kr * kr + ki * ki;
+      }
+      const norm = Math.hypot(sr, si) / Math.max(1e-12, Math.sqrt(na * nb));     // 0..1 (Cauchy-Schwarz)
+      if (norm > bestScore) { bestScore = norm; best = c; }
+    }
+    this.stats.retrains++;
+    if (best < 0 || bestScore < 0.6) return false;
+    // Gain and phase from the window at that place.
+    let gr = 0, gi = 0, km = 0;
+    for (let m = 0; m < W; m++) {
+      const a = (this.rawPos + 1 + m) % W, j = best - (W - 1) + m;
+      gr += this.rawRe[a] * K.re[j] + this.rawIm[a] * K.im[j]; gi += this.rawIm[a] * K.re[j] - this.rawRe[a] * K.im[j];
+      km += K.re[j] * K.re[j] + K.im[j] * K.im[j];
+    }
+    this.gRe = gr / km; this.gIm = gi / km;
+    this.rawIndex = best;
+    this._startTraining(false);
+    return true;
   }
 
   _altEstimate(re, im, par, first) {
@@ -332,17 +396,21 @@ export class PskReceiver {
     this.prevAltRe = ar; this.prevAltIm = ai;
   }
 
-  _startTraining() {
+  _startTraining(first = true) {
     // Equaliser: the inverse of the measured gain on the tap that the symbol D symbols back sits on.
     this.wRe.fill(0); this.wIm.fill(0);
     const gm = this.gRe * this.gRe + this.gIm * this.gIm || 1;
     const c = 2 * this.D;
     this.wRe[c] = this.gRe / gm; this.wIm[c] = -this.gIm / gm;
     this.theta = 0; this.omega = 0;
-    this.mseAcc = 0; this.mseN = 0;
+    this.mseAcc = 0; this.mseN = 0; this.trainAcc = 0; this.trainN = 0;
+    this.checkAt = first ? this.rawIndex + RAW_W : -1;
+    // The equaliser's delay line holds the symbols before the break at the old timing: start it clean.
+    if (!first) { this.xRe.fill(0); this.xIm.fill(0); }
     this._setState(ST_TRAIN);
+    this.refPw = this.pw;
     this.stats.gainDb = 20 * Math.log10(Math.sqrt(gm) * this.gain + 1e-12);
-    this._equalise();
+    if (first) this._equalise();
   }
 
   _equalise() {
@@ -380,7 +448,10 @@ export class PskReceiver {
     // Error, statistics, updates.
     const er = tr - rr, ei = ti - ri;
     const e2 = er * er + ei * ei;
-    if (training) { if (j >= this.knownLen - 128) { this.mseAcc += e2; this.mseN++; } }
+    if (training) {
+      if (j >= this.knownLen - 128) { this.mseAcc += e2; this.mseN++; }
+      if (this.rawIndex > this.checkAt - RAW_W / 2) { this.trainAcc += e2; this.trainN++; }
+    }
     else {
       this.mseRun += 0.01 * (e2 - this.mseRun);
       this.stats.mseDb = 10 * Math.log10(this.mseRun / this.symPow + 1e-12);

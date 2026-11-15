@@ -29,6 +29,12 @@
 //   The receiver knows nothing about the data: TCF judgement is the T.30 layer counting zeros in sink.bit (an
 //   ErrorCounter against () => 0 does it), so CFR/FTT and RTN follow from what the receiver really decoded.
 //
+// ── The T.30 modem port ──────────────────────────────────────────────────────────────────────────────────────────
+//   audio-port.js implements the modem-port interface of src/fax/t30/endpoint.js (sendV21, sendTone, sendHighSpeed,
+//   setHighSpeedRx; listener v21Carrier, v21Bits, tone, hsCarrier, hsBits) over these modems and a channel:
+//   AudioModemPort (one end), AudioLink (two ends on a DuplexLine), runAudioCall (the driver, like transport.js's
+//   runCall). Its TRAINING_SECONDS are the real durations of our training sequences.
+//
 // ── Ideal bit pipe → modems ──────────────────────────────────────────────────────────────────────────────────────
 //   T.30 "send these V.21 bits"          → createTransmitter('v21', { source: bitSource(bits) })
 //   T.30 "train and send at R"           → createTransmitter(modulationForRate(R), { rate: R, source })

@@ -34,7 +34,7 @@ export const MODEM_TX_DBM0 = -10;
 
 /**
  * A small deterministic noise source (xorshift32 with a Box-Muller pair). Seeded so a call is identical in Node and in
- * the worklet; no Math.random.
+ * the worklet (no unseeded random source).
  */
 export class Rng {
   constructor(seed = 0x9e3779b9) { this.s = (seed >>> 0) || 0x9e3779b9; this.spare = 0; this.hasSpare = false; }

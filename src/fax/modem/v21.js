@@ -9,10 +9,9 @@
 //   -> bit timing by a digital phase-locked loop that pulls the bit clock toward the discriminator's zero crossings
 //   -> a decision at the middle of each bit (frequency below the centre is mark, 1).
 //   Carrier detect on the in-band power after the low-pass: on at -43 dBm0, off at -48 dBm0 [M], with 20 ms hold-off
-//   [A]. Bits are delivered only while the carrier is on.
-//
-// The two filters reject the high-speed modems' spectrum only partly, as a real V.21 receiver does: during V.29 page
-// data it produces bits, and the HDLC layer above finds no flags in them.
+//   [A]; on also needs 70 % of the line's power in the channel (I^2 + Q^2 is half the power of a centred sine) [A], so
+//   the high-speed modems' signals do not bring it on, and it goes off when the share falls under 30 % (a high-speed
+//   signal followed without a gap, as TCF follows DCS). Bits are delivered only while the carrier is on.
 
 import { LINE_RATE, dbm0ToPeak, dbm0ToRms, MODEM_TX_DBM0 } from '../line/levels.js';
 import { butterLowpass } from '../line/filters.js';
@@ -69,7 +68,7 @@ export class V21Receiver {
     this.avg = new Float64Array(this.avgN); this.avgPos = 0; this.avgSum = 0;
     this.step = V21.baud / lineRate;
     this.bitPhase = 0; this.lastD = 0;
-    this.pw = 0; this.pwA = 1 / (0.004 * lineRate);
+    this.pw = 0; this.tw = 0; this.pwA = 1 / (0.004 * lineRate);
     // The low-pass passes the whole channel; a 0 dBm0 sine gives I^2 + Q^2 = peak^2 / 4 ... compare like for like.
     this.onLevel = (dbm0ToRms(onDbm0) ** 2) / 2; this.offLevel = (dbm0ToRms(offDbm0) ** 2) / 2;
     this.hold = Math.round(0.02 * lineRate); this.offRun = 0;
@@ -85,12 +84,15 @@ export class V21Receiver {
       this.ph += this.w; if (this.ph > 2 * Math.PI) this.ph -= 2 * Math.PI;
       const p = I * I + Q * Q;
       this.pw += this.pwA * (p - this.pw);
+      this.tw += this.pwA * (v * v - this.tw);
       if (!this.cd) {
-        if (this.pw > this.onLevel) {
+        // On needs the level and the shape: most of the line's power inside the channel (a V.21 signal puts nearly
+        // all of it there; the high-speed modems and CED far less) [A].
+        if (this.pw > this.onLevel && this.pw > 0.35 * this.tw) {
           this.cd = true; this.offRun = 0; this.stats.carrier = true; this.bitPhase = 0;
           if (this.sink.carrier) this.sink.carrier(true);
         }
-      } else if (this.pw < this.offLevel) {
+      } else if (this.pw < this.offLevel || this.pw < 0.15 * this.tw) {
         if (++this.offRun >= this.hold) {
           this.cd = false; this.stats.carrier = false;
           if (this.sink.carrier) this.sink.carrier(false);

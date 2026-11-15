@@ -18,10 +18,11 @@
 //                `ring` cadence (distinctive ring) and a `burst` (Float32Array) to send in the first silent interval,
 //                0.5 s into the first silence of 1.5 s or more (Caller ID's place, after the first ring [M]).
 //
-// The call-progress tones are generated in the exchange and pass the codec (its law) only, not the line model.
+// The call-progress tones are generated in the exchange and pass the codec (its law) only, not the line model, with
+// the loop's idle noise (-68 dBm0 [A]) under them.
 // Events go to onEvent({ type, port, t, ... }) with t the sample count. No timers: time is samples processed.
 
-import { LINE_RATE } from './levels.js';
+import { LINE_RATE, Rng, dbm0ToRms } from './levels.js';
 import { TONE_PLANS, ToneSource } from './tones.js';
 import { DtmfDetector, PulseCounter } from './dtmf.js';
 import { DuplexLine } from './channel.js';
@@ -63,7 +64,7 @@ export class Exchange {
    * preset: the line quality between ports (a channel.js preset name or options).
    */
   constructor({ ports = { A: '5551001', B: '5551002' }, directory = {}, plan = 'na', preset = 'typical', seed = 1,
-    rate = LINE_RATE, noAnswerRings = 10, onEvent = null, maxBlock = 1024 } = {}) {
+    rate = LINE_RATE, noAnswerRings = 10, onEvent = null, maxBlock = 1024, idleNoiseDbm0 = -68 } = {}) {
     this.rate = rate;
     this.plan = typeof plan === 'string' ? TONE_PLANS[plan] : plan;
     this.codec = compander(this.plan.law);
@@ -80,6 +81,8 @@ export class Exchange {
     this.tmpA = new Float32Array(maxBlock); this.tmpB = new Float32Array(maxBlock);
     this.silent = new Float32Array(maxBlock);
     this.ms = (x) => Math.round(x * rate / 1000);
+    this.idleSigma = idleNoiseDbm0 == null ? 0 : dbm0ToRms(idleNoiseDbm0);
+    this.rng = new Rng(seed * 977 + 5);
   }
 
   _event(type, port, extra = {}) {
@@ -191,10 +194,16 @@ export class Exchange {
       const p = this.ports[id], o = io[id];
       if (!o || !o.rx) continue;
       const talking = this.line && p.state === S.TALK;
-      if (!talking) o.rx.fill(0, 0, n);
-      if (p.tone) {
-        p.tone.process(o.rx, 0, n);
-        if (this.codec) for (let i = 0; i < n; i++) o.rx[i] = this.codec(o.rx[i]);
+      if (!talking) {
+        // An off-hook line not in a call hears its tones and the loop's idle noise through the codec [A: level].
+        o.rx.fill(0, 0, n);
+        if (p.offHook || p.tone) {
+          if (p.tone) p.tone.process(o.rx, 0, n);
+          for (let i = 0; i < n; i++) {
+            const v = o.rx[i] + this.idleSigma * this.rng.gauss();
+            o.rx[i] = this.codec ? this.codec(v) : v;
+          }
+        }
       }
       // Digits are listened for on what the subscriber sends while dialling.
       if ((p.state === S.DIAL || p.state === S.DIGITS) && o.tx) p.dtmf.process(o.tx, 0, n);

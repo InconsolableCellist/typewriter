@@ -236,7 +236,8 @@ function mechanism() {
     markEnergy: 0.25e-3,                          // J a dot [A]
     roll: {
       // Sharp's paper, the starter roll included, is 216 mm wide; 210 mm paper takes the roll shims [S p.1-6/pdf11].
-      width: 0.216, thickness: 65e-6, grammage: 0.052, coreRadius: 0.00635, coreMass: 0.004,   // [M] 1/2 in core
+      // FO-20PRw: 30 m on a 12.7 mm core [S OM p.1]; thickness, grammage and core mass [M].
+      width: 0.216, thickness: 65e-6, grammage: 0.052, coreRadius: 0.00635, coreMass: 0.004,
       starterLength: 10, spareLength: 30,         // m [S p.1-1: 10 m starter, FO-20PRw 30 m]
       warmRemaining: 7.5,                         // m left on the starter roll at a warm start [A, decision 18]
       drag: 3e-3, slipSpeed: 2e-3,                // N m of the roll turning loose in its compartment [A]

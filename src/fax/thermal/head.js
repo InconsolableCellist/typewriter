@@ -1,6 +1,7 @@
 // The FO-70's thermal line head (docs/fax/plan.md 2, "Head frame unit and thermal head"): 1728 resistive dots at
-// 8 a mm, strobed in 4 blocks of 432 [A: the block count is the ROHM format the plan names; the FO-70's head is
-// not identified]. Integrated once per printed line, not per substep. Pure module; state allocated once.
+// 8 a mm, strobed in 4 blocks of 432 [S: service manual p.4-3 (head cable STRB1-STRB4) and p.5-2 (the FC200's
+// "4 STROBE TPH"); the mechanism chapter, p.3-2, speaks of nine segments], 10 ms a line at best [S p.3-2], on a 24 V
+// supply (VTH, switched by relay RY1, p.6-5) with a thermistor (THI) and a resistance rank (RANK 0 or 1, p.2-3). Integrated once per printed line, not per substep. Pure module; state allocated once.
 //
 // Per dot, two thermal states (lumped):
 //   Th  the heater and the glaze over it, capacity Ch, to the substrate through Ghs, to the paper through Ghp;
@@ -32,9 +33,9 @@ export const HEAD_CAL = Object.freeze({
   blocks: 4,
   pitchMm: 0.125,
   dotLenMm: 0.16,       // heater length along the feed [A]
-  R: 700,               // ohms per dot [A]
-  Vs: 12,               // supply volts [A]
-  Rs: 0.15,             // supply and common-lead resistance, ohms [A]
+  R: 2800,              // ohms per dot [A: not given; chosen with Rs to keep the first draft's 12 V / 700 ohm dot power and sag]
+  Vs: 24,               // supply volts [S: VTH = +24 V, service manual p.6-5]
+  Rs: 0.6,              // supply and common-lead resistance, ohms [A]
   Ch: 1.2e-6,           // J/K heater and glaze [A]
   Ghs: 0.8e-4,          // W/K heater to substrate [A]
   Ghp: 0.9e-4,          // W/K heater to paper [A]

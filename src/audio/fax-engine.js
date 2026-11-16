@@ -1,8 +1,8 @@
 // Drives the fax's mechanism host at the audio rate and voices it, with the interface of WpAudioEngine (wp-engine.js),
 // so LocalHost and the worklet (worklet-fax.js) run it unchanged. M0 voices only (docs/fax/architecture.md 5):
 // silence when the machine waits, and simple synthesised placeholders for the mechanism, each from the mechanism's own
-// ports and onsets: the drive stepper's torque ripple ringing two modes of the light case, the cutter motor's brush
-// buzz at its commutation rate, and short damped knocks for the swing gear's clack, the cut, the relays, the hook
+// ports and onsets: the drive stepper's torque ripple ringing two modes of the light case, the cutter train's rasp
+// and its blade, and short damped knocks for the swing gear's clack, the cut, the relays, the hook
 // switch and the keys. M7 adds the line and the machine's own sounders (`sim.tap`, src/sim/fax/line-tap.js, when the host
 // is the whole station): the monitor speaker on the line by the firmware's rule (dialling and handshake, muted for the
 // pages) at its volume setting, the handset's earpiece while the handset is off its cradle, the electronic ringer and
@@ -96,6 +96,7 @@ export class FaxAudioEngine {
         case FAC.PLANET_STOP: k += L.planet * Math.min(1, mag / 60); break;
         case FAC.CUT: k += L.cut; break;
         case FAC.CAM_HOME: k += 0.3 * L.cut * Math.min(1, mag / 20); break;
+        case FAC.CUTTER_SWITCH: k += 0.2 * L.cut; break;
         case FAC.RELAY: k += L.relay * Math.min(1, mag / 0.3); break;
         case FAC.HOOK: k += L.hook * Math.min(1, mag / 0.5); break;
         case FAC.KEY: k += L.key * Math.min(1, mag / 0.2); break;
@@ -114,13 +115,12 @@ export class FaxAudioEngine {
     const Te = p[FAX_PORT.MOTOR];
     const dT = Te - this.lastTe; this.lastTe = Te;
     let drive = dT * L.motor;
-    // The cutter motor: a buzz at its commutation rate (three slots, two brushes), scaled by its current.
-    const w = p[FAX_PORT.CUTTER_SPEED], amps = Math.abs(p[FAX_PORT.CUTTER_CURRENT]);
-    if (w > 1 || amps > 1e-3) {
-      this.buzzPhase += (w * 6) / (2 * Math.PI) / this.sr;
-      this.buzzPhase -= Math.floor(this.buzzPhase);
+    // The cutter: no motor of its own (the stepper drives it, service manual p.3-7), so its voice is the gear train's
+    // rasp while the crank turns, with its tooth load, and the blade's shear.
+    const w = p[FAX_PORT.CUTTER_SPEED], mesh = Math.abs(p[FAX_PORT.CUT_MESH]);
+    if (Math.abs(w) > 0.5) {
       this.noise = (this.noise * 1664525 + 1013904223) >>> 0;
-      drive += L.cutterBuzz * Math.min(1, amps) * ((this.buzzPhase < 0.5 ? 1 : -1) + 0.5 * (this.noise / 4294967296 - 0.5));
+      drive += L.cutterBuzz * Math.min(1, 0.3 + mesh * 20) * (this.noise / 4294967296 - 0.5);
       drive += p[FAX_PORT.BLADE] * 0.4;
     }
     let y = 0;

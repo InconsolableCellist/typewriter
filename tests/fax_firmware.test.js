@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { boot, press, untilLcd, testSheet, TEST_WALL } from '../src/fax/firmware/testkit.js';
-import { MESSAGES, ERRORS } from '../src/fax/firmware/messages.js';
+import { MESSAGES, ERRORS, noteFor, commCode } from '../src/fax/firmware/messages.js';
 import { lcdText, LCD_COLUMNS, KEYS } from '../src/fax/firmware/panel.js';
 import { MemoryStorage, STORAGE_KEY } from '../src/fax/firmware/setup.js';
 import { inkOf } from '../src/fax/firmware/page.js';
@@ -19,17 +19,33 @@ test('the LCD message table: 16 characters at most, in the LCD set, each marked'
   for (const [id, m] of Object.entries(MESSAGES)) {
     assert.ok(m.text.length <= LCD_COLUMNS, `${id} is ${m.text.length} characters`);
     assert.equal(lcdText(m.text).trimEnd(), m.text, `${id} has characters the LCD lacks`);
-    assert.ok(m.mark === 'S' || m.mark === 'A', id);
+    assert.ok(m.mark === 'A' || (m.mark === 'S' && /^(OM|SM) p\./.test(m.page)), id);
   }
   for (const e of Object.values(ERRORS)) if (e.lcd) assert.ok(MESSAGES[e.lcd], e.lcd);
+  // The operation manual's display messages (OM p.90-91), word for word.
+  for (const t of ['CHECK PAPER', 'COVER OPEN', 'DOCUMENT JAMMED', 'FUNCTION MODE', 'HOLD', 'LINE BUSY', 'LINE ERROR', 'NO DATA',
+    'NO # STORED', 'OFF HOOK', 'ON HOOK DIAL', 'OUT OF PAPER', 'OVER HEAT', 'PAPER JAMMED', 'READY TO SEND', 'RECALLING',
+    'SEARCH DIAL', 'TOTAL PAGE(S)']) assert.ok(Object.values(MESSAGES).some((m) => m.text === t && m.mark === 'S'), t);
+  // The communication error codes (SM p.2-19) as the transaction report prints them (OM p.51).
+  assert.equal(noteFor({ result: 'OK' }), 'OK');
+  assert.equal(noteFor({ result: 'NO_RESPONSE', code: commCode('TX', { reason: 'no-response', lastRx: 'DIS' }) }), 'COM.E-1');
+  assert.equal(commCode('TX', { reason: 'remote-dcn', lastRx: 'DCN' }), 7);
+  assert.equal(commCode('TX', { reason: 'page-rejected', lastRx: 'RTN' }), 6);
+  assert.equal(commCode('RX', { reason: 'T2', lastRx: 'MPS' }), 5);
+  assert.equal(commCode('RX', { reason: 'T2', lastRx: 'BAD' }), 0);
+  assert.equal(noteFor({ result: 'STOPPED' }), 'CANCEL');
+  assert.equal(noteFor({ result: 'PAPER' }), 'NO PAPER');
+  assert.equal(noteFor({ result: 'DOC_JAM' }), 'JAM');
   assert.equal(KEYS.length, 27);
 });
 
 test('warm start: the real date and time and the reception mode on the LCD, the desk programmed', () => {
   const { fw } = boot();
-  assert.equal(fw.lcd.text, 'NOV-16 09:30 FAX');
+  // "05-NOV 10:30" and the arrow to FAX (OM p.28).
+  assert.equal(fw.lcd.text, '16-NOV 09:30   ▲');
+  assert.ok(fw.lcd.history.some((h) => h.text.trim() === 'WAIT A MOMENT'), 'power on (SM p.7-2)');
   fw.runFor(61);
-  assert.equal(fw.lcd.text, 'NOV-16 09:31 FAX');
+  assert.equal(fw.lcd.text, '16-NOV 09:31   ▲');
   assert.equal(fw.settings.speed[0].number, '555-0142');
   assert.equal(fw.settings.ownNumber, '+1 555 0100');
 });
@@ -39,10 +55,10 @@ test('send a page to the Records Room; a minute later it calls back with the pag
   const sheet = testSheet({ seed: 2 });
   devices.insertDocument([sheet]);
   fw.runFor(2);
-  assert.equal(fw.lcd.text.trim(), 'DOCUMENT READY');
+  assert.equal(fw.lcd.text.trim(), 'READY TO SEND');
   press(fw, 'A');
-  assert.ok(untilLcd(fw, /TRANSMISSION OK|LINE ERROR/, 120));
-  assert.match(fw.lcd.text, /TRANSMISSION OK/);
+  assert.ok(untilLcd(fw, /TOTAL PAGE|LINE ERROR/, 120));
+  assert.match(fw.lcd.text, /TOTAL PAGE\(S\) 01/);
   assert.ok(shown(fw, /^RECORDS ROOM/) && shown(fw, /SENDING +P\.01/));
   const tx = last(fw, 'TX');
   assert.equal(tx.result, 'OK');
@@ -56,8 +72,8 @@ test('send a page to the Records Room; a minute later it calls back with the pag
   assert.ok(inkOf(office.fax.inbox[0]) > inkOf({ rows: sheet.rows }) / 2);
   // The call back: rings, FAX mode answers on the second ring, prints, cuts.
   assert.ok(untilLcd(fw, /INCOMING CALL/, 120));
-  assert.ok(untilLcd(fw, /RECEPTION OK|LINE ERROR/, 120));
-  assert.match(fw.lcd.text, /RECEPTION OK/);
+  assert.ok(untilLcd(fw, /TOTAL PAGE|LINE ERROR/, 120));
+  assert.match(fw.lcd.text, /TOTAL PAGE\(S\) 01/);
   const rx = last(fw, 'RX');
   assert.equal(rx.result, 'OK');
   assert.equal(rx.pages, 1);
@@ -76,8 +92,8 @@ test('busy: LINE BUSY, then automatic redial twice at five minutes; the taxi off
   assert.equal(fw.lcd.text.trim(), 'TAXI OFFICE');
   press(fw, 'START');
   assert.ok(untilLcd(fw, /LINE BUSY/, 30));
-  assert.ok(untilLcd(fw, /REDIAL WAIT 4:5/, 10));
-  assert.ok(untilLcd(fw, /TRANSMISSION OK/, 700));
+  assert.ok(untilLcd(fw, /RECALLING/, 10));
+  assert.ok(untilLcd(fw, /TOTAL PAGE\(S\) 01/, 700));
   assert.equal(devices.log.dials.length, 3);
   const gap = devices.log.dials[2].t - devices.log.dials[1].t;
   assert.ok(gap > 300 && gap < 320, `redial interval ${gap}`);
@@ -85,7 +101,7 @@ test('busy: LINE BUSY, then automatic redial twice at five minutes; the taxi off
   assert.equal(fw.journal.length, 1);
 });
 
-test('always busy: three tries, then E-02 and the transmission report prints', () => {
+test('always busy: three tries, then LINE BUSY and the transaction report prints', () => {
   const { fw, devices } = boot();
   devices.insertDocument([testSheet()]);
   fw.runFor(2);
@@ -95,17 +111,17 @@ test('always busy: three tries, then E-02 and the transmission report prints', (
   assert.equal(last(fw, 'TX').result, 'BUSY');
   assert.match(fw.lcd.text, /LINE BUSY/);
   assert.equal(devices.output.length, 1, 'the transmission report (TRANS. REPORT: ERROR)');
-  assert.ok(fw.log.some((l) => l.what === 'print' && l.kind === 'transmission'));
+  assert.ok(fw.log.some((l) => l.what === 'print' && l.kind === 'transaction'));
   press(fw, 'STOP');                               // clears the message; the document stays
-  assert.equal(fw.lcd.text.trim(), 'DOCUMENT READY');
+  assert.equal(fw.lcd.text.trim(), 'READY TO SEND');
 });
 
 test('TEL/FAX mode: a voice call pseudo-rings the handset; a fax call is received', () => {
   const { fw, devices, sb, dir } = boot();
-  press(fw, 'RES RES');                            // FAX -> TEL -> TEL/FAX
+  press(fw, 'RES');                                // FAX -> TEL/FAX (OM p.28)
   assert.equal(fw.settings.rxMode, 'TEL/FAX');
   fw.runFor(3);
-  assert.match(fw.lcd.text, /T\/F$/);
+  assert.equal(fw.lcd.text[13], '▼', 'the arrow points down to TEL/FAX');
   // A person calls.
   const person = dir.caller();
   assert.ok(sb.callIn(person));
@@ -122,20 +138,24 @@ test('TEL/FAX mode: a voice call pseudo-rings the handset; a fax call is receive
   const sender = dir.sender([testSheet({ seed: 3 })]);
   const mark = fw.lcd.history.length;
   assert.ok(sb.callIn(sender));
-  assert.ok(untilLcd(fw, /RECEPTION OK|LINE ERROR/, 120));
-  assert.match(fw.lcd.text, /RECEPTION OK/);
+  assert.ok(untilLcd(fw, /TOTAL PAGE|LINE ERROR/, 120));
+  assert.match(fw.lcd.text, /TOTAL PAGE\(S\) 01/);
   assert.ok(!fw.lcd.history.slice(mark).some((h) => /PICK UP/.test(h.text)), 'CNG heard before any pseudo ring');
   assert.equal(devices.output.length, 1);
   assert.equal(last(fw, 'RX').pages, 1);
 });
 
-test('polling: E/POLL, the information line by its rapid key, START; the day\'s sheet prints', () => {
+test('polling: POLLING set to YES, SPEED DIAL and the number of the information line, E/POLL; the day\'s sheet prints', () => {
   const { fw, devices } = boot();
+  press(fw, 'FUNCTION 4 * *');                     // POLLING (OM p.79)
+  assert.match(fw.lcd.text, /POLLING|1=YES,2=NO/);
+  press(fw, '1 STOP');
+  assert.equal(fw.settings.pollingKey, true);
+  press(fw, 'SPEED 02');
   press(fw, 'POLL');
-  assert.match(fw.lcd.text, /POLLING/);
-  press(fw, 'B START');
-  assert.ok(untilLcd(fw, /RECEPTION OK|LINE ERROR/, 200));
-  assert.match(fw.lcd.text, /RECEPTION OK/);
+  assert.ok(untilLcd(fw, /POLLING/, 5));
+  assert.ok(untilLcd(fw, /TOTAL PAGE|LINE ERROR/, 200));
+  assert.match(fw.lcd.text, /TOTAL PAGE\(S\) 01/);
   const e = last(fw, 'POLL');
   assert.equal(e.result, 'OK');
   assert.equal(e.remote, '+1 555 0167');
@@ -154,19 +174,20 @@ test('copy: two sheets scanned and printed in blocks, each cut', () => {
   assert.equal(devices.output.length, 2);
   assert.deepEqual(devices.output.map((p) => p.height), [240, 300]);
   assert.deepEqual(devices.output[0].rows, testSheet({ seed: 1 }).rows);
-  assert.match(fw.lcd.text, /NOV-16/);
+  assert.ok(shown(fw, /TOTAL PAGE\(S\) 02/));
+  assert.match(fw.lcd.text, /16-NOV/);
   assert.ok(devices.log.feeds.length >= 4);
 });
 
-test('out of paper during a reception: the call ends, CHECK PAPER, E-13; no paper, no answer', () => {
+test('out of paper during a reception: the call ends, OUT OF PAPER, NO PAPER on the report; no paper, no answer', () => {
   const { fw, devices, sb, dir } = boot({ paperMm: 20 });
   const sender = dir.sender([testSheet({ height: 400 }), testSheet({ height: 400, seed: 2 })]);
   assert.ok(sb.callIn(sender));
   fw.runFor(50);
-  assert.equal(fw.lcd.text.trim(), 'CHECK PAPER');
+  assert.equal(fw.lcd.text.trim(), 'OUT OF PAPER');
   const e = last(fw, 'RX');
   assert.equal(e.result, 'PAPER');
-  assert.equal(ERRORS[e.result].code, 'E-13');
+  assert.equal(noteFor(e), 'NO PAPER');
   assert.ok(!sender.sent.at(-1).result.ok, 'the sender did not finish');
   assert.equal(sb.state, 'idle');
   assert.equal(devices.output.length, 0, 'the part page stays on the roll, uncut');
@@ -176,7 +197,7 @@ test('out of paper during a reception: the call ends, CHECK PAPER, E-13; no pape
   assert.equal(fw.journal.length, 1);
   devices.loadPaper();
   fw.runFor(1);
-  assert.doesNotMatch(fw.lcd.text, /CHECK PAPER/);
+  assert.doesNotMatch(fw.lcd.text, /OUT OF PAPER/);
 });
 
 test('STOP in the middle of a call: DCN between signals; during a page the line is let go', () => {
@@ -208,8 +229,9 @@ test('STOP in the middle of a call: DCN between signals; during a page the line 
     assert.equal(devices.sb.state, 'idle');
     assert.equal(dir.lookup('555-0142').fax.calls[0].result.ok, false);
     fw.runFor(120);
-    assert.equal(devices.output.length, 0, 'nothing comes back');
-    assert.match(fw.lcd.text, /NOV-16/, 'the half-sent sheet was fed out');
+    assert.equal(fw.journal.filter((e) => e.kind === 'RX').length, 0, 'nothing comes back');
+    assert.equal(noteFor(last(fw, 'TX')), 'CANCEL');
+    assert.match(fw.lcd.text, /16-NOV/, 'the half-sent sheet was fed out');
   }
 });
 
@@ -218,13 +240,17 @@ test('STOP while dialling and STOP in the menu', () => {
   devices.insertDocument([testSheet()]);
   fw.runFor(2);
   press(fw, '555');
+  press(fw, 'STOP STOP');                          // STOP backspaces a keyed number (OM p.47)
+  assert.equal(fw.lcd.text.trim(), '5');
+  press(fw, 'STOP STOP');
+  assert.equal(fw.lcd.text.trim(), 'READY TO SEND');
+  press(fw, 'FUNCTION');
+  assert.equal(fw.lcd.text.trim(), 'FUNCTION MODE');
   press(fw, 'STOP');
-  assert.equal(fw.lcd.text.trim(), 'DOCUMENT READY');
-  press(fw, 'FUNCTION FUNCTION STOP');
-  assert.equal(fw.lcd.text.trim(), 'DOCUMENT READY');
+  assert.equal(fw.lcd.text.trim(), 'READY TO SEND');
   press(fw, 'STOP');                               // STOP in standby ejects the document
   fw.runFor(2);
-  assert.match(fw.lcd.text, /NOV-16/);
+  assert.match(fw.lcd.text, /16-NOV/);
   assert.equal(devices.feeder.status().docPresent, false);
 });
 
@@ -233,63 +259,82 @@ test('every report and list prints', () => {
   devices.insertDocument([testSheet()]);
   fw.runFor(2);
   press(fw, 'A');
-  untilLcd(fw, /TRANSMISSION OK/, 120);
-  untilLcd(fw, /RECEPTION OK/, 200);               // the Records Room's call back, out of the way
+  untilLcd(fw, /TOTAL PAGE\(S\) 01/, 120);
+  fw.runUntil(() => last(fw, 'RX'), 300);          // the Records Room's call back, out of the way
   fw.runFor(5);
   const before = devices.output.length;
-  for (const n of ['1', '2', '3', '4', '5']) {
-    press(fw, `FUNCTION 6 ${n}`);
-    fw.runFor(30);
-  }
+  press(fw, 'FUNCTION 2 # START');                 // LISTING MODE: the Telephone Number List (OM p.81)
+  fw.runFor(30);
+  press(fw, 'FUNCTION 2 * START');                 // and the Anti Junk Number List
+  fw.runFor(30);
   press(fw, 'HELP');
+  fw.runFor(30);
+  press(fw, 'FUNCTION 4 # # #');                   // TRANSACTION LIST (OM p.50): 1 ALWAYS PRINT
+  assert.match(fw.lcd.text, /TRANSACTION LIST|ENTER \(1-4\)/);
+  press(fw, '1 STOP');
+  assert.equal(fw.settings.report, 'ALWAYS');
+  devices.insertDocument([testSheet()]);
+  fw.runFor(2);
+  press(fw, 'COPY');
+  fw.runFor(30);
+  devices.insertDocument([testSheet()]);
+  fw.runFor(2);
+  press(fw, 'C');                                  // a send, and its report
+  untilLcd(fw, /TOTAL PAGE|LINE ERROR/, 120);
   fw.runFor(30);
   const printed = devices.output.slice(before);
   const kinds = fw.log.filter((l) => l.what === 'print').map((l) => l.kind);
-  for (const k of ['tel', 'setup', 'activity', 'transmission', 'help']) assert.ok(kinds.includes(k), k);
-  assert.ok(printed.length >= 6);
+  for (const k of ['tel', 'junk', 'help', 'transaction']) assert.ok(kinds.includes(k), k);
+  assert.ok(printed.length >= 4);
   for (const p of printed) assert.ok(inkOf(p) > 3000 && p.height > 200, `${p.height} rows`);
 });
 
 test('setup persists: own number and name, a speed dial, an option, the reception mode', () => {
   const storage = new MemoryStorage();
   const { fw } = boot({ storage });
-  press(fw, 'FUNCTION 2');
-  fw.runFor(2);
-  press(fw, 'HOLD*11 5550111 START');              // clear the stored number, type a new one
-  press(fw, 'HOLD*8 2*2 # 3 START');              // B, then D
+  press(fw, 'FUNCTION 3 # #');                     // ENTRY MODE, OWN NUMBER SET (OM p.20-21)
+  assert.equal(fw.lcd.text.trim(), 'OWN NUMBER SET');
+  press(fw, 'START');
+  press(fw, 'SPEED*11 5550111 START');             // SPEED DIAL backspaces; a new number
+  press(fw, 'SPEED*8 2*3 3*2 START');              // B (2 A B), D (3 D)
   assert.equal(fw.settings.ownNumber, '5550111');
   assert.equal(fw.settings.ownName, 'BD');
-  press(fw, 'STOP FUNCTION 3 12 5550177 START 6 # 6*2 START STOP');
+  press(fw, 'STOP FUNCTION 3 #');                  // FAX/TEL. # MODE, 1=SET (OM p.41)
+  press(fw, '1 12 5550177 START 6*2 SPEAKER 6*3 START STOP');
   assert.deepEqual(fw.settings.speed[11], { number: '5550177', name: 'MN' });
-  press(fw, 'FUNCTION 4 4 START STOP');            // # OF RINGS: 4
+  press(fw, 'FUNCTION 4 #');                       // NUMBER OF RINGS, ENTER (2-5) (2) (OM p.54)
+  assert.match(fw.lcd.text, /NUMBER OF RINGS|ENTER \(2-5\) \(2\)/);
+  press(fw, '4');
+  assert.match(fw.lcd.text, /TEL\/FAX REMOTE #|ENTER/, 'on to the next option');
+  press(fw, 'STOP');
   assert.equal(fw.settings.rings, 4);
   press(fw, 'RES');
-  assert.equal(fw.settings.rxMode, 'TEL');
+  assert.equal(fw.settings.rxMode, 'TEL/FAX');
   assert.ok(storage.load(STORAGE_KEY));
   const again = boot({ storage });
   assert.equal(again.fw.settings.ownNumber, '5550111');
   assert.deepEqual(again.fw.settings.speed[11], { number: '5550177', name: 'MN' });
   assert.equal(again.fw.settings.rings, 4);
-  assert.match(again.fw.lcd.text, / TEL$/);
+  assert.equal(again.fw.lcd.text[13], '▼');
 });
 
-test('name entry cycles the keypad letters', () => {
+test('name entry: each key gives its digit, then its letters; SPEAKER moves on, REDIAL changes case (OM p.22)', () => {
   const { fw } = boot();
-  press(fw, 'FUNCTION 2');
-  fw.runFor(2);
-  press(fw, 'START HOLD*8 4*2 3*2 5*3 # 5*3 6*3 START');
-  assert.equal(fw.settings.ownName, 'HELLO');
+  press(fw, 'FUNCTION 3 # # START START');
+  press(fw, 'SPEED*8 4*3 3*3 5*4 SPEAKER 5*4 6*4 1*2 REDIAL 7*5 START');
+  assert.equal(fw.settings.ownName, 'HELLO s');
 });
 
 test('the clock is set from the menu; a cold start asks for it', () => {
   const { fw } = boot({ cold: true });
-  assert.ok(fw.lcd.history.some((h) => /SET DATE&TIME/.test(h.text)) || (fw.runFor(4), shown(fw, /SET DATE&TIME/)));
-  press(fw, 'FUNCTION 1 1 2 2 5 1 9 9 9 2 3 5 9 START [1.5] STOP');
+  assert.ok(fw.lcd.history.some((h) => /DATE & TIME SET/.test(h.text)) || (fw.runFor(4), shown(fw, /DATE & TIME SET/)));
+  // FUNCTION 3 # # #, START, day, month, year, hour, minute, START, STOP (OM p.24-26).
+  press(fw, 'FUNCTION 3 # # # START 2 5 1 2 1 9 9 9 2 3 5 9 START [1.5] STOP');
   assert.equal(fw.settings.clock.set, true);
   fw.runFor(3);
-  assert.equal(fw.lcd.text, 'DEC-25 23:59 FAX');
+  assert.equal(fw.lcd.text, '25-DEC 23:59   ▲');
   fw.runFor(60);
-  assert.equal(fw.lcd.text, 'DEC-26 00:00 FAX');
+  assert.equal(fw.lcd.text, '26-DEC 00:00   ▲');
   void TEST_WALL;
 });
 
@@ -298,7 +343,7 @@ test('a bad long-distance line: training fails at 9600 and 7200, the page goes a
   devices.insertDocument([testSheet()]);
   fw.runFor(2);
   press(fw, 'E');
-  assert.ok(untilLcd(fw, /TRANSMISSION OK|LINE ERROR/, 200));
+  assert.ok(untilLcd(fw, /TOTAL PAGE|LINE ERROR/, 200));
   assert.equal(last(fw, 'TX').mode, 'G3 4800');
   assert.equal(last(fw, 'TX').result, 'OK');
 });
@@ -314,12 +359,13 @@ test('far-end faults: out of paper (E-08), a dead number, no answer (T1, E-03), 
   };
   let fw = run('SPEED 08 START');
   assert.equal(last(fw, 'TX').result, 'INCOMPAT');
+  assert.equal(noteFor(last(fw, 'TX')), 'CANCEL');
   assert.equal(fw.lcd.text.trim(), 'LINE ERROR');
+  // No answer: LINE BUSY, and the machine will redial (RECALLING, OM p.91).
   fw = run('SPEED 10 START');
-  assert.equal(last(fw, 'TX').result, 'NO_ANSWER');
+  assert.ok(shown(fw, /LINE BUSY/) && fw.redial);
   fw = run('SPEED 09 START');
-  assert.equal(last(fw, 'TX').result, 'NO_ANSWER');
-  assert.ok(last(fw, 'TX').durationS > 34);
+  assert.ok(shown(fw, /LINE BUSY/) && fw.redial);
   fw = run('5550100 START');
   assert.ok(shown(fw, /LINE BUSY/));
 });
@@ -336,10 +382,10 @@ test('the handset: dial the front desk, a person answers "hello?"; SPEAKER diall
   assert.ok(voice[0].samples instanceof Float32Array && voice[0].samples.length > 2000);
   devices.replaceHandset();
   fw.runFor(2);
-  assert.match(fw.lcd.text, /NOV-16/);
+  assert.match(fw.lcd.text, /16-NOV/);
   assert.equal(sb.state, 'idle');
   press(fw, 'SPEAKER');
-  assert.match(fw.lcd.text, /ON-HOOK DIAL/);
+  assert.match(fw.lcd.text, /ON HOOK DIAL/);
   assert.equal(devices.seized, true);
   press(fw, 'SPEAKER');
   assert.equal(devices.seized, false);
@@ -355,11 +401,12 @@ test('a manual send: handset, dial, hear the far machine, START, hang up', () =>
   fw.runFor(20);
   press(fw, 'START');
   devices.replaceHandset();
-  assert.ok(untilLcd(fw, /TRANSMISSION OK|LINE ERROR/, 120));
-  assert.match(fw.lcd.text, /TRANSMISSION OK/);
+  assert.ok(untilLcd(fw, /TOTAL PAGE|LINE ERROR/, 120));
+  assert.match(fw.lcd.text, /TOTAL PAGE\(S\) 01/);
   assert.equal(dir.lookup('555-0188').fax.inbox.length, 1);
   // The correspondent writes back in a few minutes.
-  assert.ok(untilLcd(fw, /RECEPTION OK/, 400));
+  assert.ok(fw.runUntil(() => last(fw, 'RX'), 400));
+  fw.runFor(30);
   assert.equal(devices.output.length, 1);
 });
 
@@ -370,18 +417,17 @@ test('faults at the machine: DOCUMENT JAMMED and COVER OPEN', () => {
   assert.equal(fw.lcd.text.trim(), 'DOCUMENT JAMMED');
   devices.removeDocument();
   fw.runFor(1);
-  assert.match(fw.lcd.text, /NOV-16/);
+  assert.match(fw.lcd.text, /16-NOV/);
   devices.openCover();
   fw.runFor(1);
   assert.equal(fw.lcd.text.trim(), 'COVER OPEN');
   devices.closeCover();
   fw.runFor(1);
-  assert.match(fw.lcd.text, /NOV-16/);
+  assert.match(fw.lcd.text, /16-NOV/);
 });
 
 test('fax blocking: a junk number\'s fax is cut off', () => {
   const { fw, devices, sb, dir } = boot();
-  fw.settings.blocking = true;
   fw.settings.junk[0] = '555-0180';
   assert.ok(sb.callIn(dir.sender([testSheet()], { ident: '+1 555 0180' })));
   fw.runFor(90);
@@ -410,32 +456,36 @@ test('over real modem audio: a page to the Records Room on a typical line', () =
   devices.insertDocument([testSheet({ height: 120 })]);
   fw.runFor(2);
   press(fw, 'A');
-  assert.ok(untilLcd(fw, /TRANSMISSION OK|LINE ERROR/, 120));
-  assert.match(fw.lcd.text, /TRANSMISSION OK/);
+  assert.ok(untilLcd(fw, /TOTAL PAGE|LINE ERROR/, 120));
+  assert.match(fw.lcd.text, /TOTAL PAGE\(S\) 01/);
   assert.equal(dir.lookup('555-0142').fax.inbox.length, 1);
   assert.equal(dir.lookup('555-0142').fax.calls[0].result.reason, 'complete', 'the office heard DCN');
 });
 
-test('Caller ID shows the calling name between rings; Distinctive Ring answers only its own pattern', () => {
+test('Caller ID shows the calling name and number between rings; Duplex Ringing answers only the fax cadence', () => {
   const { fw, sb, dir, devices } = boot();
-  press(fw, 'RES');                                // TEL: the machine only rings
+  press(fw, 'RES RES RES');                        // FAX -> TEL/FAX -> A.M. -> TEL: the machine only rings
   fw.runFor(3);
-  fw.settings.callerId = true;
+  assert.equal(fw.settings.rxMode, 'TEL');
+  press(fw, 'FUNCTION 4 * 1 STOP');                // CALLER-ID: YES (OM p.69)
+  assert.equal(fw.settings.callerId, true);
   assert.ok(sb.callIn(dir.caller({ name: 'AUNT EDNA' })));
-  fw.runFor(4);
-  assert.equal(fw.lcd.text.trim(), 'AUNT EDNA');
+  fw.runFor(6);
+  assert.ok(shown(fw, /AUNT EDNA/));
   fw.runFor(80);
   assert.equal(fw.journal.length, 0);
-  // FAX mode with Distinctive Ring: a call on the normal pattern is left to ring; the distinctive one is answered.
-  press(fw, 'RES RES RES');                        // TEL -> TEL/FAX -> A.M. -> FAX
+  assert.equal(fw.settings.callers.length, 1, 'the Caller ID list');
+  // Duplex Ringing: the short cadence is a voice call and rings on; the long one is a fax, answered after two rings.
+  press(fw, 'RES');                                // TEL -> FAX
   fw.runFor(3);
   assert.equal(fw.settings.rxMode, 'FAX');
-  fw.settings.distinctive = true;
+  press(fw, 'FUNCTION 4 * * * * 1 STOP');          // DUPLEX RINGING: YES (OM p.75)
+  assert.equal(fw.settings.duplex, true);
   assert.ok(sb.callIn(dir.sender([testSheet()]), { maxRings: 4 }));
   fw.runFor(40);
   assert.equal(fw.journal.length, 0);
   assert.ok(sb.callIn(dir.sender([testSheet()], { number: '555-0182' }), { pattern: 'distinctive' }));
-  assert.ok(untilLcd(fw, /RECEPTION OK/, 120));
+  assert.ok(untilLcd(fw, /TOTAL PAGE\(S\) 01/, 120));
   assert.equal(devices.output.length, 1);
 });
 
@@ -457,11 +507,11 @@ async function simMachine(opts = {}) {
 test('on the mechanism host: a sheet is drawn in and copied, line by line through the head, and cut', async () => {
   const bars = (pose) => { const r = new Uint8Array(216); if (Math.floor(pose.y * 1000) % 4 === 0) r.fill(0xff, 20, 100); return r; };
   const { sim, fw, run } = await simMachine({ sampleLine: bars });
-  run(0.3);
-  assert.equal(fw.lcd.text, 'NOV-16 09:30 FAX');
+  run(1.3);
+  assert.equal(fw.lcd.text, '16-NOV 09:30   ▲');
   sim.command({ dev: 'feeder', op: 'load', sheets: [{ id: 's1', length: 0.035 }] });
   run(2.5);
-  assert.equal(fw.lcd.text.trim(), 'DOCUMENT READY');
+  assert.equal(fw.lcd.text.trim(), 'READY TO SEND');
   sim.command({ dev: 'panel', op: 'finger', key: 'copyHelp', force: 2 });
   run(0.1);
   sim.command({ dev: 'panel', op: 'finger', key: 'copyHelp', force: 0 });
@@ -486,13 +536,13 @@ test('on the mechanism host: SPEAKER closes the line relay, the exchange sees th
   const sb = new Switchboard({ clock: fw.clock, directory: dir });
   dir.attach(sb);
   devices.setLine(sb);
-  run(0.2);
+  run(1.2);
   assert.equal(sim.liu.lineLoop(), false);
   sim.command({ dev: 'panel', op: 'finger', key: 'speaker', force: 2 });
   run(0.05);
   sim.command({ dev: 'panel', op: 'finger', key: 'speaker', force: 0 });
   run(0.4);
-  assert.match(fw.lcd.text, /ON-HOOK DIAL/);
+  assert.match(fw.lcd.text, /ON HOOK DIAL/);
   assert.equal(sim.liu.lineLoop(), true);
   assert.ok(sb.log.some((l) => l.what === 'progress' && l.signal === 'dialtone'));
   sim.command({ dev: 'handset', op: 'lift' });

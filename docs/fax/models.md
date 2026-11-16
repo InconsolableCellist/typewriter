@@ -212,4 +212,49 @@ These are all [A]. The numbers are the photographs in plan.md section 10.
   - The pad's moulded marks (diamond, ring, box).
   - The small print in the LCD window. The "FO-70" under the LCD is our placement.
   - The number keys' legend colour.
-- **VOLUME (4).** One key in the photograph, two in the mechanism (above).
+- **VOLUME (4).** One key, in the photograph and now in the mechanism too (the manuals' panel drawing and key matrix).
+
+## Corrections from the service manual
+
+From the owner's service manual (SM) and operation manual (OM), read in full (`hardware.md`). What the model has
+right, what it must change, and what `tools/blender/fax_fo70.json` now carries. The GLB is rebuilt by the next model
+pass; Blender was not run here.
+
+**Confirmed.**
+
+- Size 304 x 236 x 122 mm, about 2.6 kg (SM p.1-1, OM p.2): `size` is right.
+- The panel's layout (SM p.1-2, OM p.8): five rapid keys A B C D E/POLL in an arc under the LCD; STOP printed over the
+  round pad; START left, COPY/HELP right; VOLUME, FUNCTION, RESOLUTION/RECEPTION MODE left of the keypad; the keypad's
+  letters ABC DEF GHI JKL MNO PQRS TUV WXYZ; SPEED DIAL, REDIAL, HOLD/SEARCH, SPEAKER at the right; one VOLUME key.
+  The json's 27 keys and their labels match.
+- The handset on its rest at the left; its cord into a jack with a handset symbol on the left side (OM p.11).
+- The operation panel lifts at the front by a finger hold at the front right (OM p.9 item 14, "pull toward you", and
+  p.16 "pull up"); the paper compartment under it; two panel lock levers (SM p.3-10).
+- The speaker in the base, on the PWB case (SM p.3-12).
+
+**Changed in the json.**
+
+- `docPath.minWidth` 0.128 -> **0.148**: documents are 148 to 216 mm wide (SM p.1-1, OM p.31); the hopper guides
+  close no further.
+- `print.items`: the reception mode legends **TEL  FAX** above the LCD window's right end and **TEL/FAX  A.M.** below
+  it (SM p.1-2, OM p.8 and p.28), where the arrow points. Their exact placement is ours.
+- Notes on `bay` and `jacks`: the front paper guide and metal guide, the head that stays down, TEL. LINE and TEL. SET
+  on the back, the fixed AC cord.
+
+**Still to model (a model pass).**
+
+- **The LCD's mode arrow.** The display draws ▲ at the 14th and 16th characters (TEL, FAX) and ▼ there (TEL/FAX,
+  A.M.); the window's printed legends must sit over and under those columns.
+- **The front paper guide** (green in the photographs of the class) that flips up inside the compartment, with the
+  metal guide and its knob (OM p.16-18); the slot the paper is pushed through; the paper roll shims for 210 mm paper.
+- **The white back roller and its two green CIS release levers** under the panel (OM p.83, p.92), seen when the panel is
+  open.
+- **The FO-70's exit:** the cutter unit with the PO roller and two pinch rollers after it (SM p.3-9, 3-10); the cut
+  sheet leaves the front opening. The json's `cutter` is a guillotine stand-in; the real one is a cutter unit worked
+  by a cutter arm from the drive (no motor, SM p.3-7).
+- **The original document support**, an accessory that clips on at the rear (OM p.15 figure, SM parts p.7).
+- **The rear:** two sockets, TEL. SET behind a peel-off seal, and TEL. LINE (OM p.14-15, p.62); no power socket or
+  switch, a fixed AC cord (OM p.13).
+- **The hopper's document guides** move together on a pinion with a spring (SM p.3-5, parts p.2).
+- **No lamps** on the panel: the drawing shows none (the FC200 can drive 8 LEDs, none fitted).
+- The panel's opening angle, the handset's thickness, the profile's sides and back: still not shown in either manual.

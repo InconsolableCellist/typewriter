@@ -20,7 +20,7 @@ export const T30_TIMING = Object.freeze({
   cedDelay: 2.0,       // CED starts 1.8 to 2.5 s after the called station connects
   cedDuration: 3.0,    // CED: 2100 Hz for 2.6 to 4.0 s
   cedHz: 2100,
-  gap: 0.075,          // 75 +- 20 ms of silence between signals that turn the line around, and after CED
+  gap: 0.075,          // 75 +- 20 ms of silence between signals that turn the line around, and after CED (the FO-70: SW-A3 No. 1-2, CED tone signal interval, initial 75 ms, service manual p.2-5)
   preamble: 1.0,       // V.21 preamble of flags, 1 s +- 15 %
   tcf: 1.5,            // training check: zeros at the message rate for 1.5 s +- 10 %
 });

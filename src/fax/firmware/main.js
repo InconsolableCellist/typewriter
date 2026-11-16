@@ -1,50 +1,64 @@
 // The Sharp FO-70's firmware: the machine's top loop on a simulated clock. Pure: no DOM and no timers; the host hands
 // in devices (devices.md), delivers their events with deviceEvent() and moves time with advance().
 //
-// What it does, and where the behaviour comes from (marks as in docs/fax/plan.md: [S] search summary of the manuals,
-// [M] memory of machines of the class, [A] ours):
-//   standby with the date, time and reception mode on the LCD [A: layout]; a document laid in the feeder is drawn to
-//     the read line and DOCUMENT READY shown [A]
-//   sending by keypad number + START, rapid key A-E, SPEED DIAL + two digits, REDIAL, or HOLD/SEARCH's list [S keys]
-//   automatic redial on busy: 2 more tries at 5 minute intervals [M: Sharp's small machines of the period]
-//   copy (COPY/HELP with a document) and the help list (COPY/HELP without) [photo legend; behaviour A]
-//   the handset and SPEAKER: dial by hand, START to send or receive manually [S]; HOLD [S]
-//   reception modes FAX (answers after the set rings) and TEL/FAX [S]; TEL and A.M. [A]; TEL/FAX answers, listens
-//     for CNG, then pseudo-rings the handset for the set time and falls back to fax reception [A]
-//   polling: E/POLL with no document [photo legend; behaviour A]
-//   RESOLUTION/RECEPTION MODE: resolution with a document, reception mode without [S]
-//   VOLUME: ringer volume, or the speaker's while it is on [A]
-//   STOP at any point: every wait in an operation ends on it; a call in progress is ended with DCN [M]
-//   faults: CHECK PAPER, COVER OPEN, DOCUMENT JAMMED, LINE ERROR [S wording], codes from messages.js [A]
-//   no page memory [A, plan section 2]: the document is fed as fast as the modem takes its lines (pacing below), and
-//     a received page is printed as it is decoded; with no paper the machine does not answer, and paper running out
-//     during a reception ends the call.
+// What it does, and where the behaviour comes from. [OM p.N] the FO-10/FO-50/FO-70 operation manual, [SM p.N] the
+// service manual (docs/fax/refs/), [A] ours:
+//   power on: WAIT A MOMENT; STOP then offers MEMORY CLEAR? [SM p.7-2]
+//   standby: "05-NOV 10:30" and an arrow to the reception mode's legend by the window [OM p.28]; a document laid in the
+//     feeder is drawn in and READY TO SEND shown [OM p.33]
+//   RESOLUTION/RECEPTION MODE: with a document, STANDARD FINE SUPER FINE HALF TONE at AUTO, then at DARK contrast
+//     [OM p.37]; without, the reception mode TEL, FAX, TEL/FAX, A.M. [OM p.28]
+//   sending: number keys + START (STOP backspaces) [OM p.47], a rapid key [OM p.45], SPEED DIAL + two digits + START
+//     [OM p.46], HOLD/SEARCH 1, a letter, # or * and START [OM p.48]; the handset or SPEAKER, dial, START on the
+//     fax tone [OM p.38]; REDIAL turns the speaker on and redials, START sends [OM p.39]
+//   automatic redial when busy or unanswered: RECALLING, 2 more tries at 5 minutes [OM p.49, p.91; SM SW-B1, B2]
+//   after a transaction TOTAL PAGE(S) nn and a 3 s tone, or a 5 s intermittent tone when it failed [OM p.91]; the
+//     transaction report by the TRANSACTION LIST setting [OM p.50-51]
+//   copy: COPY/HELP with a document; the Help List without [OM p.9, p.59]
+//   reception: FAX answers on the set rings (2) [OM p.53]; TEL by the handset, reception starting by itself on a fax
+//     tone (FAX SIGNAL RX) or by START [OM p.55-58]; TEL/FAX answers, listens about five seconds for a fax tone, else
+//     pseudo-rings 30 seconds and then receives [OM p.52]; A.M. leaves the call to the answering machine and takes
+//     over on a fax tone [OM p.64], or answers after 5 rings when FAX RX A.M. FAILS is on [OM p.67]
+//   polling: dial (number keys, SPEED DIAL, or the handset), then E/POLL, when POLLING is set to YES [OM p.79-80]
+//   Caller ID, priority call, duplex ringing, anti junk fax [OM p.69-78]
+//   VOLUME: the ringer MIDDLE HIGH RINGER OFF: OK? LOW, or the speaker's MIDDLE HIGH LOW while it is on [OM p.29-30]
+//   STOP at any point: every wait in an operation ends on it; a call in progress is ended with DCN [A]
+//   no page memory [SM p.5-2: the 256 kbit SRAM is line memory]: the document is fed as fast as the modem takes its
+//     lines (pacing below), and a received page is printed as it is decoded; with no paper the machine does not
+//     answer, and paper running out during a reception ends the call.
 
 import { Kernel, wait, event } from './kernel.js';
 import { CallDriver } from './call.js';
-import { msg, ERRORS, errorForHangup } from './messages.js';
+import { msg, ERRORS, errorForHangup, commCode, resText } from './messages.js';
 import { Lcd, lcdPair, lcdText, isDigitKey, isRapidKey } from './panel.js';
 import {
   loadSettings, MemoryStorage, STORAGE_KEY, JOURNAL_KEY, RX_MODES, digitsOf, rapidIndex, isJunk,
-  numberEntry, chooseSpeed, functionMenu, SPEED_COUNT,
+  numberEntry, chooseSpeed, functionMenu, SPEED_COUNT, defaultSettings,
 } from './setup.js';
+import { decode } from './softswitch.js';
+import { diagnostics } from './diag.js';
+import { KEY_LETTERS } from './panel.js';
 import { encodeRows, pageChecker, STRIDE, LINES_PER_MM } from './page.js';
-import { transmissionReport, activityReport, telephoneList, setupList, helpList, headerPage, JOURNAL_LENGTH } from './reports.js';
+import { transactionReport, telephoneList, junkList, helpList, headerPage, JOURNAL_LENGTH } from './reports.js';
 import { T30Caller } from '../t30/caller.js';
 import { T30Answerer } from '../t30/answerer.js';
 import { TRAINING_SECONDS } from '../transport.js';
 
-/** Timing the manual does not give [A unless marked]. */
+/** Timing, from the manuals where marked, else ours [A]. */
 export const TIMING = Object.freeze({
+  bootS: 1,                // WAIT A MOMENT [SM p.7-2; its length A]
+  memoryClearS: 3,         // MEMORY CLEAR? waits for START [SM p.7-2]
   dialToneWaitS: 3,        // listen this long for dial tone before dialling blind
-  resultS: 3,              // TRANSMISSION OK and the like stay this long
+  resultS: 3,              // TOTAL PAGE(S) stays this long
   flashS: 2,               // a setting's name after a key press
-  redialTries: 2,          // [M]
-  redialIntervalS: 300,    // [M]
+  redialTries: 2,          // [OM p.49; SM SW-B2 No. 1-4]
+  redialIntervalS: 300,    // [OM p.49: 5 minutes; SM SW-B1 No. 4-8]
   ringGapS: 7,             // no ring for this long: the caller has given up
-  cngWindowS: 5,           // TEL/FAX: listen for CNG before pseudo-ringing
-  amFallbackRings: 5,      // A.M. mode with no answering machine answering: the fax answers itself
-  amWatchS: 30,            // A.M. mode: listen for CNG while the answering machine has the line
+  cngWindowS: 5,           // TEL/FAX: listen "about five seconds" for a fax tone [OM p.52; SM SW-E1 No. 5]
+  telFaxRings: 2,          // TEL/FAX answers on two rings [OM p.52]
+  amFallbackRings: 5,      // FAX RX A.M. FAILS: the fax answers after 5 rings [OM p.67]
+  duplexRings: 2,          // duplex ringing: a fax call is answered after 2 rings [OM p.75]
+  amWatchS: 40,            // A.M. mode: listen for CNG while the answering machine has the line [SM SW-G3 No. 3-4: 40 s]
   paceChunkS: 0.5,         // the feed is commanded in steps of this many seconds of line time
   copyBlockLines: 128,     // copy: scan and print alternate in blocks (one motor [M])
   copyLineS: 1 / 154,      // copy: time a line takes to scan at fine (20 mm/s [A])
@@ -53,10 +67,10 @@ export const TIMING = Object.freeze({
 
 export class Stop extends Error { constructor() { super('STOP'); } }
 
+/** The RESOLUTION/RECEPTION MODE key's settings with a document: each resolution at AUTO, then at DARK [OM p.37]. */
 const RES_ORDER = ['STANDARD', 'FINE', 'SUPERFINE', 'HALFTONE'];
-const RES_MSG = { STANDARD: 'RES_STANDARD', FINE: 'RES_FINE', SUPERFINE: 'RES_SUPERFINE', HALFTONE: 'RES_HALFTONE' };
-const MODE_MSG = { FAX: 'MODE_FAX', TEL: 'MODE_TEL', 'TEL/FAX': 'MODE_TELFAX', 'A.M.': 'MODE_AM' };
-const MODE_ABBR = { FAX: 'FAX', TEL: 'TEL', 'TEL/FAX': 'T/F', 'A.M.': 'A.M' };
+/** Where the arrow stands for each reception mode: column and glyph (▲ to TEL or FAX above, ▼ to TEL/FAX or A.M. below) [OM p.28]. */
+export const MODE_ARROW = { TEL: [13, '▲'], FAX: [15, '▲'], 'TEL/FAX': [13, '▼'], 'A.M.': [15, '▼'] };
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const p2 = (n) => String(n).padStart(2, '0');
 
@@ -90,6 +104,7 @@ export class FaxFirmware {
     this.lcd.now = () => this.k.t;
     this.state = { doc: false, docLoaded: false, docJam: false, paper: true, cover: false, handset: false };
     this.res = 'STANDARD';
+    this.contrast = 'AUTO';     // [OM p.36: the defaults are STANDARD and AUTO, set again for each document]
     this.alert = null;          // a message id that stays until STOP (LINE ERROR, LINE BUSY)
     this.redial = null;         // { number, left, at }
     this.lastNumber = '';
@@ -141,9 +156,20 @@ export class FaxFirmware {
     this.tickTimer = this.k.at(next, () => { this.k.post({ dev: 'fw', ev: 'tick' }); this.armTick(); });
   }
 
+  /** The soft switches decoded (softswitch.js). */
+  get sw() { return decode(this.settings.softSwitches); }
+
+  /** "05-NOV 10:30" and the reception mode's arrow [OM p.28; SM p.1-9]; 12-hour and month-first by SW-J3. */
   clockLine() {
     const d = new Date(this.wallMs());
-    return `${MONTHS[d.getUTCMonth()]}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())} ${MODE_ABBR[this.settings.rxMode]}`;
+    const sw = this.sw;
+    let h = d.getUTCHours();
+    if (sw.clock12h) h = h % 12 || 12;
+    const date = sw.monthFirst ? `${MONTHS[d.getUTCMonth()]}-${p2(d.getUTCDate())}` : `${p2(d.getUTCDate())}-${MONTHS[d.getUTCMonth()]}`;
+    const line = `${date} ${p2(h)}:${p2(d.getUTCMinutes())}`.padEnd(16).split('');
+    const [col, glyph] = MODE_ARROW[this.settings.rxMode] ?? MODE_ARROW.FAX;
+    line[col] = glyph;
+    return line.join('');
   }
 
   addJournal(entry) {
@@ -171,6 +197,27 @@ export class FaxFirmware {
   *key(timeout) {
     const e = yield* this.ev((x) => isKey(x), timeout);
     return e.dev === 'keys' ? e.key : null;
+  }
+
+  /** The next key, STOP included (returned, not thrown); null after `timeout` seconds. */
+  *keyOrStop(timeout) {
+    const e = yield* this.ev((x) => isKey(x), timeout, { stop: true });
+    return e.dev === 'keys' ? e.key : null;
+  }
+
+  /** Show a text and wait for a key (STOP throws). */
+  *showKey(text, timeout = this.MENU_TIMEOUT) { this.show(text); return yield* this.key(timeout); }
+
+  throwStop() { throw new Stop(); }
+
+  *diagnostics() { yield* diagnostics(this); }
+
+  /** Back to the factory settings, the desk's numbers kept out (memory clear) [SM p.2-3, p.7-2]. */
+  memoryClear() {
+    const d = defaultSettings();
+    for (const k of Object.keys(this.settings)) delete this.settings[k];
+    Object.assign(this.settings, d);
+    this.save();
   }
 
   *pause(s) { yield* wait(s); }
@@ -238,7 +285,19 @@ export class FaxFirmware {
 
   // ---- the top loop ------------------------------------------------------------------------------------------------
 
+  /** Power on [SM p.7-2]: WAIT A MOMENT; STOP then shows MEMORY CLEAR?, which START answers within 3 s. */
+  *powerOn() {
+    if (this.options.resume) return;
+    this.show(msg('WAIT_MOMENT'));
+    const e = yield* event((x) => isStop(x), TIMING.bootS);
+    if (!isStop(e)) return;
+    this.show(msg('MEMORY_CLEAR_Q'));
+    const k = yield* event((x) => isKey(x), TIMING.memoryClearS);
+    if (isKey(k, 'START')) { this.memoryClear(); this.show(msg('MEMORY_CLEARED')); yield* wait(TIMING.flashS); }
+  }
+
   *mainLoop() {
+    yield* this.powerOn();
     for (;;) {
       try {
         yield* this.standby();
@@ -260,12 +319,9 @@ export class FaxFirmware {
     const s = this.state;
     if (s.cover) return msg('COVER_OPEN');
     if (s.docJam) return msg('DOC_JAMMED');
-    if (!s.paper) return msg('CHECK_PAPER');
+    if (!s.paper) return msg('OUT_OF_PAPER');
     if (this.alert) return msg(this.alert);
-    if (this.redial) {
-      const left = Math.max(0, Math.ceil(this.redial.at - this.k.t));
-      return lcdPair(msg('REDIAL_WAIT'), `${Math.floor(left / 60)}:${p2(left % 60)}`);
-    }
+    if (this.redial) return msg('RECALLING');
     if (s.docLoaded) return msg('DOC_READY');
     if (!this.settings.clock.set && Math.floor(this.k.t / 2) % 2) return msg('SET_CLOCK');
     return this.clockLine();
@@ -309,16 +365,22 @@ export class FaxFirmware {
     }
     this.alert = null;
     if (k === 'RESOLUTION') {
-      // Each press while the setting is shown moves it on; another key ends the display and is acted on.
+      if (!doc) {
+        // The arrow moves to the next mode [OM p.28].
+        this.settings.rxMode = RX_MODES[(RX_MODES.indexOf(this.settings.rxMode) + 1) % RX_MODES.length];
+        this.save();
+        return;
+      }
+      // Each press while the setting is shown moves it on: STANDARD :AUTO ... HALF TONE :DARK [OM p.37]; the first
+      // press shows the setting in force.
+      let first = true;
       for (let next = k; next === 'RESOLUTION';) {
-        if (doc) {
-          this.res = RES_ORDER[(RES_ORDER.indexOf(this.res) + 1) % RES_ORDER.length];
-          next = yield* this.flash(msg(RES_MSG[this.res]));
-        } else {
-          this.settings.rxMode = RX_MODES[(RX_MODES.indexOf(this.settings.rxMode) + 1) % RX_MODES.length];
-          this.save();
-          next = yield* this.flash(msg(MODE_MSG[this.settings.rxMode]));
+        if (!first) {
+          const i = RES_ORDER.indexOf(this.res) + (this.contrast === 'DARK' ? 4 : 0) + 1;
+          this.res = RES_ORDER[i % 4]; this.contrast = i % 8 >= 4 ? 'DARK' : 'AUTO';
         }
+        first = false;
+        next = yield* this.flash(resText(this.res, this.contrast));
         if (next && next !== 'RESOLUTION') return yield* this.onKey(next);
       }
       return;
@@ -327,7 +389,8 @@ export class FaxFirmware {
     if (k === 'SPEAKER') { yield* this.telephone('speaker'); return; }
     if (k === 'COPY_HELP') { if (doc) yield* this.copy(); else yield* this.printList('help'); return; }
     if (k === 'VOLUME') { yield* this.volume('ringer'); return; }
-    if (k === 'E' && !doc) { yield* this.pollEntry(); return; }
+    const pollKey = this.settings.pollingKey;
+    if (k === 'E' && pollKey) { this.beep('error'); return; }       // Rapid Dial Keys cannot be used for polling [OM p.80]
     if (isRapidKey(k)) {
       const e = this.settings.speed[rapidIndex(k) - 1];
       if (!e) { yield* this.flash(msg('NOT_STORED')); return; }
@@ -343,12 +406,13 @@ export class FaxFirmware {
       this.show(e.name || e.number);
       const go = yield* this.key(this.ENTRY_TIMEOUT);
       if (go === 'START' && this.state.docLoaded) yield* this.send(e.number, { name: e.name });
+      else if (go === 'E' && pollKey && !this.state.docLoaded) yield* this.receive({ poll: e.number, name: e.name });
       return;
     }
     if (k === 'REDIAL') {
+      // The speaker comes on and the last number is redialled; START sends on the fax tone [OM p.39, p.61; SM SW-B1 No. 2].
       if (!this.lastNumber) return;
-      if (doc) yield* this.send(this.lastNumber);
-      else yield* this.flash(this.lastNumber);
+      yield* this.telephone('speaker', { dial: this.lastNumber });
       return;
     }
     if (k === 'HOLD_SEARCH') {
@@ -357,37 +421,101 @@ export class FaxFirmware {
       return;
     }
     if (isDigitKey(k)) {
-      const n = yield* numberEntry(this, { first: k });
-      if (n && this.state.docLoaded) yield* this.send(n);
-      else if (n) this.beep('error');
+      const n = yield* numberEntry(this, { first: k, ends: pollKey ? ['START', 'E'] : ['START'], stopBackspace: true });
+      if (!n || !n.text) return;
+      if (n.key === 'E' && !this.state.docLoaded) yield* this.receive({ poll: n.text });
+      else if (n.key === 'START' && this.state.docLoaded) yield* this.send(n.text);
+      else this.beep('error');
       return;
     }
     if (k === 'START' && !doc) this.beep('error');
   }
 
-  /** HOLD/SEARCH in standby: step through the stored numbers by name; START chooses [A]. */
+  /**
+   * HOLD/SEARCH: SEARCH DIAL; 1, then the first letter of the name by its key (1 for a symbol or number, 0 for the
+   * numbers); # or * scrolls in alphabetical order from there; START chooses [OM p.48-49]. 2 reviews the Caller ID list
+   * [OM p.72]. NO DATA with nothing stored.
+   */
   *search() {
-    const list = this.settings.speed.filter(Boolean).slice().sort((a, b) => (a.name || a.number).localeCompare(b.name || b.number));
-    if (!list.length) { yield* this.flash(msg('NOT_STORED')); return null; }
-    for (let i = 0; ;) {
-      this.show(list[i].name || list[i].number);
-      const k = yield* this.key(this.ENTRY_TIMEOUT);
-      if (k == null) return null;
-      if (k === 'HOLD_SEARCH') i = (i + 1) % list.length;
-      else if (k === 'START') return list[i];
+    let k = yield* this.showKey(msg('SEARCH_DIAL'), this.ENTRY_TIMEOUT);
+    if (k === '2') return yield* this.reviewCalls();
+    const byName = this.settings.speed.filter(Boolean).slice().sort((a, b) => (a.name || a.number).localeCompare(b.name || b.number));
+    if (!byName.length) { yield* this.flash(msg('NO_DATA')); return null; }
+    let list = byName, i = -1, letter = '', last = null, li = 0;
+    const show = () => this.show(i >= 0 ? (list[i].name || list[i].number) : letter ? letter : msg('SEARCH_DIAL'));
+    if (k === '1') {
+      for (;;) {
+        show();
+        k = yield* this.key(this.ENTRY_TIMEOUT);
+        if (k == null) return null;
+        if (k === '0' && !letter) { list = this.settings.speed.filter(Boolean).slice().sort((a, b) => a.number.localeCompare(b.number)).map((e) => ({ ...e, name: '' })); break; }
+        if (/^[1-9]$/.test(k)) {
+          const cyc = k === '1' ? '1' : KEY_LETTERS[k];
+          li = k === last ? (li + 1) % cyc.length : 0; last = k; letter = cyc[li];
+          continue;
+        }
+        break;
+      }
+    }
+    for (;;) {
+      if (k === '#' || k === '*') {
+        if (i < 0) {
+          const from = letter ? list.findIndex((e) => (e.name || e.number).toUpperCase() >= letter) : 0;
+          i = from < 0 ? 0 : from;
+          if (k === '*' && !letter) i = list.length - 1;
+        } else i = (i + (k === '#' ? 1 : list.length - 1)) % list.length;
+      } else if (k === 'START' && i >= 0) return list[i];
+      else if (k == null) return null;
+      show();
+      k = yield* this.key(this.ENTRY_TIMEOUT);
     }
   }
 
+  /** The Caller ID list: * from the most recent, # from the oldest; 0 deletes; START chooses [OM p.72-73]. */
+  *reviewCalls() {
+    const calls = this.settings.callers;
+    let k = yield* this.showKey(msg('REVIEWING_CALLS'), this.ENTRY_TIMEOUT);
+    if (!calls.length) { yield* this.flash(msg('NO_DATA')); return null; }
+    let i = -1;
+    for (;;) {
+      if (k === '*') i = i < 0 ? calls.length - 1 : (i + calls.length - 1) % calls.length;
+      else if (k === '#') i = i < 0 ? 0 : (i + 1) % calls.length;
+      else if (k === '0' && i >= 0) { calls.splice(i, 1); this.save(); if (!calls.length) return null; i = Math.min(i, calls.length - 1); }
+      else if (k === 'START' && i >= 0) return { number: calls[i].number, name: calls[i].name };
+      else if (k == null) return null;
+      this.show(i >= 0 ? (calls[i].name || calls[i].number) : msg('REVIEWING_CALLS'));
+      k = yield* this.key(this.ENTRY_TIMEOUT);
+    }
+  }
+
+  /**
+   * VOLUME [OM p.29-30]. The speaker's (while SPEAKER is on): MIDDLE, HIGH, LOW in turn, "SPEAKER: HIGH". The ringer's:
+   * MIDDLE, HIGH, then RINGER OFF: OK? (START turns it off), then LOW, "RINGER: HIGH". Each press moves on.
+   */
   *volume(which) {
     const names = ['OFF', 'LOW', 'MIDDLE', 'HIGH'];
-    const min = which === 'speaker' ? 1 : 0;
     const v = this.settings.volume;
-    v[which] = v[which] >= 3 ? min : v[which] + 1;
-    this.save();
-    if (which === 'speaker') this.devices.ncu.monitor?.(v.speaker);
-    else this.devices.beeper?.ring?.(true, { volume: v.ringer, sample: true });
-    yield* this.flash(lcdPair(msg(which === 'speaker' ? 'SPEAKER_VOL' : 'RINGER_VOL'), names[v[which]]));
-    if (which !== 'speaker') this.devices.beeper?.ring?.(false);
+    for (let k = 'VOLUME'; k === 'VOLUME';) {
+      if (which === 'speaker') {
+        v.speaker = v.speaker >= 3 ? 1 : v.speaker + 1;
+        this.devices.ncu.monitor?.(v.speaker);
+        this.save();
+        k = yield* this.flash(`${msg('SPEAKER_VOL')} ${names[v.speaker]}`);
+        continue;
+      }
+      if (v.ringer === 3 && !this.offAsked) {
+        this.offAsked = true;
+        k = yield* this.flash(msg('RINGER_OFF_Q'));
+        if (k === 'START') { v.ringer = 0; this.save(); this.offAsked = false; return; }
+        continue;
+      }
+      this.offAsked = false;
+      v.ringer = v.ringer >= 3 || v.ringer === 0 ? 1 : v.ringer + 1;
+      this.save();
+      this.devices.beeper?.ring?.(true, { volume: v.ringer, sample: true });
+      k = yield* this.flash(`${msg('RINGER_VOL')} ${names[v.ringer]}`);
+      this.devices.beeper?.ring?.(false);
+    }
   }
 
   // ---- the document --------------------------------------------------------------------------------------------------
@@ -395,7 +523,7 @@ export class FaxFirmware {
   *loadDocument() {
     this.show(msg('DOC_READY'));
     const r = yield* this.io('feeder', 'load');
-    if (r.ok) { this.state.docLoaded = true; this.res = 'STANDARD'; return true; }
+    if (r.ok) { this.state.docLoaded = true; this.res = 'STANDARD'; this.contrast = 'AUTO'; return true; }
     if (r.error === 'jam') { this.state.docJam = true; this.beep('error'); }
     else this.state.doc = this.devices.feeder.status().docPresent;
     return false;
@@ -408,7 +536,7 @@ export class FaxFirmware {
 
   scanParams() {
     const vres = this.res === 'STANDARD' ? 'standard' : this.res === 'SUPERFINE' ? 'superfine' : 'fine';
-    return { vres, halftone: this.res === 'HALFTONE', contrast: this.settings.contrast };
+    return { vres, halftone: this.res === 'HALFTONE', contrast: this.contrast === 'DARK' ? 'DARK' : 'NORMAL' };
   }
 
   /**
@@ -442,7 +570,8 @@ export class FaxFirmware {
         const scanned = [];
         for (let k = 0; k < 20000; k++) { const row = sc.readLine(k); if (!row) break; scanned.push(row); }
         sc.end();
-        const head = fw.settings.header ? headerPage(fw.settings, { wallMs: fw.wallMs(), page: index + 1, vres }) : null;
+        // The name, number, date and time at the top of every page sent [OM p.20, p.24].
+        const head = headerPage(fw.settings, { wallMs: fw.wallMs(), page: index + 1, vres });
         const headRows = head ? head.height : 0;
         const rowAt = (i) => {
           if (i < headRows) {
@@ -561,6 +690,7 @@ export class FaxFirmware {
         if (e.ev === 'hangup') { result = result ?? errorForHangup(e.reason); entry.remote = station.remote.ident || entry.remote; break; }
       }
     } finally {
+      if (drv?.station?.result) entry.call = drv.station.result;
       job.cancelled = true;
       for (const t of job.timers) this.k.cancel(t);
       drv?.drop();
@@ -572,8 +702,11 @@ export class FaxFirmware {
     if (result === 'NO_LINE') { this.alert = 'LINE_ERROR'; return; }
     if (job.currentScanned) yield* this.eject();         // a sheet caught half sent goes out
     entry.result = result;
+    entry.code = ERRORS[result].note === 'COM' ? commCode('TX', entry.call ?? { reason: 'no-signal' }) : null;
+    delete entry.call;
     entry.durationS = this.k.t - t0;
-    if (result === 'BUSY') {
+    // Busy, or no answer: RECALLING, and two more tries five minutes apart, for automatic dialling [OM p.49, p.91].
+    if ((result === 'BUSY' || (result === 'NO_ANSWER' && !entry.pages)) && !manual) {
       const left = redial ? redial.left : TIMING.redialTries;
       if (left > 0 && this.state.docLoaded) {
         this.redial = { number, left, at: this.k.t + TIMING.redialIntervalS };
@@ -585,10 +718,18 @@ export class FaxFirmware {
     this.redial = null;
     this.addJournal(entry);
     this.lastTx = { entry, firstPage: job.firstPage };
-    if (result === 'OK') { this.beep('end'); yield* this.flash(msg('TX_OK'), TIMING.resultS); }
-    else if (result !== 'STOPPED') { this.beep('error'); this.alert = ERRORS[result].lcd ?? 'LINE_ERROR'; }
+    yield* this.endOf(entry);
+  }
+
+  /** The end of a transaction [OM p.91]: TOTAL PAGE(S) and the 3 s tone, or the failure's message and the intermittent
+   * tone; then the transaction report by its setting [OM p.50]. */
+  *endOf(entry) {
+    const result = entry.result;
+    if (result === 'OK') { this.beep('end'); yield* this.flash(`${msg('TOTAL_PAGES')} ${p2(entry.pages)}`, TIMING.resultS); }
+    else if (result !== 'STOPPED') { this.beep('error'); const lcd = ERRORS[result].lcd; if (lcd && !['COVER_OPEN', 'OUT_OF_PAPER'].includes(lcd)) this.alert = lcd; }
     const rep = this.settings.report;
-    if (rep === 'ALWAYS' || (rep === 'ERROR' && result !== 'OK' && result !== 'STOPPED')) yield* this.printList('transmission');
+    const print = result !== 'BLOCKED' && (rep === 'ALWAYS' || (rep === 'SEND' && entry.kind === 'TX') || (rep === 'ERROR' && result !== 'OK'));   // a blocked junk fax prints nothing [A]
+    if (print && !this.printerReady()) yield* this.printList('transaction', entry);
   }
 
   /**
@@ -607,36 +748,21 @@ export class FaxFirmware {
     yield* this.ev((x) => x.dev === 't30' && x.ev === 'hangup', TIMING.stopWaitS, { stop: true });
   }
 
-  /** E/POLL with no document: a number, then START. */
-  *pollEntry() {
-    this.show(msg('POLLING'));
-    const k = yield* this.key(this.ENTRY_TIMEOUT);
-    if (k == null) return;
-    let number = null, name = '';
-    if (isRapidKey(k)) { const e = this.settings.speed[rapidIndex(k) - 1]; if (!e) return; number = e.number; name = e.name; }
-    else if (k === 'SPEED_DIAL') { const i = yield* chooseSpeed(this); const e = i && this.settings.speed[i - 1]; if (!e) return; number = e.number; name = e.name; }
-    else if (isDigitKey(k)) number = yield* numberEntry(this, { first: k });
-    else return;
-    if (!number) return;
-    if (name) { this.show(name); const go = yield* this.key(this.ENTRY_TIMEOUT); if (go !== 'START') return; }
-    yield* this.receive({ poll: number, name });
-  }
-
   /**
    * Receive: answer (or, `poll`, dial and poll), print each page as it is decoded, cut it. With `seized` the line
    * is already held (TEL/FAX, manual).
    */
-  *receive({ poll = null, name = '', manual = false, how = 'auto' } = {}) {
+  *receive({ poll = null, name = '', manual = false, how = 'auto', pollManual = false } = {}) {
     const n = this.devices.ncu;
     this.alert = null;
-    const entry = { kind: poll ? 'POLL' : 'RX', dialled: poll ?? '', remote: name, wallMs: this.wallMs(), pages: 0, mode: '', result: 'OK' };
+    const entry = { kind: poll || pollManual ? 'POLL' : 'RX', dialled: poll ?? '', remote: name, wallMs: this.wallMs(), pages: 0, mode: '', result: 'OK' };
     const t0 = this.k.t;
     let drv = null, result = null, fault = null;
     const printing = { busy: 0 };
     const onPage = (page) => {
       entry.pages++;
       printing.busy++;
-      this.cmd('printer', 'print', { rows: page.rows, count: page.height, vres: page.vres, contrast: this.settings.contrast }, (r) => {
+      this.cmd('printer', 'print', { rows: page.rows, count: page.height, vres: page.vres, contrast: 'NORMAL' }, (r) => {
         if (!r.ok) { printing.busy--; fault = fault ?? (r.error === 'cover' ? 'COVER' : 'PAPER'); this.k.post({ dev: 'fw', ev: 'rxfault' }); return; }
         this.cmd('cutter', 'cut', {}, (c) => {
           printing.busy--;
@@ -660,9 +786,9 @@ export class FaxFirmware {
       } else {
         n.seize(true);
       }
-      this.show(msg('RECEIVING'));
+      this.show(msg(poll || pollManual ? 'POLLING' : 'RECEIVING'));
       const checker = pageChecker(onPage, refuse);
-      const station = poll
+      const station = poll || pollManual
         ? new T30Caller({ ident: this.settings.ownNumber, poll: true, checker })
         : new T30Answerer({ ident: this.settings.ownNumber, checker });
       drv = this.callStation(station);
@@ -691,6 +817,7 @@ export class FaxFirmware {
         if (e.ev === 'hangup') { result = result ?? fault ?? errorForHangup(e.reason); break; }
       }
       entry.remote = station.remote.ident || entry.remote;
+      if (station.result) entry.call = station.result;
     } finally {
       drv?.drop();
       n.monitor?.(0);
@@ -703,12 +830,13 @@ export class FaxFirmware {
     }
     result = fault ?? result ?? 'OK';
     entry.result = result;
+    entry.code = ERRORS[result].note === 'COM' ? commCode('RX', entry.call ?? { reason: 'no-signal' }) : null;
+    delete entry.call;
     entry.durationS = this.k.t - t0;
     this.log.push({ t: this.k.t, what: 'receive', result, pages: entry.pages });
     if (result === 'NO_LINE') { this.alert = 'LINE_ERROR'; return; }
     this.addJournal(entry);
-    if (result === 'OK') { this.beep('end'); yield* this.flash(msg('RX_OK'), TIMING.resultS); }
-    else if (result !== 'STOPPED') { this.beep('error'); if (!['PAPER', 'COVER', 'CUTTER'].includes(result)) this.alert = ERRORS[result].lcd ?? 'LINE_ERROR'; }
+    yield* this.endOf(entry);
   }
 
   // ---- an incoming call ---------------------------------------------------------------------------------------------
@@ -717,23 +845,44 @@ export class FaxFirmware {
     const s = this.settings;
     let rings = first.count ?? 1;
     let cid = null;
-    const ringer = (on) => this.devices.beeper?.ring?.(on, { volume: s.volume.ringer });
+    let ringerPattern = 'normal', lastRing = this.k.t;
+    const ringer = (on) => this.devices.beeper?.ring?.(on, { volume: s.volume.ringer, ...(ringerPattern !== 'normal' ? { pattern: ringerPattern } : {}) });
     ringer(true);
-    let mode = s.rxMode;
-    if (s.distinctive && first.pattern !== 'distinctive') mode = 'TEL';     // [A] other patterns are voice calls
+    let mode = s.rxMode, faxRings = s.rings;
+    // Duplex ringing: the long cadence is a fax, answered after two rings whatever the mode; the short, a voice call
+    // [OM p.75]. (The switchboard's 'distinctive' cadence stands for the fax number's.)
+    if (s.duplex) { if (first.pattern === 'distinctive') { mode = 'FAX'; faxRings = TIMING.duplexRings; } else mode = 'TEL'; }
+    if (mode === 'TEL/FAX') faxRings = s.rings;          // the set rings, two at the factory [OM p.52, p.54]
+    let shown = 0;
     try {
       for (;;) {
-        this.show(cid ? (cid.name || cid.number) : msg('INCOMING'));
+        // Caller ID: the name and the number in turn [OM p.71].
+        this.show(cid ? ((shown++ % 2 && cid.name) ? cid.number : (cid.name || cid.number)) : msg('INCOMING'));
         const junk = cid && isJunk(s, cid.number);
-        if (!junk) {
-          if (mode === 'FAX' && rings >= s.rings && this.state.paper && !this.state.cover) { ringer(false); return yield* this.receive({ how: 'auto' }); }
-          if (mode === 'TEL/FAX' && rings >= s.rings) { ringer(false); return yield* this.telFax(); }
-          if (mode === 'A.M.' && rings >= TIMING.amFallbackRings && this.state.paper) { ringer(false); return yield* this.receive({ how: 'auto' }); }
+        if (junk) {
+          // With Caller ID on, a junk number's call is broken off as soon as its number arrives [OM p.74].
+          ringer(false); this.devices.ncu.seize(true); yield* wait(0.5); this.devices.ncu.seize(false);
+          this.addJournal({ kind: 'RX', dialled: '', remote: cid.name || cid.number, wallMs: this.wallMs(), pages: 0, mode: '', result: 'BLOCKED', durationS: 0 });
+          return;
         }
-        const e = yield* this.ev((x) => x.dev === 'ncu' && ['ring', 'callerId', 'handset', 'ext'].includes(x.ev), TIMING.ringGapS);
-        if (e.ev === 'timeout') return;                     // the caller gave up
-        if (e.ev === 'ring') { ringer(e.on); if (e.on) rings = e.count ?? rings + 1; }
-        else if (e.ev === 'callerId') { if (s.callerId) cid = e; }
+        if (mode === 'FAX' && rings >= faxRings && this.state.paper && !this.state.cover) { ringer(false); return yield* this.receive({ how: 'auto' }); }
+        if (mode === 'TEL/FAX' && rings >= faxRings) { ringer(false); return yield* this.telFax(); }
+        if (mode === 'A.M.' && s.amFailsFax && rings >= TIMING.amFallbackRings && this.state.paper) { ringer(false); return yield* this.receive({ how: 'auto' }); }
+        const e = yield* this.ev((x) => x.dev === 'ncu' && ['ring', 'callerId', 'handset', 'ext'].includes(x.ev), cid ? 1.5 : TIMING.ringGapS);
+        if (e.ev === 'timeout') { if (cid && this.k.t - lastRing < TIMING.ringGapS) continue; return; }    // the caller gave up
+        if (e.ev === 'ring') { ringer(e.on); if (e.on) { rings = e.count ?? rings + 1; lastRing = this.k.t; } }
+        else if (e.ev === 'callerId') {
+          if (s.callerId) {
+            cid = e;
+            s.callers.push({ number: e.number, name: e.name ?? '', wallMs: this.wallMs() });
+            if (s.callers.length > 20) s.callers.splice(0, s.callers.length - 20);     // the most recent 20 [OM p.72]
+            this.save();
+            // A priority call rings with its own sound [OM p.73].
+            if (s.priority && digitsOf(s.priority).replace(/-/g, '').slice(-7) === digitsOf(e.number).replace(/-/g, '').slice(-7)) {
+              ringerPattern = 'priority';
+            }
+          }
+        }
         else if (e.ev === 'handset' && e.off) { ringer(false); return yield* this.telephone('handset', { answered: true }); }
         else if (e.ev === 'ext' && e.off && mode === 'A.M.') { ringer(false); return yield* this.amWatch(); }
       }
@@ -749,7 +898,8 @@ export class FaxFirmware {
     port.listen({ v21Carrier: nop, v21Bits: nop, hsCarrier: nop, hsBits: nop, tone: (tone, on) => { if (tone === 'CNG' && on) this.k.post({ dev: 'fw', ev: 'cng' }); } });
   }
 
-  /** TEL/FAX: answer, listen for CNG, then pseudo-ring the handset; no pickup in time: receive [A]. */
+  /** TEL/FAX: answer, listen about five seconds for CNG, then pseudo-ring for 30 s; no pickup in time: send the fax
+   * tone and receive [OM p.52]. */
   *telFax() {
     const n = this.devices.ncu;
     n.seize(true);
@@ -759,7 +909,7 @@ export class FaxFirmware {
     if (e.ev === 'timeout') {
       this.show(msg('PICK_UP'));
       this.devices.beeper?.ring?.(true, { volume: Math.max(1, this.settings.volume.ringer), pattern: 'pseudo' });
-      try { e = yield* this.ev(accept, this.settings.pseudoRingS); }
+      try { e = yield* this.ev(accept, this.sw.pseudoRingS); }   // 30 s [OM p.52; SM SW-E1]
       finally { this.devices.beeper?.ring?.(false); }
     }
     if (e.ev === 'released') { n.seize(false); return; }
@@ -777,17 +927,21 @@ export class FaxFirmware {
   // ---- the telephone ---------------------------------------------------------------------------------------------------
 
   /** Handset off hook, or SPEAKER: dial by hand, talk, HOLD, START to send or receive by hand. */
-  *telephone(via, { answered = false } = {}) {
+  *telephone(via, { answered = false, dial: first = null } = {}) {
     const n = this.devices.ncu;
     let speaker = via === 'speaker';
     let dialled = '';
     let hold = false;
     if (speaker) { n.seize(true); n.monitor?.(this.settings.volume.speaker); }
     const dial = (digits) => { dialled += digits; this.cmd('ncu', 'dial', { digits, mode: this.settings.dialMode }); };
+    if (first) { this.lastNumber = first; dial(digitsOf(first)); }
+    // A call answered by the handset: a fax tone heard starts the reception by itself (FAX SIGNAL RX) [OM p.55, p.58].
+    if (answered && this.settings.faxSignalRx) this.watchCng();
     try {
       for (;;) {
-        this.show(hold ? msg('ON_HOLD') : dialled ? lcdText(dialled, 'right') : msg(speaker ? 'ON_HOOK_DIAL' : 'TELEPHONE'));
-        const e = yield* this.ev((x) => isKey(x) || (x.dev === 'ncu' && (x.ev === 'handset' || x.ev === 'released')), null, { stop: true });
+        this.show(hold ? msg('HOLD') : dialled ? lcdText(dialled, 'right') : msg(speaker ? 'ON_HOOK_DIAL' : 'TELEPHONE'));
+        const e = yield* this.ev((x) => isKey(x) || (x.dev === 'ncu' && (x.ev === 'handset' || x.ev === 'released')) || (answered && x.dev === 'fw' && x.ev === 'cng'), null, { stop: true });
+        if (e.dev === 'fw') { yield* this.receive({ how: 'manual', manual: true }); return; }
         if (e.dev === 'ncu') {
           if (e.ev === 'handset') {
             if (!e.off && !speaker && !hold) return;
@@ -819,6 +973,8 @@ export class FaxFirmware {
           else yield* this.receive({ how: 'manual', manual: true });
           return;
         }
+        // E/POLL after dialling by hand: POLLING, and the handset can be replaced [OM p.80].
+        if (k === 'E' && this.settings.pollingKey && !this.state.docLoaded) { yield* this.receive({ how: 'manual', manual: true, pollManual: true }); return; }
       }
     } finally {
       if (speaker || hold) { n.monitor?.(0); n.seize(false); n.hold?.(false); }
@@ -854,7 +1010,7 @@ export class FaxFirmware {
           if (!f.ok) { this.state.docJam = true; return; }
           const buf = new Uint8Array(block.length * STRIDE);
           block.forEach((r, j) => buf.set(r, j * STRIDE));
-          const p = yield* this.io('printer', 'print', { rows: buf, count: block.length, vres, contrast: this.settings.contrast });
+          const p = yield* this.io('printer', 'print', { rows: buf, count: block.length, vres, contrast: 'NORMAL' });
           if (!p.ok) { this.beep('error'); return; }
           const stop = this.k.queue.find(isStop);
           if (stop) throw new Stop();
@@ -867,16 +1023,19 @@ export class FaxFirmware {
     } finally {
       this.log.push({ t: this.k.t, what: 'copy', pages });
     }
+    if (pages) { this.beep('end'); yield* this.flash(`${msg('TOTAL_PAGES')} ${p2(pages)}`, TIMING.resultS); }
   }
 
-  /** Print a report or list: 'transmission', 'activity', 'tel', 'setup', 'help'. */
-  *printList(kind) {
+  /**
+   * Print a report or list: 'transaction' (after a transaction, by the TRANSACTION LIST setting; it cannot be printed on
+   * demand [OM p.50]), 'tel' (the Telephone Number List), 'junk' (the Anti Junk Number List) [OM p.81], 'help' [OM p.9].
+   */
+  *printList(kind, entry = null) {
     const now = this.wallMs();
     let page;
-    if (kind === 'transmission') { if (!this.lastTx) { this.beep('error'); return; } page = transmissionReport(this.lastTx.entry, this.settings, { now, firstPage: this.lastTx.firstPage }); }
-    else if (kind === 'activity') page = activityReport(this.journal, this.settings, { now });
+    if (kind === 'transaction') page = transactionReport(entry, this.settings, { now });
     else if (kind === 'tel') page = telephoneList(this.settings, { now });
-    else if (kind === 'setup') page = setupList(this.settings, { now });
+    else if (kind === 'junk') page = junkList(this.settings, { now });
     else page = helpList(this.settings, { now });
     yield* this.printPage(page, kind);
   }
@@ -885,7 +1044,7 @@ export class FaxFirmware {
     const err = this.printerReady();
     if (err) { this.beep('error'); return false; }
     this.show(msg('PRINTING'));
-    const r = yield* this.io('printer', 'print', { rows: page.rows, count: page.height, vres: page.vres, contrast: this.settings.contrast });
+    const r = yield* this.io('printer', 'print', { rows: page.rows, count: page.height, vres: page.vres, contrast: 'NORMAL' });
     if (r.ok) yield* this.io('cutter', 'cut');
     this.log.push({ t: this.k.t, what: 'print', kind, ok: r.ok, rows: page.height });
     return r.ok;

@@ -26,11 +26,11 @@ import { createFirmware } from './main.js';
 import { MemoryStorage } from './setup.js';
 import { LINES_PER_MM, STRIDE } from './page.js';
 
-/** The host's key names (machine.mech.panel.keys) to the firmware's. VOLUME ▲ and ▼ both step the volume [A]. */
+/** The host's key names (machine.mech.panel.keys) to the firmware's: one VOLUME key [OM p.8]. */
 export const SIM_KEYS = Object.freeze({
   rapid1: 'A', rapid2: 'B', rapid3: 'C', rapid4: 'D', rapid5: 'E',
   speedDial: 'SPEED_DIAL', redial: 'REDIAL', holdSearch: 'HOLD_SEARCH', speaker: 'SPEAKER', resolution: 'RESOLUTION',
-  function: 'FUNCTION', volumeUp: 'VOLUME', volumeDown: 'VOLUME', copyHelp: 'COPY_HELP', start: 'START', stop: 'STOP',
+  function: 'FUNCTION', volume: 'VOLUME', copyHelp: 'COPY_HELP', start: 'START', stop: 'STOP',
 });
 const keyName = (k) => SIM_KEYS[k] ?? (/^[0-9*#]$/.test(k) ? k : null);
 

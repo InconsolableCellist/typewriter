@@ -1,7 +1,9 @@
 // The head frame unit, the platen and the paper (docs/fax/architecture.md 3.3; plan 2): the thermal paper roll lying
 // loose in its bay under the operation panel, its radius and inertia falling as it is used; the strip from the roll
-// over the platen roller under the head, pressed by the head's springs while the panel (the roll cover) is shut; the
-// paper sensor before the head; and the panel itself on its hinge, held shut by its latch.
+// over the platen roller under the head, pressed by the head's springs; the paper sensor before the head; and the
+// operation panel over the paper compartment on its hinge, held shut by its lock levers and read by the door sensor.
+// The head stays on the platen with the panel open: paper is pushed through the slot by hand [S p.1-6/pdf11], so
+// cover.liftsHead is false (true restores the first draft's head lifted by the panel).
 //
 // The strip is inextensible from the roll to the nip, so it is one DOF: `u`, the paper paid out past the head line
 // since the roll was loaded (m). A point of the paper is named by its strip coordinate c: it stands u - c beyond the
@@ -70,7 +72,7 @@ export class HeadMech {
   /** The paper sensor, a lever just before the head [A]: paper until the roll's tail has passed it. */
   paperSensor() { return !!this.roll && this.u < this.roll.length - 0.005; }
   coverClosed() { return this.latched; }
-  headDown() { return this.a < this.cdef.headLiftAngle; }
+  headDown() { return !this.cdef.liftsHead || this.a < this.cdef.headLiftAngle; }
   /** The strip coordinate under the cutter, and whether paper spans it. */
   atCutter() { return this.u - this.def.cutterAt; }
   spansCutter() { return !!this.roll && this.atCutter() > this.lead + 1e-4 && this.atCutter() < this.roll.length; }

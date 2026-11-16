@@ -1,15 +1,17 @@
-// The TEL/LIU board's moving parts (docs/fax/architecture.md 3.5; plan 2): the line relays and the hook switch.
-// Each relay is a clapper armature: its coil's current lags its drive, its pull grows as the gap closes, a spring
+// The TEL/LIU board's moving parts (docs/fax/architecture.md 3.5; docs/fax/hardware.md 6): the line relay and the hook
+// switch. The board has ONE relay, CML, the line connecting and dial pulse relay [S p.5-10/pdf61]; the handset is
+// switched by analogue gates (TELMUTE), not a relay. The relay is a clapper armature: its coil's current lags its drive, its pull grows as the gap closes, a spring
 // returns it, and its contact makes near the end of its travel, so pull-in and drop-out have their real delays and
-// clicks. The hook switch is a plunger in the handset's cradle: the handset's weight holds it down; lifted, its
-// spring brings it up and the contact changes over. A finger on the plunger (a DOF) does what it did on the real one.
+// clicks. The hook switch sits on the TEL/LIU PWB, worked by the hook switch lever under the handset rest [S p.3-3,
+// p.3-12]; modelled as a plunger: the handset's weight holds it down; lifted, its spring brings it up and the contact
+// changes over. A finger on the plunger (a DOF) does what it did on the real one.
 //
 // The line loop is closed when the hook switch is off hook or the machine's line relay (CML) is made: that is what
 // the exchange sees (lineLoop(); src/fax/line/ reads it through the firmware, M7).
 import { FAC } from './ports.js';
 
 const SLEEP_FRAMES = 384;
-export const RELAYS = ['cml', 'tel'];
+export const RELAYS = ['cml'];
 
 export class LiuMech {
   /** sim: the host; def: machine.mech.liu. The handset starts on its cradle. */

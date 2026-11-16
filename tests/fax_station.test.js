@@ -49,11 +49,11 @@ function station(opts = {}) {
 
 test('copy: a sheet laid in the feeder is scanned, printed line by line through the thermal head, and cut', () => {
   const { sim, rec, run, until, shown } = station();
-  run(0.5);
-  assert.equal(sim.fw.lcd.text, 'NOV-16 09:30 FAX');
+  run(1.5);
+  assert.equal(sim.fw.lcd.text, '16-NOV 09:30   ▲');
   sim.command({ dev: 'doc', op: 'place', sheets: [{ id: 'memo', page: crop(MEMO, 50) }] });
   run(3);
-  assert.equal(sim.fw.lcd.text.trim(), 'DOCUMENT READY');
+  assert.equal(sim.fw.lcd.text.trim(), 'READY TO SEND');
   sim.command({ dev: 'panel', op: 'tap', key: 'copyHelp' });
   assert.ok(until(() => sim.fw.log.some((l) => l.what === 'copy'), 90));
   run(1);
@@ -80,16 +80,16 @@ test('send to the Records Room over real modem audio; it calls back and the stam
     if (tap.monitor > 0 && Math.abs(tap.lineAt(sim.t)) > 1e-3) heard++;
   };
   sim.command({ dev: 'panel', op: 'tap', key: 'rapid1' });               // A: RECORDS ROOM
-  assert.ok(until(() => shown(/TRANSMISSION OK|LINE ERROR/), 90, each));
-  assert.ok(shown(/TRANSMISSION OK/), rec.lcd.map((l) => l.text).join(' / '));
+  assert.ok(until(() => shown(/TOTAL PAGE|LINE ERROR/), 90, each));
+  assert.ok(shown(/TOTAL PAGE/), rec.lcd.map((l) => l.text).join(' / '));
   assert.ok(heard > 5, 'the monitor speaker heard the line while dialling and in the handshake');
   assert.equal(pageMonitor, 0, 'and was muted for the page');
   const office = sim.directory.lookup('555-0142');
   assert.equal(office.fax.inbox.length, 1);
   const sent = rec.ink;
   assert.equal(sent, 0, 'nothing printed while sending');
-  assert.ok(until(() => shown(/RECEPTION OK|LINE ERROR/), 200));
-  assert.ok(shown(/INCOMING CALL/) && shown(/RECEPTION OK/));
+  assert.ok(until(() => sim.fw.journal.some((e) => e.kind === 'RX'), 200));
+  assert.ok(shown(/INCOMING CALL/) && sim.fw.journal.find((e) => e.kind === 'RX').result === 'OK');
   assert.ok(rec.rings >= 1, 'the ringer rang');
   run(3);
   assert.ok(rec.lines > 300, `${rec.lines} lines printed`);
@@ -143,10 +143,11 @@ test('the speaker plays dial tone after SPEAKER, the handset hears the line, key
     for (let b = 0; b < (48000 / 128) * s; b++) { eng.process(L, 128, R); for (const v of L) { ss += v * v; n++; } }
     return 10 * Math.log10(ss / n + 1e-20);
   };
+  level(1);                                         // WAIT A MOMENT (service manual p.7-2)
   const quiet = level(0.5);
   sim.command({ dev: 'panel', op: 'tap', key: 'speaker' });
   level(0.6);
-  assert.match(sim.fw.lcd.text, /ON-HOOK DIAL/);
+  assert.match(sim.fw.lcd.text, /ON HOOK DIAL/);
   const dial = level(0.5);
   assert.ok(dial > quiet + 20 && dial > -40, `dial tone ${dial.toFixed(1)} dB over ${quiet.toFixed(1)}`);
   sim.command({ dev: 'panel', op: 'tap', key: 'stop' });
@@ -169,6 +170,6 @@ test('the speaker plays dial tone after SPEAKER, the handset hears the line, key
     other.importState(sim.exportState());
     for (let i = 0; i < 0.5 * 384000; i++) other.step();
   } finally { globalThis.structuredClone = saved; }
-  assert.match(other.fw.lcd.text, /NOV-16 09:3\d FAX/);
+  assert.match(other.fw.lcd.text, /16-NOV 09:3\d   ▲/);
   assert.ok(state.station.store, 'the settings travel with the state');
 });

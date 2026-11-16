@@ -110,7 +110,8 @@ export class FaxStation extends FaxSim {
     const { fw, devices } = attachToSim(this, {
       storage, lcd, beeper,
       sampleLine: (pose, res) => this.scanner2.line(this.images.get(pose.id) ?? null, pose, res),
-      options: { wallClockMs: this.wallBase + this.t * 1000, cold: this.cold && !stored, desk: deskProgramming() },
+      // A firmware booted again on a handed-over state is not a power-on: no WAIT A MOMENT then.
+      options: { wallClockMs: this.wallBase + this.t * 1000, cold: this.cold && !stored, desk: deskProgramming(), resume: this.t > 0 },
     });
     this.fw = fw; this.devices = devices;
     // The adapter's scanner starts the video stage's page; the monitor speaker and the dialler's digits reach the tap.

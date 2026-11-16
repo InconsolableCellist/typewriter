@@ -1,21 +1,22 @@
 // The recorder's firmware (docs/fax/architecture.md 3.7): it prints a dot line (strobes the head, waits the strobe
-// time, then steps the platen one line at the resolution asked), feeds paper, and runs the cutter through one cycle:
-// motor on, wait for the cam to leave home and come back, brake, off; a cutter that does not come home in time is a
-// jam. It watches the paper sensor and the cover switch and reports their changes. It moves the paper only by asking
-// the drive controller for steps on the recording train; its only other outputs are the head's strobe and the cutter
-// motor's drive. It never writes a mechanical state.
+// time, then steps the platen one line at the resolution asked), feeds paper, and runs the cutter through one cycle.
+// The cutter has no motor of its own [S p.3-7/pdf41]: a cycle is a jog of the drive that steps the mode cam to the
+// cutter (the cam switch opens), the cutter train turned until the cutter switch has opened and made again, and a jog
+// back (the cam switch makes) [A: the sequence; S: the two switches, CSWI and CUTI, p.4-3/pdf51]. A crank that does not
+// come home within its steps is a jam. It watches the paper sensor and the door sensor and reports their changes. It
+// moves the paper and the cutter only by asking the drive controller for steps; its only other output is the head's
+// strobe. It never writes a mechanical state.
 
 // A deep copy for exportState/importState (no structuredClone in the audio thread).
 const clone = (v) => (v === null || typeof v !== 'object' ? v : ArrayBuffer.isView(v) ? v.slice()
   : Array.isArray(v) ? v.map(clone) : Object.fromEntries(Object.keys(v).map((k) => [k, clone(v[k])])));
 
 const INF = Infinity;
-const CUT_POLL = 0.5e-3;
 
 export class PrintCtl {
   /**
-   * def: { printer, cutter, stepsPerLine } from machine.mech; io: { strobe(dots, energy), setCutter(volts, closed),
-   * cutterHome(), paperSensor(), coverClosed() }; drive: the drive controller; emit(event) sends a device event.
+   * def: { printer, cutter, stepsPerLine } from machine.mech; io: { strobe(dots, energy), cutterHome(), camHome(),
+   * paperSensor(), coverClosed() }; drive: the drive controller; emit(event) sends a device event.
    */
   constructor(def, io, drive, emit, { t = 0 } = {}) {
     this.def = def; this.io = io; this.drive = drive; this.emit = emit;
@@ -23,7 +24,6 @@ export class PrintCtl {
     this.q = []; this.op = null; this.tOp = INF;
     this.paper = io.paperSensor(); this.cover = io.coverClosed(); this.since = -INF; this.coverSince = -INF;
     this.pollT = t + def.printer.pollPeriod;
-    this.io.setCutter(0, false);
     this.updateNext();
   }
 
@@ -52,6 +52,12 @@ export class PrintCtl {
   begin(op, t) {
     const P = this.def.printer;
     if (op.kind !== 'cut' && !this.io.coverClosed()) { this.finish(t, 'coverOpen'); return; }
+    // The mode cam left at the cutter (a cut that jammed): a jog brings it back to the platen first.
+    if (op.kind !== 'cut' && !this.io.camHome() && op.stage !== 'mode') {
+      op.stage = 'mode';
+      this.drive.move({ owner: 'print', train: 'jog' }, t);
+      return;
+    }
     if (op.kind === 'line') {
       if (!this.io.paperSensor()) { this.finish(t, 'noPaper'); return; }
       this.io.strobe(op.dots, op.energy);
@@ -62,17 +68,46 @@ export class PrintCtl {
       const steps = op.steps ?? op.lines * (this.def.stepsPerLine[op.res] ?? 0);
       this.drive.move({ owner: 'print', train: 'record', steps }, t);
     } else {
-      op.stage = 'leave';
-      op.t0 = t;
-      this.io.setCutter(this.def.cutter.volts, true);
-      this.tOp = t + CUT_POLL;
+      op.jam = false;
+      if (this.io.camHome()) { op.stage = 'toCut'; this.drive.move({ owner: 'print', train: 'jog' }, t); }
+      else this.crank(op, t);
     }
+  }
+
+  /** Turn the cutter train until its switch has opened and made again. */
+  crank(op, t) {
+    op.stage = 'cutting'; op.left = false;
+    this.drive.move({ owner: 'print', train: 'cut', steps: this.def.cutter.maxSteps, watch: true }, t);
+  }
+
+  driveStep(_tag, _t) {
+    const op = this.op;
+    if (!op || op.stage !== 'cutting') return false;
+    const home = this.io.cutterHome();
+    if (!home) op.left = true;
+    return home && op.left;
   }
 
   driveDone(_tag, t) {
     const op = this.op;
     if (!op) return;
     if (op.stage === 'line' || op.stage === 'feed') this.finish(t, null, op.kind);
+    else if (op.stage === 'mode') {
+      // A motor that lost steps in a jam may need more than one jog to find the cam [A: three tries].
+      op.tries = (op.tries ?? 0) + 1;
+      if (this.io.camHome()) { op.stage = ''; this.begin(op, t); }
+      else if (op.tries < 3) this.drive.move({ owner: 'print', train: 'jog' }, t);
+      else this.finish(t, 'cutterJam');
+    } else if (op.stage === 'toCut') {
+      if (this.io.camHome()) this.finish(t, 'cutterJam');          // the cam did not step: nothing reaches the cutter
+      else this.crank(op, t);
+    } else if (op.stage === 'cutting') {
+      op.jam = !(op.left && this.io.cutterHome());
+      op.stage = 'toHome';
+      this.drive.move({ owner: 'print', train: 'jog' }, t);
+    } else if (op.stage === 'toHome') {
+      this.finish(t, op.jam || !this.io.camHome() ? 'cutterJam' : null, 'cut');
+    }
   }
 
   finish(t, error, ev = 'error') {
@@ -83,23 +118,12 @@ export class PrintCtl {
   }
 
   service(t) {
-    const op = this.op, C = this.def.cutter, P = this.def.printer;
+    const op = this.op, P = this.def.printer;
     if (op && t >= this.tOp) {
       this.tOp = INF;
       if (op.stage === 'strobe') {
         op.stage = 'line';
         this.drive.move({ owner: 'print', train: 'record', steps: this.def.stepsPerLine[op.res] ?? 0 }, t);
-      } else if (op.stage === 'leave' || op.stage === 'return') {
-        const home = this.io.cutterHome();
-        if (op.stage === 'leave' && !home) op.stage = 'return';
-        else if (op.stage === 'return' && home) { this.io.setCutter(0, true); op.stage = 'brake'; this.tOp = t + C.brakeTime; }
-        if (op.stage !== 'brake') {
-          if (t - op.t0 > C.timeout) { this.io.setCutter(0, false); this.finish(t, 'cutterJam'); }
-          else this.tOp = t + CUT_POLL;
-        }
-      } else if (op.stage === 'brake') {
-        this.io.setCutter(0, false);
-        this.finish(t, null, 'cut');
       }
     }
     if (t >= this.pollT) {

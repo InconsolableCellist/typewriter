@@ -1,10 +1,10 @@
 # Fax architecture: the Sharp FO-70
 
 How the fourth machine is put together, in the form of `docs/displaywriter/architecture.md`. Written at M0 with
-the mechanical half of M4 and M5; the plan is `plan.md`, the sources `research.md` section 8. Nothing of the FO-70
-has yet been read at source, so every value in the definition carries the plan's mark: **[S]** documented (a search
-summary that quoted a named document), **[M]** typical (memory of machines of the class), **[A]** assumed (ours).
-Section 8 lists what the service manual must replace.
+the mechanical half of M4 and M5; the plan is `plan.md`. The owner's service manual and operation manual
+(`refs/`) have since been read: `hardware.md` is the cited fact base, and every value in the definition carries
+**[S p.N]** (the service manual's page) or **[S OM p.N]** (the operation manual's), **[M]** typical (memory of
+machines of the class) or **[A]** assumed (ours). Section 8 lists what the manuals settled and what they changed.
 
 Three other pieces of work plug into this one; section 4 is their contract.
 
@@ -66,7 +66,9 @@ then integrates the motor, the swing arm and both trains with the nip torques.
 
 ### 3.1 Drive unit (`drive-mech.js`, `drive-ctl.js`)
 
-**Assumed design** (`drive.layout: 'single-planetary'`; plan 2 and risk 21): one 7.5-degree permanent-magnet stepper
+**The manual's drive** (`drive.layout: 'single-planetary'`; hardware.md 4.2): ONE pulse motor, the "TX/RX MOTOR",
+with planet levers A, B and C, a mode lever and a cam gear with a cam switch; the cutter has no motor of its own. Our
+reading of it, since the manual gives the parts and not their working: one 7.5-degree [M] permanent-magnet stepper
 (`src/sim/common/stepper.js`) with a swing gear on its pinion. The arm is dragged round with the pinion by the
 friction on the planet's axle, so it follows the motor until it lands on a stop and the planet meshes: forward
 rotation drives the scanning train (feed and separation rollers), reverse the recording train (platen, through an
@@ -75,10 +77,14 @@ A change of direction therefore costs real lost motion (the swing, about 3.2 mot
 with a clack. The meshed planet stays in until the arm backs off a tooth's depth, so the motor's ring at the end of a
 move does not unmesh it.
 
+On the recording side the mode cam chooses the train: the platen (cam at home, cam switch made) or the cutter's crank
+(planet lever C). A **jog**, a part swing toward the scanning side and back that never reaches it, steps the cam; a
+full changeover does not [A]. `drive.mode` holds the jog's steps.
+
 The drive controller queues moves (`move({ owner, train, steps, rate, watch })`), ramps the step rate, adds the
 definition's `changeoverSteps` at a change of direction, holds at half current for 50 ms and then switches off. A
-watched move asks its owner after every counted step whether to stop (a sensor seen). If the manual shows two
-motors, `drive-mech.js` and `drive-ctl.js` change; nothing else knows the count.
+watched move asks its owner after every counted step whether to stop (a sensor seen). Trains: `scan`, `record`,
+`cut`, and `jog`.
 
 One motor step is half a super-fine line [A], so standard, fine and super fine are 8, 4 and 2 steps; the train
 ratios are derived from the roller radii so that this holds at the roller.
@@ -106,14 +112,16 @@ falls as it is used. The platen moves the strip only by friction at the nip unde
 against the head's glaze and the roll's drag. The paper sensor is a lever just before the head.
 
 The operation panel is the roll cover: it lifts on its rear hinge past upright and rests open [A]; gravity shuts it
-onto a latch; a hand lifts it (`grab('cover')`). Lifted more than 1.5 degrees, the head is off the platen and nothing
-prints or feeds.
+onto a latch; a hand lifts it (`grab('cover')`). The door sensor reports it, and the print controller refuses a line
+while it is open; the head stays on the platen (paper is pushed through the slot by hand, OM p.18), so
+`cover.liftsHead` is false.
 
-The cutter (**assumed design**: guillotine blade on an eccentric cam, one turn a cut, through a self-locking worm from
-its own small DC motor, with a home switch on the cam) loads its motor while the blade shears, and divides the strip
-where the blade passes: the event `{ dev: 'print', ev: 'cut', from, to, length }` gives the piece in strip
-coordinates. The print controller's cycle: motor on, cam leaves home, comes back, dynamic brake 30 ms, off; no
-return within 1.5 s is `cutterJam`. It also prints a line (strobe, the strobe time, then a line feed) and feeds paper,
+The cutter (hardware.md 4.4: no motor; planet lever C, the cutter gear and the cutter plate's crank work the cutter
+arm; a cutter switch reads home) is the load on the drive's cutter train, and divides the strip where the blade
+passes: the event `{ dev: 'print', ev: 'cut', from, to, length }` gives the piece in strip coordinates. The print
+controller's cycle: a jog steps the mode cam to the cutter (the cam switch opens), the cutter train turns until the
+cutter switch has opened and made again, and a jog brings the cam home; a crank not home within a turn and a half
+is `cutterJam`, and the next feed jogs the cam home first. It also prints a line (strobe, the strobe time, then a line feed) and feeds paper,
 and reports the paper sensor and the cover switch.
 
 ### 3.4 Snapshot (`layout.js`) and sounds (`ports.js`)
@@ -127,17 +135,16 @@ hook, key, cover, sheet out, pick.
 
 ### 3.5 Telephone (`liu-mech.js`, `liu-ctl.js`)
 
-Two clapper relays [A]: `cml` (the machine seizes the line) and `tel` (the handset switched out while the machine has
-the line). Each coil's current lags its drive; the pull grows as the gap closes; the contact makes at 80 % of travel,
+One clapper relay, `cml`, the line connecting and dial pulse relay (hardware.md 5.2); the handset is switched by
+gates, not a relay. Each coil's current lags its drive; the pull grows as the gap closes; the contact makes at 80 % of travel,
 so pull-in takes a few milliseconds. The hook switch is a plunger in the cradle held down by the handset's weight; a
 finger on it is a DOF (`grab('hook')`). `liu.lineLoop()` is what the exchange sees: closed when the handset is off
 hook or `cml` is made. The controller sets coils and reports the hook switch, debounced.
 
 ### 3.6 Panel (`panel-mech.js`, `panel-ctl.js`)
 
-28 keys (`mech.panel.keys`), each a stem on a rubber dome whose force rises, buckles and rises again; the contact
-makes near the bottom. Keys named in the manuals are [S]; FUNCTION, the volume pair, COPY/HELP, START and STOP are
-[A]. A finger is `command({ dev: 'panel', op: 'finger', key, force })` or `grab('key', i)`. The controller scans every
+27 keys (`mech.panel.keys`, one VOLUME key, as the panel drawing and key matrix show: hardware.md 3), each a stem on a
+rubber dome whose force rises, buckles and rises again; the contact makes near the bottom. A finger is `command({ dev: 'panel', op: 'finger', key, force })` or `grab('key', i)`. The controller scans every
 5 ms and reports a key after two equal scans: `{ dev: 'panel', ev: 'key', key, down }`.
 
 ### 3.7 The controller rule
@@ -150,7 +157,7 @@ operation, and scans the sources for assignments to positions, speeds or current
 |---|---|
 | `DriveCtl` | `setMotor(state, amp)` |
 | `ScanCtl` | `docSensor()`, `regSensor()` (and asks `DriveCtl` for steps) |
-| `PrintCtl` | `strobe(dots, energy)`, `setCutter(volts, closed)`, `cutterHome()`, `paperSensor()`, `coverClosed()` (and asks `DriveCtl`) |
+| `PrintCtl` | `strobe(dots, energy)`, `cutterHome()`, `camHome()`, `paperSensor()`, `coverClosed()` (and asks `DriveCtl` for the paper and the cutter) |
 | `LiuCtl` | `setRelay(name, amps)`, `hookOn()` |
 | `PanelCtl` | `keyContact(i)` |
 
@@ -210,7 +217,7 @@ emitted. It drives the machine only through the controllers in `sim.ctl`:
 | `sim.ctl.print.command({ op: 'line', id, dots, energy, res }, t)` | `{ dev: 'print', ev: 'line', id }` or `error: 'coverOpen' / 'noPaper'` |
 | `sim.ctl.print.command({ op: 'feed', id, lines, res } or { op: 'feed', id, steps }, t)` | `{ dev: 'print', ev: 'feed', id }` |
 | `sim.ctl.print.command({ op: 'cut', id }, t)` | `{ dev: 'print', ev: 'cut', id }` or `error: 'cutterJam'` |
-| `sim.ctl.liu.command({ op: 'relay', name: 'cml' or 'tel', on })` | none; `sim.liu.lineLoop()` for the exchange |
+| `sim.ctl.liu.command({ op: 'relay', name: 'cml', on })` | none; `sim.liu.lineLoop()` for the exchange |
 | unsolicited | `scan/document {present}`, `print/paper {present}`, `print/cover {closed}`, `liu/hook {offHook}`, `panel/key {key, down}`, `feeder/out {id}` |
 
 Commands queue per controller; scan and print moves share the one motor through `DriveCtl`, so copy mode alternates
@@ -275,8 +282,7 @@ The mechanism's voices (stepper, cutter motor and blade, relays, hook, keys) are
 
 **Known approximations.** A received page is printed once its data has arrived (the T.30 checker gets the page
 whole), line by line through the head; a real memory-less machine prints as it decodes. Feed lines run at motor speed
-within each pacing chunk. The cutter feeds the strip 16 mm (the head to the blade, and 2 mm) before it cuts. The panel
-has one VOLUME key on the model; the mechanism's `volumeDown` is an empty stand-in (both map to VOLUME). A sheet
+within each pacing chunk. The cutter feeds the strip 16 mm (the head to the blade, and 2 mm) before it cuts. A sheet
 shorter than about 24 mm never reaches the feed roller and is not fed.
 
 ## 6. Kit and views
@@ -314,34 +320,47 @@ typewriters' environment (`src/render/environment.js`, `src/audio/ambience.js`),
 | `fax_mech` | A sheet past both sensors, ten lines at each resolution within 3 % of pitch, eject; two sheets part with a gap; a held sheet misfeeds; the paper fed a line at a time at 3.85, 7.7 and 15.4 lines/mm (mean within 1 %, each line within 10 %), the planet staying meshed; strobe and the thermal model swap, a backwards roll prints nothing; cover open refuses; a cutter cycle (one cut at the blade, home again) and a jam; paper out; roll radius; hook switch, hook flash, relay pull-in; panel keys and a light touch; export/import mid-move by a plain deep copy with `structuredClone` deleted, both runs then identical; firmware attach; controller purity; sleep |
 | `worklet_entries` | The fax entry bundles only its family, the others not the fax; the fax worklet takes over a warm state with no `structuredClone` or `setTimeout`, feeds, cuts and sounds |
 
-## 8. Assumed values the manual should replace
+## 8. What the manuals settled
 
-The first thing M0 reads (research.md 8.8). Each is in `src/machine/faxfo70.js` with its mark.
+The owner's service manual (SM) and operation manual (OM) were read in full (hardware.md). Each value below is in
+`src/machine/faxfo70.js` or the firmware with its page.
 
-| Value | Now | Mark | Manual's place |
+| Value | Was | Now | Source |
 |---|---|---|---|
-| Number of motors and the drive layout | One stepper, swing gear, forward = scan, reverse = record | [M] hypothesis, assumed | S-70 drive unit (cutter model) |
-| Motor | 48 steps/rev, 0.04 N m, rotor 4e-7 kg m2, damping | [M] / [A] | Drive unit parts list |
-| Steps per line | 8 / 4 / 2 (one step = 1/30.8 mm) | [A] | Drive unit, gear ratios |
-| Gear trains | Ratios derived from roller radii; tooth stiffness, backlash 0.3 deg, inertias | [A] | Drive unit exploded view |
-| Swing gear | +-12 deg travel, drag, mesh window and release | [A] | Drive unit |
-| Step rates | 200 start, 600 max, ramp 4000 steps/s2, hold half current 50 ms | [A] | Circuit description, motor driver |
-| Roller radii | Platen 6 mm, feed 8 mm, separation 9 mm; separation speed 0.7 of feed | [A] / [M] | Scanner frame, head frame |
-| Document path | Sensors at -12 and +12 mm, feed roller +24, read line +32 | [A] | Scanner frame and CIS unit |
-| Feeder forces | Separation 1.5 N, pad 1.5 N mu 0.6, feed 2 N, glass mu 0.2 | [A] / [M] | Scanner frame |
-| Document size | US letter, 75 g/m2 | [A] (decision 5) | Specifications p.3, market |
-| Head force, friction | 4.5 N, platen mu 0.9, glaze mu 0.15 | [A] / [M] | Head frame unit |
-| Strobe blocks and time | 4 blocks, 1.2 ms each | [A] | Control PWB, head drive |
-| Default mark energy | 0.25 mJ a dot (replaced by the thermal model) | [A] | Head data sheet |
-| Roll | 216 mm wide, 65 um, 52 g/m2, 1/2 in core, 7.5 m left at a warm start | [M] / [A] | Specifications; FO-20PR |
-| Print width | 216 mm (one summary says 210) | [A] | Specifications p.3 |
-| Strip path | Cutter 14 mm, exit 30 mm beyond the head; 40 mm roll to head; paper sensor 5 mm before the head | [A] | Head frame, cutter |
-| Cutter design | Guillotine on a cam, worm, own DC motor 12 V, home switch -8 to +45 deg | [A] | Drive unit (cutter model) |
-| Cutter numbers | Motor R, kt, inertia; ratio 60; cut torque 0.12 N m; cam friction; 1.5 s timeout | [A] | Same; error code table p.31 |
-| Relays | Two clapper relays, CML and TEL; armature numbers | [A] | TEL/LIU PWB circuit |
-| Hook switch | Plunger 6 mm, 0.6 N, make at 4 mm; handset 0.17 kg | [A] | Cabinet, handset |
-| Panel keys | FUNCTION, VOLUME pair, COPY/HELP, START, STOP; dome curve | [A] / [M] | Operation panel figure (S-70-OM) |
-| Cover | Panel lifts on its rear hinge to 95 deg, latch, head lifts at 1.5 deg | [M] / [A] | Operation panel block, installation chapter |
-| Handset size and body block-out | From the owner's photograph | [A] | Exploded views |
-| Debounce and poll periods | 5 to 30 ms | [A] | Firmware is ours |
-| Audio levels and modes | Placeholders | [A] | A recording (plan 10) |
+| Number of motors | One stepper [M hypothesis] | One pulse motor, "TX/RX MOTOR" | SM p.4-1, 4-2, 3-7 |
+| Drive layout | Swing gear, forward scan, reverse record [A] | Planet levers A, B, C, mode lever, cam gear and cam switch; our reading keeps the swing gear and adds the mode cam [A] | SM p.3-7 fig. 5 |
+| Cutter drive | Own 12 V DC motor, worm, cam [A] | No motor: planet lever C, cutter gear, cutter plate crank, cutter arm; cutter switch | SM p.3-7, 3-9, 4-3 |
+| Motor drive | 2-phase, amplitude [A] | Unipolar, ULN2003A, phases TPA/TPB and complements, +24 V through FU100 | SM p.6-5 |
+| Step angle | 7.5 deg [M] | Not given | - |
+| Gear teeth | Derived [A] | 17/30Z (2), 17/36Z, 17/43Z, idlers 25Z (3), 30Z; scanner 17/28Z, 17/23Z; path not given | SM p.3-4, 3-7 |
+| Document path | Separation roller on a clutch, feed roller [M] | One feed roller against a separation rubber plate; driven back roller over the CIS; front sensor and document sensor | SM p.3-1, 3-4, 3-6 |
+| Feeder capacity | 5 [S] | 5 (10 in the paper table) | SM p.1-1, 1-3 |
+| Head | 1728, 4 blocks [A] | 1728, 8/mm, 4 strobes, 10 ms a line, +24 V VTH by relay RY1, thermistor, rank | SM p.3-2, 4-3, 5-2, 6-5 |
+| Head supply | 12 V, 700 ohm [A] | 24 V [S]; 2800 ohm [A] keeping the dot power | SM p.6-5 |
+| Head lift | Panel lifts the head at 1.5 deg [A] | Head stays down; paper pushed through the slot | OM p.18, SM p.1-6 |
+| Print width | 216 mm [A] | 210 mm effective; roll 216 mm, shims for 210 | SM p.1-1, 1-6 |
+| Roll core | 1/2 in [M] | 12.7 mm | OM p.1 |
+| CIS | 1728 [S] | 1728, 8/mm, 5 ms line, 2 V on white, LED from +24 V | SM p.5-12 |
+| Relays | CML and TEL [A] | One: CML (line and dial pulse) | SM p.5-10 |
+| Hook switch | Plunger [A] | On the TEL/LIU PWB, via hook switch lever and joint lever | SM p.3-3, 3-12 |
+| Panel keys | 28, VOLUME pair [A] | 27, one VOLUME; key matrix SEN0-SEN6 x KEN1A-KEN4A | OM p.8, SM p.6-15 |
+| Memory, ECM | None [A] | None: 256 kbit SRAM is line memory; no ECM frames | SM p.5-2, 7-1 |
+| Modem | V.29/V.27ter [A] | FM209: V.29, V.27ter, V.21; 9600-2400, fallback | SM p.5-6 |
+| LCD messages | 4 [S summary], the rest [A] | OM's Messages and Signals and display figures; SM's power-on and diagnostics | OM p.90-91 etc. |
+| Error codes | E-01 to E-17 [A] | Communication error code table 0-13; report NOTE COM.E-0 to 7, JAM, NO PAPER, CANCEL | SM p.2-19, OM p.51 |
+| Menus | FUNCTION 1-6 [A] | FUNCTION 2 lists, 3 entry, 4 options, 9 * 8 # 7 diagnostics | OM, SM p.2-2 |
+| Standby line | "NOV-16 09:30 FAX" [A] | "16-NOV 09:30" and the mode arrow | OM p.28 |
+| Reception mode order | FAX, TEL, TEL/FAX, A.M. [A] | TEL, FAX, TEL/FAX, A.M. | OM p.28 |
+| Rings | 2 [A] | 2 (2-5); TEL/FAX 2, pseudo ring 30 s, CNG 5 s | OM p.52-54 |
+| Redial | 2 x 5 min [M] | 2 x 5 min, RECALLING, also when unanswered | OM p.49, p.91 |
+| Speed dial | 35 | 01-05 rapid, 06-40 speed | OM p.40 |
+| Name entry | Letters first [A] | Digit first, SPEAKER, REDIAL case, symbols; 24 characters | OM p.22 |
+| Date entry | MM-DD-YYYY [A] | Day, month, year, hour, minute | OM p.25 |
+| Reports | Transmission, activity, setup, tel, help [A] | Transaction report (figure), Telephone Number List, Anti Junk Number List, Help List | OM p.50-51, p.81 |
+| Polling | E/POLL with no document [A] | POLLING option; dial, then E/POLL | OM p.79-80 |
+| Market | North America [A, decision 5] | FO-70RA, 220-240 V; Hong Kong OM edition; country select list | SM cover, p.2-4; OM p.75 |
+
+Still assumed: roller radii and speeds, sensor positions, forces, the swing gear's numbers, step rates, the cam's
+working, the cutter's geometry and numbers, the cover's angle and torques, the dome curve, debounce and poll periods,
+the audio levels, the line's tone plan and cadences (the manuals give none), and the texts the manuals do not show
+(hardware.md 12).

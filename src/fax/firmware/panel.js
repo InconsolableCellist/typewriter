@@ -1,17 +1,15 @@
 // The operation panel: the key map and the LCD model.
 //
-// Keys, as read from the owner's photograph of an FO-70 panel (docs/fax/refs/owner/sharp_fo70_top.png, 474 px square,
-// legends read at about 4 px a letter, so each is marked):
-//   under the LCD, five small rapid keys  A  B  C  D  E/POLL                                        [photo]
-//   a round four-way pad: STOP above it, START at its left, COPY/HELP at its right; the left and right
-//     segments carry triangle marks; the lower segment's legend could not be read (not mapped)      [photo]
-//   between the pad and the keypad: VOLUME, FUNCTION, RESOLUTION/RECEPTION MODE                     [photo]
-//   the keypad 1-9, *, 0, # with letters ABC DEF GHI JKL MNO PRS TUV WXY on 2-9                      [photo]
-//   on the right: SPEED DIAL, REDIAL, HOLD/SEARCH, SPEAKER                                          [photo, S]
-// The handset's hook switch is not a key: it reaches the firmware from the ncu (devices.md).
+// The keys, as the operation manual's panel drawing names them [OM p.8-9] and the service manual's key matrix wires
+// them [SM p.6-15/pdf78]: under the LCD five rapid keys A B C D E/POLL (Speed Dial 01-05; E/POLL is the polling key
+// when POLLING is set to YES [OM p.79]); the round pad of START, STOP and COPY/HELP; VOLUME, FUNCTION and
+// RESOLUTION/RECEPTION MODE beside the keypad; the keypad 1-9, *, 0, # with ABC DEF GHI JKL MNO PQRS TUV WXYZ on 2-9;
+// SPEED DIAL, REDIAL, HOLD/SEARCH and SPEAKER at the right. 27 keys. The handset's hook switch is not a key: it reaches
+// the firmware from the ncu (devices.md).
 //
-// The LCD: 16 characters on one line [S]. Its character set is not known; we take upper-case letters, digits, space
-// and the punctuation below, and fold lower case to upper [A].
+// The LCD: one line of 16 digits [OM p.2]. It shows upper and lower case (REDIAL changes case in name entry, OM p.22),
+// the symbols of name entry, and the arrow that points to the reception mode's legend printed by the window [OM p.28]:
+// ▲ under TEL or FAX above the window, ▼ over TEL/FAX or A.M. below it.
 
 export const KEYS = Object.freeze([
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '#',
@@ -34,12 +32,12 @@ export const RAPID_KEYS = ['A', 'B', 'C', 'D', 'E'];
 export const isDigitKey = (k) => DIGIT_KEYS.has(k);
 export const isRapidKey = (k) => RAPID_KEYS.includes(k);
 
-/** Letters on the keypad for name entry: 2-9 from the photograph; Q and Z on 1 are ours [A]. */
+/** What a key gives after its digit in name entry: SPACE = 1 1, A = 2 2 ... S = 7 7 7 7 7, Z = 9 9 9 9 9 [OM p.22]. */
 export const KEY_LETTERS = Object.freeze({
-  1: 'QZ', 2: 'ABC', 3: 'DEF', 4: 'GHI', 5: 'JKL', 6: 'MNO', 7: 'PRS', 8: 'TUV', 9: 'WXY', 0: '',
+  1: ' ', 2: 'ABC', 3: 'DEF', 4: 'GHI', 5: 'JKL', 6: 'MNO', 7: 'PQRS', 8: 'TUV', 9: 'WXYZ', 0: '',
 });
-/** Symbols offered by repeated presses of * in name entry [A]. */
-export const SYMBOLS = "-./&'#@()+,:!?";
+/** The symbols # and * step through in name entry [OM p.22]. */
+export const SYMBOLS = './!"#$%&\'()*+,-:;<=>?@[¥]^_`{|}→←';
 
 /** The real keyboard's keys (plan decision 14): digits, * and # are the keypad, Enter START, Esc STOP. */
 export const KEYBOARD = Object.freeze({
@@ -50,12 +48,11 @@ export const KEYBOARD = Object.freeze({
 // ---- the LCD --------------------------------------------------------------------------------------------------------
 
 export const LCD_COLUMNS = 16;
-const LCD_SET = new Set(' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./&\'#@()+,:!?*%=_');
+const LCD_SET = new Set(' ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./!"#$%&\'()*+,-:;<=>?@[¥]^_`{|}→←▲▼');
 
-/** A character as the LCD can show it: lower case folded, anything else a space [A]. */
+/** A character as the LCD can show it; anything else a space. */
 export function lcdChar(ch) {
-  const u = ch.toUpperCase();
-  return LCD_SET.has(u) ? u : ' ';
+  return LCD_SET.has(ch) ? ch : LCD_SET.has(ch.toUpperCase()) ? ch.toUpperCase() : ' ';
 }
 
 /** Text as 16 LCD characters (cut or padded). align: 'left' | 'right' | 'center'. */

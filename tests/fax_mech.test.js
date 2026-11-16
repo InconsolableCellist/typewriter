@@ -162,11 +162,11 @@ test('printing a line strobes the head where the paper is, and the thermal model
   assert.ok(r.ev('print', 'line').filter((e) => e.darkness).pop().darkness.every((d) => d === 0));
 });
 
-test('with the cover open the head is lifted: nothing prints and the controller says so', () => {
+test('with the operation panel open the door sensor refuses a line; the head stays on the platen (service manual p.1-6)', () => {
   const sim = fresh(), r = new Run(sim);
   const g = sim.grab('cover', 0, { target: 80 * deg });
   r.run(0.8);
-  assert.ok(!sim.head.coverClosed() && !sim.head.headDown(), `the cover opens: ${sim.head.a}`);
+  assert.ok(!sim.head.coverClosed() && sim.head.headDown(), `the cover opens: ${sim.head.a}`);
   assert.equal(r.ev('print', 'cover').pop()?.closed, false);
   assert.equal(r.op({ dev: 'print', op: 'line', id: 1, dots: new Uint8Array(M.printer.dots), energy: 0 })?.error, 'coverOpen');
   sim.release(g);
@@ -176,34 +176,56 @@ test('with the cover open the head is lifted: nothing prints and the controller 
   assert.equal(r.ev('print', 'cover').pop()?.closed, true);
 });
 
-test('a cutter cycle: the cam leaves home, the blade parts the strip once, and the cam comes home', () => {
+test('a cutter cycle off the one motor: a jog steps the mode cam to the cutter, the crank turns once and parts the strip, a jog brings the cam home', () => {
   const sim = fresh(), r = new Run(sim);
   // Paper beyond the cutter: the starter roll's end and two centimetres of print.
   r.op({ dev: 'print', op: 'feed', steps: Math.round(0.02 / M.drive.advancePerStep), id: 0 });
   const lead = sim.head.lead, t0 = sim.t;
-  let left = false;
-  const done = (() => { sim.command({ dev: 'print', op: 'cut', id: 1 }); r.run(3, (x) => { if (!sim.cutter.home()) left = true; return !!x.done('print', 1); }); return r.done('print', 1); })();
+  let left = false, camAway = false, cutMeshed = false;
+  const done = (() => {
+    sim.command({ dev: 'print', op: 'cut', id: 1 });
+    r.run(3, (x) => {
+      if (!sim.cutter.home()) left = true;
+      if (!sim.drive.camHome()) camAway = true;
+      if (sim.drive.meshed() === 2) cutMeshed = true;
+      return !!x.done('print', 1);
+    });
+    return r.done('print', 1);
+  })();
   assert.equal(done?.ev, 'cut', JSON.stringify(done));
-  assert.ok(left, 'the cam left home');
+  assert.ok(camAway, 'the mode cam left home: the cam switch opened');
+  assert.ok(cutMeshed, 'the planet meshed with the cutter train');
+  assert.ok(left, 'the crank left home');
+  assert.ok(sim.drive.camHome(), 'the mode cam is home again');
   const cuts = r.ev('print', 'cut').filter((e) => e.length !== undefined);
   assert.equal(cuts.length, 1, 'one cut');
   assert.ok(Math.abs(cuts[0].from - lead) < 1e-9);
-  assert.ok(Math.abs(cuts[0].to - (sim.head.u - M.printer.cutterAt)) < 1e-6, 'the strip parts at the blade');
-  assert.ok(sim.t - t0 < M.cutter.timeout, `a cycle takes ${sim.t - t0} s`);
+  // The jog that brings the cam home ends with a few steps on the platen: a tenth of a millimetre.
+  assert.ok(Math.abs(cuts[0].to - (sim.head.u - M.printer.cutterAt)) < 0.3e-3, 'the strip parts at the blade');
+  assert.ok(sim.t - t0 < 1.5, `a cycle takes ${sim.t - t0} s`);
   r.run(0.3);
-  assert.ok(sim.cutter.home(), `the cam rests at home: ${sim.cutter.cam() / deg} deg`);
-  assert.equal(sim.cutter.w, 0);
+  assert.ok(sim.cutter.home(), `the crank rests at home: ${sim.cutter.cam() / deg} deg`);
+  assert.ok(Math.abs(sim.cutter.w) < 1e-3);
+  // The platen is driven again after the cut.
+  const u0 = sim.head.u;
+  r.op({ dev: 'print', op: 'feed', lines: 4, res: 'standard', id: 9 });
+  assert.ok(sim.head.u - u0 > 0.5 * 4 / 3.85e3, 'paper feeds after a cut');
   // A second cut with no paper fed since parts nothing new.
   r.op({ dev: 'print', op: 'cut', id: 2 });
   assert.equal(r.ev('print', 'cut').filter((e) => e.length !== undefined).length, 1);
 });
 
-test('a cutter held by a jam is reported, and the motor is switched off', () => {
+test('a cutter held by a jam is reported, and the mode cam is brought home', () => {
   const sim = fresh(), r = new Run(sim);
   sim.setParam('mech.cutter.cutTorque', 5);          // far beyond what the motor can shear
   r.op({ dev: 'print', op: 'feed', steps: Math.round(0.02 / M.drive.advancePerStep), id: 0 });
   assert.equal(r.op({ dev: 'print', op: 'cut', id: 1 })?.error, 'cutterJam');
-  assert.equal(sim.cutter.volts, 0);
+  // The jam cleared, the next feed first brings the mode cam home and then drives the platen.
+  sim.setParam('mech.cutter.cutTorque', M.cutter.cutTorque);
+  const u0 = sim.head.u;
+  assert.equal(r.op({ dev: 'print', op: 'feed', lines: 4, res: 'standard', id: 2 })?.ev, 'feed');
+  assert.ok(sim.drive.camHome(), 'the cam is back at the platen');
+  assert.ok(sim.head.u > u0, 'and the paper moves');
   assert.equal(r.ev('print', 'cut').filter((e) => e.length !== undefined).length, 0);
 });
 
@@ -288,7 +310,7 @@ test('export and import mid-move, by a plain deep copy with no structuredClone, 
   a.command({ dev: 'print', op: 'feed', lines: 3, res: 'fine', id: 2 });
   a.command({ dev: 'print', op: 'cut', id: 3 });
   a.command({ dev: 'handset', op: 'lift' });
-  a.command({ dev: 'liu', op: 'relay', name: 'tel', on: true });
+  a.command({ dev: 'liu', op: 'relay', name: 'cml', on: true });
   ra.run(0.7);
   const b = fresh(), rb = new Run(b);
   const saved = globalThis.structuredClone;
@@ -335,7 +357,7 @@ test('no controller writes a mechanical state: they only switch phases, coils an
   const allowed = {
     drive: ['setMotor'],
     scan: ['docSensor', 'regSensor'],
-    print: ['strobe', 'setCutter', 'cutterHome', 'paperSensor', 'coverClosed'],
+    print: ['strobe', 'cutterHome', 'camHome', 'paperSensor', 'coverClosed'],
     liu: ['setRelay', 'hookOn'],
     panel: ['keyContact'],
   };

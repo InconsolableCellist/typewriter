@@ -81,14 +81,16 @@
    {"text": "STOP", "at": [-0.0315, 0.0640], "size": 0.0020},
    {"text": "START", "at": [-0.0680, 0.0835], "size": 0.0020},
    {"text": "COPY/\nHELP", "at": [0.0045, 0.0855], "size": 0.0020},
-   {"text": "FO-70", "at": [-0.0140, 0.0320], "size": 0.0016}
+   {"text": "FO-70", "at": [-0.0140, 0.0320], "size": 0.0016},
+   {"text": "TEL  FAX", "at": [-0.0080, 0.0078], "size": 0.0013, "_note": "the reception mode legends by the LCD window, above its right end (OM p.8, p.28)"},
+   {"text": "TEL/FAX  A.M.", "at": [-0.0110, 0.0292], "size": 0.0013, "_note": "and below it"}
   ]
  },
  "docPath": {
   "center": 0.0226,
   "slotWidth": 0.220,
   "maxWidth": 0.216,
-  "minWidth": 0.128,
+  "minWidth": 0.148,
   "slot": {"w": [-0.022, 0.030], "n": [-0.0140, -0.0072]},
   "exit": {"y": [0.0258, 0.0331]},
   "path": [[-0.030, 0.1260], [-0.0040, 0.1010], [0.050, 0.0660], [0.100, 0.0385], [0.118, 0.0318], [0.160, 0.0300]]
@@ -110,7 +112,7 @@
  },
  "roll": {"center": [0.0226, 0.0350, 0.0400], "r": 0.0255, "core": 0.0127, "width": 0.216},
  "panelOpen_deg": 95,
- "bay": {"_note": "The roll bay under the operation panel, which lifts on its rear hinge as the roll cover (docs/fax/architecture.md 3.3).", "z": [0.004, 0.118]},
+ "bay": {"_note": "The paper compartment under the operation panel, which is grasped by its finger hold and pulled up (OM p.16, SM p.1-5); the roll's shaft ends sit in notches each side; a front paper guide flips up and a metal guide lies under it (OM p.16-18). The head stays on the platen: paper is pushed through the slot by hand (OM p.18).", "z": [0.004, 0.118]},
  "latch": {"_note": "The panel release: a tab in the right side under the panel's front corner [A]. at = [y, z], size = [height, length].", "at": [0.0240, 0.0880], "size": [0.008, 0.018], "travel": 0.0020},
  "handset": {
   "center": [-0.1225, 0.0765, 0.0306],
@@ -125,6 +127,6 @@
   "points": [[-0.130, 0.0355, 0.110], [-0.132, 0.026, 0.126], [-0.142, 0.009, 0.148], [-0.178, 0.0065, 0.152], [-0.206, 0.0065, 0.110], [-0.210, 0.0065, 0.030], [-0.188, 0.0080, -0.030], [-0.160, 0.0160, -0.028], [-0.1525, 0.0180, -0.024]],
   "coil": 0.0048, "wire": 0.0013, "pitch": 0.0030
  },
- "jacks": {"handset": [-0.152, 0.018, -0.024], "line": [-0.060, 0.016, -0.118], "tel": [-0.034, 0.016, -0.118], "power": [0.120, 0.014, -0.118]},
+ "jacks": {"_note": "line = TEL. LINE, tel = TEL. SET (an extension or answering machine, behind a seal), both on the back (OM p.14-15, p.62); handset = the jack marked with a handset symbol on the side (OM p.11); power = where the fixed AC cord leaves (no switch, no socket: OM p.13, SM parts AC cord ass'y).", "handset": [-0.152, 0.018, -0.024], "line": [-0.060, 0.016, -0.118], "tel": [-0.034, 0.016, -0.118], "power": [0.120, 0.014, -0.118]},
  "speaker": {"at": [0.095, 0.0, 0.055], "r": 0.020}
 }

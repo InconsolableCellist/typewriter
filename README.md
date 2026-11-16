@@ -6,7 +6,10 @@ animation:
 - `frontstrike1926`, an open-frame front-strike manual typewriter, c. 1926;
 - `element1971`, an electric single-element office typewriter, c. 1971;
 - `wordproc1980`, the IBM Displaywriter word processor, c. 1980: display station, keyboard, dual 8-inch diskette unit
-  and printwheel printer.
+  and printwheel printer;
+- `faxfo70`, the Sharp FO-70 thermal facsimile, c. 1999 (**in progress**, not yet in the menu: `?machine=faxfo70`).
+  It scans, dials, sends and receives over real modem audio to a desk exchange of correspondents, prints on thermal
+  paper and cuts. Design and plan in `docs/fax/`.
 
 Live at **https://typewriter.foxipso.com**. The two typewriters are generic machines of their period, with no specific
 make or model. The word processor is a particular product, recreated from IBM's manuals.

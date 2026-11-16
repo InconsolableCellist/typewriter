@@ -1,6 +1,6 @@
 // The AudioWorklet processor: hosts a machine's mechanism and its acoustic model on the audio thread. Each machine
 // family has its own entry that registers it with that family's mechanism and engine (worklet-typewriter.js,
-// worklet-wordproc.js), so neither bundle carries the other family's code; src/sim/worklet-url.js picks the entry.
+// worklet-wordproc.js, worklet-fax.js), so no bundle carries another family's code; src/sim/worklet-url.js picks the entry.
 // Everything runs from typed arrays; the only allocation in the audio path is the snapshot buffer pool. No
 // structuredClone, setTimeout or DOM here: an AudioWorkletGlobalScope has none of them.
 

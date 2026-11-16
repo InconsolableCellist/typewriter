@@ -6,6 +6,15 @@
  * A unit with `on` stands on another unit at `at`, in that unit's local coordinates.
  */
 export function deriveWordprocGeometry(m) {
+  return {
+    system: true, units: placeUnits(m),
+    ...(m.printer ? { printer: printerGeometry(m.printer) } : null),
+    ...(m.diskettes ? { diskettes: { drives: 2 } } : null),
+  };
+}
+
+/** The units' world origins and boxes alone, for any machine of several units (the fax's body and handset too). */
+export function placeUnits(m) {
   const units = {};
   const place = (name) => {
     if (units[name]) return units[name];
@@ -22,11 +31,7 @@ export function deriveWordprocGeometry(m) {
     return (units[name] = { origin, size: u.size, box, on: u.on ?? null });
   };
   for (const name of Object.keys(m.units)) place(name);
-  return {
-    system: true, units,
-    ...(m.printer ? { printer: printerGeometry(m.printer) } : null),
-    ...(m.diskettes ? { diskettes: { drives: 2 } } : null),
-  };
+  return units;
 }
 
 /**

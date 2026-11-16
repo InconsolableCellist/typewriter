@@ -1,0 +1,136 @@
+{
+ "_note": "Sharp FO-70 (c. 1999). Unit metres; x right, y up, z toward the operator; origin on the desk under the footprint's centre. Panel coordinates (u, w): u = x, w down the panel's slope from its rear edge. Measured on docs/fax/refs/owner/sharp_fo70_top.png at 0.925 px/mm in the panel's plane (the photograph looks at the panel square on); see docs/fax/models.md.",
+ "size": [0.304, 0.122, 0.236],
+ "feet": 0.004,
+ "wall": 0.0025,
+ "gap": 0.0007,
+ "plan": {"corner": 0.016, "sideRound": 0.004, "rearRight": 0.136, "notchZ": -0.0065, "notchRadius": 0.006},
+ "profile": {
+  "_note": "Side profile (z, y, corner radius), front bottom first, anticlockwise seen from the right. The panel's plane runs from frontLip to panelRear; behind it the document table rises to the ridge, then the roll cover falls steeply to the heel.",
+  "points": [
+   [0.115, 0.004, 0.0],
+   [0.118, 0.008, 0.003],
+   [0.118, 0.030, 0.0015],
+   [0.116, 0.0363, 0.003],
+   [-0.0019, 0.110, 0.002],
+   [-0.0085, 0.0975, 0.002],
+   [-0.0280, 0.1080, 0.004],
+   [-0.0340, 0.1120, 0.006],
+   [-0.0450, 0.1120, 0.008],
+   [-0.1100, 0.0400, 0.014],
+   [-0.1180, 0.0280, 0.004],
+   [-0.1180, 0.0080, 0.003],
+   [-0.1150, 0.0040, 0.0]
+  ]
+ },
+ "panel": {
+  "slope_deg": 32.0,
+  "rear": [-0.0019, 0.110],
+  "length": 0.139,
+  "thickness": 0.007,
+  "u": [-0.0935, 0.152],
+  "overlay": {"u": [-0.0920, 0.1490], "w": [0.0015, 0.1375], "radius": 0.003, "thickness": 0.0010},
+  "lcdRecess": {"u": [-0.0742, 0.0177], "w": [0.0040, 0.0400], "depth": 0.0025, "draft": 0.0015},
+  "lcd": {"u": [-0.0606, 0.0016], "w": [0.0106, 0.0262]},
+  "window": {"u": [-0.0742, 0.0177], "w": [0.0016, 0.0650], "curveTop": 0.0440, "curveSag": 0.0035},
+  "pad": {"center": [-0.0315, 0.0973], "rIn": 0.0118, "rOut": 0.0285, "gap": 0.0014, "bezel": 0.0340, "well": 0.0298, "hub": 0.0104},
+  "logo": {"center": [0.0263, 0.1227], "width": 0.034, "height": 0.0048}
+ },
+ "keys": {
+  "_note": "kind: num (round grey caps, 14.8 mm), small (round grey, side and rapid keys), pad (segments of the round pad). legend: printed on the cap; label: printed on the panel above the key ([du, dw] from the key's centre).",
+  "num": {"r": 0.0074, "top": 0.0040, "travel": 0.0018},
+  "small": {"r": 0.0034, "top": 0.0030, "travel": 0.0012},
+  "rapid": {"r": 0.0031, "top": 0.0028, "travel": 0.0012},
+  "pad": {"top": 0.0032, "travel": 0.0016},
+  "list": [
+   {"name": "1", "kind": "num", "at": [0.0542, 0.0368], "legend": "1"},
+   {"name": "2", "kind": "num", "at": [0.0758, 0.0368], "legend": "2", "label": "ABC"},
+   {"name": "3", "kind": "num", "at": [0.0980, 0.0368], "legend": "3", "label": "DEF"},
+   {"name": "4", "kind": "num", "at": [0.0542, 0.0565], "legend": "4", "label": "GHI"},
+   {"name": "5", "kind": "num", "at": [0.0758, 0.0565], "legend": "5", "label": "JKL"},
+   {"name": "6", "kind": "num", "at": [0.0980, 0.0565], "legend": "6", "label": "MNO"},
+   {"name": "7", "kind": "num", "at": [0.0542, 0.0765], "legend": "7", "label": "PQRS"},
+   {"name": "8", "kind": "num", "at": [0.0758, 0.0765], "legend": "8", "label": "TUV"},
+   {"name": "9", "kind": "num", "at": [0.0980, 0.0765], "legend": "9", "label": "WXYZ"},
+   {"name": "star", "kind": "num", "at": [0.0542, 0.0962], "legend": "*"},
+   {"name": "0", "kind": "num", "at": [0.0758, 0.0962], "legend": "0"},
+   {"name": "hash", "kind": "num", "at": [0.0980, 0.0962], "legend": "#"},
+   {"name": "rapid_a", "kind": "rapid", "at": [-0.0626, 0.0557], "label": "A"},
+   {"name": "rapid_b", "kind": "rapid", "at": [-0.0466, 0.0557], "label": "B"},
+   {"name": "rapid_c", "kind": "rapid", "at": [-0.0304, 0.0557], "label": "C"},
+   {"name": "rapid_d", "kind": "rapid", "at": [-0.0145, 0.0557], "label": "D"},
+   {"name": "rapid_e", "kind": "rapid", "at": [0.0017, 0.0557], "label": "E/POLL"},
+   {"name": "volume", "kind": "small", "at": [0.0331, 0.0557], "label": "VOLUME"},
+   {"name": "function", "kind": "small", "at": [0.0331, 0.0754], "label": "FUNCTION"},
+   {"name": "resolution", "kind": "small", "at": [0.0331, 0.0949], "label": "RESOLUTION/\nRECEPTION MODE"},
+   {"name": "speed_dial", "kind": "small", "at": [0.1193, 0.0389], "label": "SPEED\nDIAL"},
+   {"name": "redial", "kind": "small", "at": [0.1193, 0.0584], "label": "REDIAL"},
+   {"name": "hold", "kind": "small", "at": [0.1193, 0.0773], "label": "HOLD/\nSEARCH"},
+   {"name": "speaker", "kind": "small", "at": [0.1193, 0.0976], "label": "SPEAKER"},
+   {"name": "stop", "kind": "pad", "dir": [0, -1], "legend": "stop", "label": "STOP"},
+   {"name": "start", "kind": "pad", "dir": [-1, 0], "legend": "start", "label": "START"},
+   {"name": "copy", "kind": "pad", "dir": [1, 0], "legend": "copy", "label": "COPY/\nHELP"}
+  ],
+  "padFixed": [0, 1]
+ },
+ "print": {
+  "_note": "Panel print not tied to a key: [u, w] centres, size = cap height (m).",
+  "labelSize": 0.0024,
+  "labelColor": "#2f2e34",
+  "items": [
+   {"text": "STOP", "at": [-0.0315, 0.0640], "size": 0.0020},
+   {"text": "START", "at": [-0.0680, 0.0835], "size": 0.0020},
+   {"text": "COPY/\nHELP", "at": [0.0045, 0.0855], "size": 0.0020},
+   {"text": "FO-70", "at": [-0.0140, 0.0320], "size": 0.0016}
+  ]
+ },
+ "docPath": {
+  "center": 0.0226,
+  "slotWidth": 0.220,
+  "maxWidth": 0.216,
+  "minWidth": 0.128,
+  "slot": {"w": [-0.022, 0.030], "n": [-0.0140, -0.0072]},
+  "exit": {"y": [0.0258, 0.0331]},
+  "path": [[-0.030, 0.1260], [-0.0040, 0.1010], [0.050, 0.0660], [0.100, 0.0385], [0.118, 0.0318], [0.160, 0.0300]]
+ },
+ "guides": {
+  "width": 0.210,
+  "tab": [0.056, 0.020],
+  "fence": 0.0060,
+  "thick": 0.0015
+ },
+ "printPath": {
+  "center": 0.0226,
+  "slotWidth": 0.224,
+  "slot": {"y": [0.0168, 0.0212]},
+  "path": [[-0.078, 0.0615], [-0.045, 0.0590], [0.020, 0.0300], [0.090, 0.0195], [0.118, 0.0190], [0.150, 0.0170]],
+  "platen": {"z": 0.101, "y": 0.0130, "r": 0.0060, "length": 0.222},
+  "head": {"z": 0.101, "y": [0.0196, 0.0255], "depth": 0.010},
+  "cutter": {"z": 0.1115, "y": [0.0206, 0.0280], "travel": 0.0062}
+ },
+ "roll": {"center": [0.0226, 0.0360, -0.0780], "r": 0.0255, "core": 0.0127, "width": 0.216},
+ "cover": {
+  "_note": "The roll cover: the rear slope behind the ridge, hinged at the heel; it opens by turning about x by a negative angle.",
+  "front": -0.0405,
+  "cut": [[-0.0405, 0.093], [-0.053, 0.093], [-0.105, 0.040], [-0.140, 0.040]],
+  "hinge": [-0.1160, 0.0440],
+  "u": [-0.0935, 0.152],
+  "open": -1.9
+ },
+ "latch": {"at": [0.1240, -0.0315], "size": [0.016, 0.008], "travel": 0.0020},
+ "handset": {
+  "center": [-0.1225, 0.0765, 0.0306],
+  "slope_deg": 21.0,
+  "length": 0.176,
+  "width": 0.054,
+  "bar": [-0.012, 0.015],
+  "pods": [{"lz": -0.064, "r": [0.044, 0.046], "depth": 0.010}, {"lz": 0.064, "r": [0.040, 0.042], "depth": 0.010}]
+ },
+ "cradle": {"u": [-0.1515, -0.0935], "lz": [-0.098, 0.12], "hook": {"lz": -0.030, "r": 0.0045, "travel": 0.0040}},
+ "cord": {
+  "points": [[-0.130, 0.0355, 0.110], [-0.132, 0.026, 0.126], [-0.142, 0.009, 0.148], [-0.178, 0.0065, 0.152], [-0.206, 0.0065, 0.110], [-0.210, 0.0065, 0.030], [-0.188, 0.0080, -0.030], [-0.160, 0.0160, -0.028], [-0.1525, 0.0180, -0.024]],
+  "coil": 0.0048, "wire": 0.0013, "pitch": 0.0030
+ },
+ "jacks": {"handset": [-0.152, 0.018, -0.024], "line": [-0.060, 0.016, -0.118], "tel": [-0.034, 0.016, -0.118], "power": [0.120, 0.014, -0.118]},
+ "speaker": {"at": [0.095, 0.0, 0.055], "r": 0.020}
+}

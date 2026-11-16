@@ -12,6 +12,14 @@ export const FO70_URL = '/assets/models/fax_fo70.glb';
 const FONT = '"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif';
 const PX_PER_M = 8000;                 // the panel print: 8 px a millimetre
 
+/** The mechanism's key names (src/machine/faxfo70.js mech.panel.keys) to the GLB's: the photograph shows one VOLUME
+ * key where the mechanism has volumeUp and volumeDown, so volumeDown has no cap of its own (an empty stand-in). */
+export const MECH_KEY_TO_NODE = {
+  '*': 'star', '#': 'hash', rapid1: 'rapid_a', rapid2: 'rapid_b', rapid3: 'rapid_c', rapid4: 'rapid_d', rapid5: 'rapid_e',
+  speedDial: 'speed_dial', redial: 'redial', holdSearch: 'hold', speaker: 'speaker', resolution: 'resolution',
+  function: 'function', volumeUp: 'volume', volumeDown: null, copyHelp: 'copy', start: 'start', stop: 'stop',
+};
+
 /** Every key node's name in the GLB, without the `fax_key_` prefix: the contract the kit binds controls to. */
 export const FO70_KEYS = [
   '1', '2', '3', '4', '5', '6', '7', '8', '9', 'star', '0', 'hash',
@@ -191,10 +199,13 @@ function lcdCanvas(size, opts) {
 
 /**
  * Loads the FO-70. opts: { url, gltf (already parsed), mats (createFaxMaterials()), makeCanvas(w, h) (for tests) }.
- * Returns { group, parts, setKey(name, depth01), setHandset(lifted01), setCover(open01), setGuides(width), lcd }.
- * parts: body, panel, keys { name: node }, handset, hook, rollCover, rollLatch, guides { l, r }, docSlot, docExit,
- * printSlot, docPath { node, points }, printPath { node, points }, cutter, platen, paperRoll, lcd (the mesh), speaker,
- * cord, cordEnds { handset, jack }, jacks, mech, feet. Each moving node's origin is its pivot; its axis and travel are
+ * Returns { group, parts, update(state, layout), setKey(name, depth01), setHook, setPanel(open01), setLatch, setCutter,
+ * setGuides(width), lcd }. parts: body, panel, cover (= panel: the operation panel is the roll cover, its node's origin
+ * on the rear hinge; rotation.x = -angle lifts it), display (= lcd, the LCD's mesh node), rollBay (= paperRoll),
+ * keys (an array in mech.panel.keys order, each the key's mesh, for picking), keyNodes { GLB name: node }, handset,
+ * hook, rollLatch (the panel's release), guides { l, r }, docSlot, docExit, printSlot, docPath { node, points },
+ * printPath { node, points }, cutter, platen, paperRoll, lcd, speaker, cord, cordEnds { handset, jack }, jacks, mech,
+ * feet. Each moving node's origin is its pivot; its axis and travel are
  * in node.userData (press, travel, slide, hinge, open, axis), as parsed JSON.
  */
 export async function buildFo70(opts = {}) {
@@ -243,9 +254,20 @@ export async function buildFo70(opts = {}) {
   group.add(gltf.scene);
   const keys = Object.fromEntries(keyInfo.filter((k) => k.node).map((k) => [k.name, k.node]));
   const path = (n) => (n ? { node: n, points: (n.userData.path ?? []).map((p) => new THREE.Vector3(...p).add(n.position)) } : null);
+  const meshOf = (n) => { let m = null; n?.traverse((o) => { if (!m && o.isMesh) m = o; }); return m; };
+  const mechKeys = opts.mechKeys ?? [];
+  const keyMeshes = mechKeys.map((k) => {
+    const name = k in MECH_KEY_TO_NODE ? MECH_KEY_TO_NODE[k] : k;
+    const m = meshOf(name ? keys[name] : null);
+    if (m) { m.userData.key = k; return m; }
+    const stand = new THREE.Object3D();
+    stand.name = `fax_key_${k}_none`;
+    return stand;
+  });
   const parts = {
-    body: nodes.fax_body, panel, keys, handset: nodes.fax_handset, hook: nodes.fax_hook,
-    rollCover: nodes.fax_roll_cover, rollLatch: nodes.fax_roll_latch,
+    body: nodes.fax_body, panel, cover: panel, display: lcdNode, rollBay: nodes.fax_paper_roll,
+    keys: keyMeshes, keyNodes: keys, handset: nodes.fax_handset, hook: nodes.fax_hook,
+    rollLatch: nodes.fax_roll_latch,
     guides: { l: nodes.fax_guide_l, r: nodes.fax_guide_r },
     docSlot: nodes.fax_doc_slot, docExit: nodes.fax_doc_exit, printSlot: nodes.fax_print_slot,
     docPath: path(nodes.fax_doc_path), printPath: path(nodes.fax_print_path),
@@ -255,7 +277,7 @@ export async function buildFo70(opts = {}) {
   };
   // Rest poses, for the setters.
   const rest = new Map();
-  for (const n of [...Object.values(keys), parts.handset, parts.hook, parts.rollCover, parts.rollLatch, parts.guides.l, parts.guides.r, parts.cutter, panel]) {
+  for (const n of [...Object.values(keys), parts.handset, parts.hook, parts.rollLatch, parts.guides.l, parts.guides.r, parts.cutter, panel]) {
     if (n) rest.set(n, { p: n.position.clone(), q: n.quaternion.clone() });
   }
   const along = (n, t) => {
@@ -268,13 +290,41 @@ export async function buildFo70(opts = {}) {
     if (!r) return;
     n.quaternion.copy(r.q).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(...(n.userData.hinge ?? [1, 0, 0])), (n.userData.open ?? 0) * t));
   };
+  const handsetRest = rest.get(parts.handset);
+  const rollR = nodes.fax_paper_roll?.userData.radius ?? 0.0255, coreR = nodes.fax_paper_roll?.userData.core ?? 0.0127;
+  const keyNodeList = mechKeys.map((k) => keys[k in MECH_KEY_TO_NODE ? MECH_KEY_TO_NODE[k] : k] ?? null);
   return {
     group, parts, lcd, keyAtlas: atlas.canvas, printCanvas,
+    /**
+     * Poses the model from the mechanism's snapshot (src/sim/fax/layout.js): the keys' stems (the mechanism's 2.5 mm
+     * of travel scaled to the cap's), the hook plunger, the handset (lifted off the cradle to the hand's place above
+     * it), the cutter's blade, the platen and the roll's radius. The cover's angle the kit sets (parts.cover).
+     */
+    update(s, L) {
+      keyNodeList.forEach((n, i) => {
+        if (!n) return;
+        const t = n.userData.travel ?? 0.0018;
+        along(n, Math.min(t, Math.max(0, s[L.keyX + i]) * t / 0.0025));
+      });
+      const hook = parts.hook;
+      if (hook) along(hook, -(hook.userData.travel ?? 0.004) * Math.min(1, Math.max(0, s[L.hookX]) / 0.006));
+      if (parts.handset && handsetRest) {
+        parts.handset.position.copy(handsetRest.p);
+        if (s[L.onCradle] < 0.5) parts.handset.position.add(new THREE.Vector3(-0.02, 0.17, 0.08));
+      }
+      if (parts.cutter) along(parts.cutter, (parts.cutter.userData.travel ?? 0.006) * Math.min(1, Math.max(0, s[L.blade])));
+      if (parts.platen) parts.platen.rotation.x = s[L.platenPsi];
+      const roll = parts.paperRoll;
+      if (roll) {
+        const r = s[L.rollRadius];
+        roll.visible = r > coreR * 0.5;
+        if (r > 0) { const k = Math.max(coreR, r) / rollR; roll.scale.set(1, k, k); }
+      }
+    },
     /** Presses key `name` by depth01 of its travel (0 up, 1 bottomed). */
     setKey(name, depth01) { const n = keys[name]; if (n) along(n, (n.userData.travel ?? 0.0015) * Math.min(1, Math.max(0, depth01))); },
     /** The hook plunger rises as the handset leaves (0 on the cradle, 1 lifted clear). */
     setHook(up01) { const n = parts.hook; if (n) along(n, -(n.userData.travel ?? 0.004) * Math.min(1, Math.max(0, up01))); },
-    setCover(open01) { hinge(parts.rollCover, open01); },
     setPanel(open01) { hinge(panel, open01); },
     setLatch(depth01) { const n = parts.rollLatch; if (n) along(n, (n.userData.travel ?? 0.002) * depth01); },
     setCutter(depth01) { const n = parts.cutter; if (n) along(n, (n.userData.travel ?? 0.006) * depth01); },
@@ -288,3 +338,13 @@ export async function buildFo70(opts = {}) {
     },
   };
 }
+
+/**
+ * The kit's entry (docs/fax/architecture.md 6.2): buildFo70View(machine, { renderer, geometry }) -> { group, parts,
+ * update } in the body's frame, parts.keys in machine.mech.panel.keys order.
+ */
+export async function buildFo70View(machine, opts = {}) {
+  return buildFo70({ ...opts, mechKeys: machine?.mech?.panel?.keys ?? [] });
+}
+
+export default buildFo70View;

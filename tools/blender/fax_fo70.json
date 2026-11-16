@@ -103,21 +103,15 @@
   "center": 0.0226,
   "slotWidth": 0.224,
   "slot": {"y": [0.0168, 0.0212]},
-  "path": [[-0.078, 0.0615], [-0.045, 0.0590], [0.020, 0.0300], [0.090, 0.0195], [0.118, 0.0190], [0.150, 0.0170]],
+  "path": [[0.040, 0.0595], [0.068, 0.0480], [0.088, 0.0230], [0.101, 0.0190], [0.118, 0.0190], [0.150, 0.0170]],
   "platen": {"z": 0.101, "y": 0.0130, "r": 0.0060, "length": 0.222},
   "head": {"z": 0.101, "y": [0.0196, 0.0255], "depth": 0.010},
   "cutter": {"z": 0.1115, "y": [0.0206, 0.0280], "travel": 0.0062}
  },
- "roll": {"center": [0.0226, 0.0360, -0.0780], "r": 0.0255, "core": 0.0127, "width": 0.216},
- "cover": {
-  "_note": "The roll cover: the rear slope behind the ridge, hinged at the heel; it opens by turning about x by a negative angle.",
-  "front": -0.0405,
-  "cut": [[-0.0405, 0.093], [-0.053, 0.093], [-0.105, 0.040], [-0.140, 0.040]],
-  "hinge": [-0.1160, 0.0440],
-  "u": [-0.0935, 0.152],
-  "open": -1.9
- },
- "latch": {"at": [0.1240, -0.0315], "size": [0.016, 0.008], "travel": 0.0020},
+ "roll": {"center": [0.0226, 0.0350, 0.0400], "r": 0.0255, "core": 0.0127, "width": 0.216},
+ "panelOpen_deg": 95,
+ "bay": {"_note": "The roll bay under the operation panel, which lifts on its rear hinge as the roll cover (docs/fax/architecture.md 3.3).", "z": [0.004, 0.118]},
+ "latch": {"_note": "The panel release: a tab in the right side under the panel's front corner [A]. at = [y, z], size = [height, length].", "at": [0.0240, 0.0880], "size": [0.008, 0.018], "travel": 0.0020},
  "handset": {
   "center": [-0.1225, 0.0765, 0.0306],
   "slope_deg": 21.0,

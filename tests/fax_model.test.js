@@ -8,7 +8,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { compressGlb } from '../tools/gen/compress_glb.mjs';
-import { buildFo70, createFaxMaterials, FO70_KEYS } from '../src/render/fax/fo70-view.js';
+import { buildFo70View, createFaxMaterials, FO70_KEYS } from '../src/render/fax/fo70-view.js';
+import faxfo70 from '../src/machine/faxfo70.js';
 
 const GLB = new URL('../public/assets/models/fax_fo70.glb', import.meta.url);
 const SPEC = JSON.parse(fs.readFileSync(new URL('../tools/blender/fax_fo70.json', import.meta.url), 'utf8'));
@@ -26,7 +27,7 @@ const parse = (v) => (typeof v === 'string' ? JSON.parse(v) : v);
 
 const PARTS = [
   'fax_body', 'fax_panel', 'fax_lcd', 'fax_handset', 'fax_hook', 'fax_cord', 'fax_cord_handset', 'fax_cord_jack',
-  'fax_roll_cover', 'fax_roll_latch', 'fax_guide_l', 'fax_guide_r', 'fax_doc_slot', 'fax_doc_exit', 'fax_doc_path',
+  'fax_roll_latch', 'fax_guide_l', 'fax_guide_r', 'fax_doc_slot', 'fax_doc_exit', 'fax_doc_path',
   'fax_print_slot', 'fax_print_path', 'fax_cutter', 'fax_platen', 'fax_paper_roll', 'fax_speaker', 'fax_mech',
   'fax_feet', 'fax_jacks', ...FO70_KEYS.map((k) => `fax_key_${k}`),
 ];
@@ -89,8 +90,12 @@ test('keys: each sits on the panel at its measured place, with a unit press axis
 test('moving parts carry their axes: hinges, slides, the hook, the paths and the LCD face', async () => {
   const { scene } = await gltfP;
   const n = byName(scene);
-  assert.deepEqual(parse(n.fax_roll_cover.userData.hinge), [1, 0, 0]);
-  assert.ok(parse(n.fax_roll_cover.userData.open) < -1);
+  // The operation panel is the roll cover (architecture.md 3.3): its node on the rear hinge, opening 95 degrees.
+  assert.deepEqual(parse(n.fax_panel.userData.hinge), [1, 0, 0]);
+  assert.ok(Math.abs(parse(n.fax_panel.userData.open) + 95 * Math.PI / 180) < 1e-4);
+  // The roll lies in the bay under the panel, inside the body.
+  const roll = new THREE.Box3().setFromObject(n.fax_paper_roll), pan = new THREE.Box3().setFromObject(n.fax_panel);
+  assert.ok(roll.max.z < pan.max.z && roll.min.z > pan.min.z - 0.01 && roll.min.y > 0.004, 'the roll under the panel');
   assert.deepEqual(parse(n.fax_guide_l.userData.slide), [1, 0, 0]);
   assert.deepEqual(parse(n.fax_guide_r.userData.slide), [-1, 0, 0]);
   assert.ok(parse(n.fax_hook.userData.travel) > 0);
@@ -113,16 +118,37 @@ test('the view builds the parts from the GLB with the named materials', async ()
   const gltf = await gltfP;
   const ctx = new Proxy({}, { get: (t, k) => (k === 'measureText' ? () => ({ width: 100 }) : k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
   const makeCanvas = () => ({ getContext: () => ctx, width: 0, height: 0 });
-  const v = await buildFo70({ gltf, mats: createFaxMaterials({ textured: false }), makeCanvas });
-  assert.deepEqual(Object.keys(v.parts.keys).sort(), [...FO70_KEYS].sort());
-  for (const k of ['handset', 'hook', 'rollCover', 'rollLatch', 'docSlot', 'printSlot', 'cutter', 'platen', 'paperRoll', 'lcd', 'speaker', 'cord']) assert.ok(v.parts[k], k);
+  const v = await buildFo70View(faxfo70, { gltf, mats: createFaxMaterials({ textured: false }), makeCanvas });
+  assert.deepEqual(Object.keys(v.parts.keyNodes).sort(), [...FO70_KEYS].sort());
+  // The kit's names (architecture.md 6.2): keys as meshes in the mechanism's order, every one an Object3D.
+  const order = faxfo70.mech.panel.keys;
+  assert.equal(v.parts.keys.length, order.length);
+  for (const k of v.parts.keys) assert.ok(k?.isObject3D);
+  assert.equal(v.parts.keys[order.indexOf('5')].parent, v.parts.keyNodes['5']);
+  assert.equal(v.parts.keys[order.indexOf('start')].parent, v.parts.keyNodes.start);
+  assert.equal(v.parts.cover, v.parts.panel);
+  assert.equal(v.parts.display, v.parts.lcd);
+  assert.equal(v.parts.rollBay, v.parts.paperRoll);
+  for (const k of ['handset', 'hook', 'rollLatch', 'docSlot', 'printSlot', 'cutter', 'platen', 'paperRoll', 'lcd', 'speaker', 'cord']) assert.ok(v.parts[k], k);
   assert.ok(v.parts.guides.l && v.parts.guides.r);
   assert.ok(v.parts.docPath.points.length >= 4 && v.parts.printPath.points.length >= 4);
-  const key = v.parts.keys['5'], rest = key.position.clone();
+  const key = v.parts.keyNodes['5'], rest = key.position.clone();
   v.setKey('5', 1);
   assert.ok(Math.abs(key.position.distanceTo(rest) - parse(key.userData.travel)) < 1e-6);
   v.setKey('5', 0);
   assert.ok(key.position.distanceTo(rest) < 1e-12);
-  v.setCover(1);
-  assert.ok(Math.abs(v.parts.rollCover.quaternion.angleTo(new THREE.Quaternion()) - Math.abs(parse(v.parts.rollCover.userData.open))) < 1e-6);
+  v.setPanel(1);
+  assert.ok(Math.abs(v.parts.panel.quaternion.angleTo(new THREE.Quaternion()) - 95 * Math.PI / 180) < 1e-4);
+  v.setPanel(0);
+  // update() from a snapshot: a key down, the handset lifted, the roll half used.
+  const { makeFaxLayout } = await import('../src/sim/fax/layout.js');
+  const L = makeFaxLayout(faxfo70), s = new Float32Array(L.length);
+  s[L.onCradle] = 1; s[L.rollRadius] = 0.0255;
+  v.update(s, L);
+  const hs = v.parts.handset.position.clone();
+  s[L.keyX + order.indexOf('5')] = 0.0025; s[L.onCradle] = 0; s[L.rollRadius] = 0.019;
+  v.update(s, L);
+  assert.ok(Math.abs(key.position.distanceTo(rest) - parse(key.userData.travel)) < 1e-6, 'the key bottoms');
+  assert.ok(v.parts.handset.position.y > hs.y + 0.1, 'the handset lifts');
+  assert.ok(v.parts.paperRoll.scale.y < 0.8, 'the roll shrinks');
 });

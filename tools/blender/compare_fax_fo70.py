@@ -115,7 +115,7 @@ def draw_art():
     lc = pn["lcd"]
     im = Image.new("RGB", (round((lc["u"][1] - lc["u"][0]) * S), round((lc["w"][1] - lc["w"][0]) * S)), "#c3cabd")
     g = ImageDraw.Draw(im)
-    f = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 52)
+    f = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 40)
     g.text((im.width / 2, im.height / 2), "FAX     01-01 12:00", font=f, fill="#2c3330", anchor="mm")
     im.save(os.path.join(ART, "lcd.png"))
 
@@ -215,7 +215,7 @@ def render(a):
 
     def P(u, w, n=0.0):
         return (u, yr + n * math.cos(ps) - w * math.sin(ps), zr + n * math.sin(ps) + w * math.cos(ps))
-    cover = obs.get("fax_roll_cover")
+    cover = obs.get("fax_panel")
     handset = obs.get("fax_handset")
     guides = [obs.get("fax_guide_l"), obs.get("fax_guide_r")]
     views = {
@@ -255,7 +255,7 @@ def render(a):
             pos, tgt, lens, res, pose = views[v]
             if pose == "open" and cover:
                 cover.rotation_mode = "XYZ"
-                cover.rotation_euler.x += J["cover"]["open"]          # unit x is Blender x
+                cover.rotation_euler.x -= math.radians(J["panelOpen_deg"])          # unit x is Blender x
                 if handset:
                     handset.location.z += 0.12
             cam.sensor_fit = "AUTO"

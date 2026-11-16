@@ -4,9 +4,11 @@
 
 304 x 236 x 122 mm (docs/fax/research.md 8.2), after the owner's photograph from above (docs/fax/refs/owner/
 sharp_fo70_top.png; the review and the reasoning are in docs/fax/models.md). A lilac-grey body whose side profile is a
-low front face, the operation panel rising at 32 degrees, the document table rising behind it to a ridge, and the roll
-cover falling steeply from the ridge to a low heel at the back (the photograph, taken from in front and above, sees
-nothing behind the ridge, which the documented depth needs). The handset lies in a cradle moulded along the left side,
+low front face, the operation panel rising at 32 degrees, the document table rising behind it to a ridge, and the back
+falling steeply from the ridge to a low heel (the photograph, taken from in front and above, sees nothing behind the
+ridge, which the documented depth needs). The operation panel is the roll cover: it lifts on its rear hinge to 95
+degrees over the roll bay, where the roll lies loose in front of the thermal head, platen and cutter
+(docs/fax/architecture.md 3.3). The handset lies in a cradle moulded along the left side,
 its earpiece end at the ridge. The panel carries a cream overlay with the LCD in a recess, five rapid keys, the round
 START / STOP / COPY pad, the 3 x 4 number keys and the function keys on either side.
 
@@ -138,7 +140,7 @@ RADII = [p[2] for p in J["profile"]["points"]]
 
 def plan_poly(d=0.0, seg=6):
     """The footprint (x, z) inset by d: full width under the panel, narrower behind it on the right, where the
-    photograph shows the document table and the roll cover stopping short of the panel's right edge."""
+    photograph shows the document table and the back stopping short of the panel's right edge."""
     pc = J["plan"]["corner"]
     xr, zn, rn = J["plan"]["rearRight"], J["plan"]["notchZ"], J["plan"]["notchRadius"]
     pts = [(-X + d, -SZ / 2 + d), (xr - d, -SZ / 2 + d), (xr - d, zn - d), (X - d, zn - d), (X - d, SZ / 2 - d), (-X + d, SZ / 2 - d)]
@@ -177,16 +179,6 @@ def panel_slab(grow=0.0):
     """The operation panel's region: in front of its rear edge, above its underside, right of the cradle."""
     poly = [(U0 - grow, -grow), (X + 0.02, -grow), (X + 0.02, L + 0.03), (U0 - grow, L + 0.03)]
     return in_frame(W.ob_from(W.prism(poly, "y", -PT - grow, 0.06), "slab"), MP())
-
-
-def cover_region(grow=0.0):
-    """The roll cover's region: behind its front parting line across the ridge, above a line that runs inside the
-    hollow under the rear slope and leaves the shell at the heel."""
-    c = J["cover"]
-    f = c["front"] + grow
-    cut = [(f, c["cut"][0][1] - grow)] + [(z, y - grow) for z, y in c["cut"][1:]]
-    poly = [(f, 0.25)] + cut + [(cut[-1][0], 0.25)]
-    return W.ob_from(W.prism(poly, "x", c["u"][0] - grow, X + 0.02), "cov")
 
 
 def cradle_cuts():
@@ -247,10 +239,11 @@ def speaker_cuts():
 
 
 def latch_cut():
+    """The panel's release: a recess in the right side under the panel's front corner."""
     la = J["latch"]
-    x, z = la["at"]
-    w, d = la["size"]
-    return W.ob_from(W.box_bm(x - w / 2 - 0.0007, 0.1050, z - d / 2 - 0.0007, x + w / 2 + 0.0007, 0.2, z + d / 2 + 0.0007), "lcut")
+    y, z = la["at"]
+    h, d = la["size"]
+    return W.ob_from(W.box_bm(X - 0.004, y - h / 2 - 0.0007, z - d / 2 - 0.0007, X + 0.01, y + h / 2 + 0.0007, z + d / 2 + 0.0007), "lcut")
 
 
 def check_solid(ob, what):
@@ -270,15 +263,14 @@ def check_solid(ob, what):
 
 
 def build_body():
-    # A solid moulding with one hollow: the roll compartment under the cover (the slots and jacks are blind pockets
-    # with dark linings; the mechanism under the panel is not modelled).
+    # A solid moulding with one hollow: the roll bay under the operation panel, which is the roll cover (the slots
+    # and jacks are blind pockets with dark linings; the scanner and drive are not modelled).
     body = outer()
     cav = inner()
-    c = J["cover"]
-    W.boolean(cav, W.ob_from(W.box_bm(U0 + WALL, FEET + WALL, -1, X, 1, c["front"] - WALL), "cb"), "INTERSECT")
+    b = J["bay"]
+    W.boolean(cav, W.ob_from(W.box_bm(U0 + WALL, FEET + WALL, b["z"][0], X, 1, b["z"][1]), "cb"), "INTERSECT")
     W.boolean(body, cav, "DIFFERENCE")
     W.boolean(body, panel_slab(GAP))
-    W.boolean(body, cover_region(GAP))
     for c in cradle_cuts():
         W.boolean(body, c)
     W.boolean(body, doc_channel())
@@ -290,16 +282,6 @@ def build_body():
     W.finish(body, "fax_body", 0.0006, 1)
     body.name = "fax_body"
     return body
-
-
-def build_cover():
-    cov = outer()
-    W.boolean(cov, cover_region(0.0), "INTERSECT")
-    W.boolean(cov, inner(), "DIFFERENCE")
-    check_solid(cov, "roll cover")
-    W.finish(cov, "fax_body", 0.0006, 1)
-    cov.name = "fax_roll_cover"
-    return cov
 
 
 # ---------- the operation panel ----------
@@ -626,12 +608,11 @@ def build_guides():
 def build_latch():
     la = J["latch"]
     x, z = la["at"]
-    w, d = la["size"]
-    ob = W.ob_from(W.prism(W.rounded_rect(x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0.002, seg=3), "y", 0.1053, 0.1103), "fax_roll_latch")
-    W.bevel_finish(ob, width=0.0006, segs=2, angle=30)
+    d, w = la["size"]
+    ob = W.ob_from(W.prism(W.rounded_rect(z - w / 2, x - d / 2, z + w / 2, x + d / 2, 0.0015, seg=3), "x", X - 0.0038, X - 0.0006), "fax_roll_latch")
+    W.bevel_finish(ob, width=0.0005, segs=2, angle=30)
     W.assign(ob, "fax_body")
     W.box_uv(ob)
-    # Grip ribs across its top.
     return ob
 
 
@@ -683,7 +664,6 @@ def empty_at(name, unit_pos, parent=None, parent_pivot=(0, 0, 0)):
 def main():
     W.reset()
     body = build_body()
-    cover = build_cover()
     panel = build_panel()
     lcd = build_lcd()
     keys = []
@@ -708,7 +688,7 @@ def main():
     jacks = build_jacks()
 
     statics = [body, mech, feet, jacks, doc_exit, print_slot, cord]
-    movers = [cover, panel, lcd, handset, hook, doc_slot, platen, cutter, roll, latch, speaker] + [k[0] for k in keys] + [g[0] for g in guides]
+    movers = [panel, lcd, handset, hook, doc_slot, platen, cutter, roll, latch, speaker] + [k[0] for k in keys] + [g[0] for g in guides]
     for o in statics + movers:
         o.data.name = o.name
         W.to_blender(o)
@@ -716,7 +696,7 @@ def main():
     # Pivots (unit coordinates).
     panel_pivot = tuple(P(U0, 0.0, -PT))                    # the panel's rear lower edge: it lifts at the front
     W.pivot_mesh(panel, panel_pivot)
-    tag(panel, hinge=[1, 0, 0], open=-0.35, layout=panel_layout(J))
+    tag(panel, hinge=[1, 0, 0], open=round(-math.radians(J["panelOpen_deg"]), 5), layout=panel_layout(J))
     for cap, top in keys:
         W.pivot_mesh(cap, tuple(top), panel, panel_pivot)
     lc = PN["lcd"]
@@ -724,12 +704,9 @@ def main():
     W.pivot_mesh(lcd, tuple(lcd_c), panel, panel_pivot)
     tag(lcd, size=[round(lc["u"][1] - lc["u"][0], 5), round(lc["w"][1] - lc["w"][0], 5)], normal=[0, round(math.cos(PS), 5), round(math.sin(PS), 5)], chars=16)
     W.pivot_mesh(doc_slot, tuple(P(XC, 0.0, J["docPath"]["slot"]["n"][0])))
-    c = J["cover"]
-    W.pivot_mesh(cover, (0.0, c["hinge"][1], c["hinge"][0]))
-    tag(cover, hinge=[1, 0, 0], open=c["open"])
     la = J["latch"]
-    W.pivot_mesh(latch, (la["at"][0], 0.1103, la["at"][1]))
-    tag(latch, press=[0, -1, 0], travel=la["travel"])
+    W.pivot_mesh(latch, (X - 0.0006, la["at"][0], la["at"][1]))
+    tag(latch, press=[-1, 0, 0], travel=la["travel"])
     # The handset: its node at its centre, turned to the cradle's slope.
     handset.location = W.UNIT_TO_BLENDER @ HC
     handset.rotation_euler = (HA, 0, 0)

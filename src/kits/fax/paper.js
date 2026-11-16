@@ -110,7 +110,7 @@ export class PrintedStrip {
       for (let i = 0; i <= 1; i++) {
         const k = j * 2 + i;
         pos.setXYZ(k, X + (i ? WIDTH / 2 : -WIDTH / 2), y, z);
-        uv.setXY(k, i, v);
+        uv.setXY(k, 1 - i, v);     // print side up, the page's top furthest out: seen from the front, upside down
       }
     }
     pos.needsUpdate = true; uv.needsUpdate = true;
@@ -135,10 +135,10 @@ export class ReceivedPile {
   }
 
   add({ canvas, lengthM }) {
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const tex = new THREE.CanvasTexture(canvas);        // flipY: the canvas's top row (the page's top) at the far edge
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const geo = new THREE.PlaneGeometry(WIDTH, lengthM);
-    geo.rotateX(-Math.PI / 2);                        // lying on the desk, the page's top toward the machine
+    geo.rotateX(-Math.PI / 2);                        // lying on the desk face up, its top toward the machine (turned round to be read)
     const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, side: THREE.DoubleSide }));
     m.castShadow = m.receiveShadow = true;
     m.name = `received${this.pages.length + 1}`;

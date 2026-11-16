@@ -225,6 +225,10 @@ No free recording of a 1980s thermal machine's mechanism was found. The owner's 
 
 ## 8. The Sharp FO-70 (the machine chosen)
 
+**Superseded in part (2026-11-16):** the owner's service manual and operation manual are now in `refs/` and were read;
+`hardware.md` holds what they say, with pages, and its section 11 the points where they differ from each other. What
+follows is the earlier search-summary record.
+
 Gathered 2026-11-15 in a second cloud session, after the owner chose the machine. **No FO-70 document was read at
 source.** Every manual host was blocked again (section 1), so what follows comes from web search summaries, which
 quote lines of the manuals and their contents lists. The marks used in this section:

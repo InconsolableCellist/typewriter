@@ -8,7 +8,8 @@
 // Every value carries a mark:
 //   [S p.N]  documented: read in the owner's copy of the Sharp FO-50/FO-70 service manual, No. 00ZFO50RA/SME (c) 2000
 //            (docs/fax/refs/sharp_fo70_service_manual.pdf, a ManualsLib print). N is the manual's own page, then the
-//            PDF's page: p.3-7/pdf41. The fact base is docs/fax/hardware.md;
+//            PDF's page: p.3-7/pdf41. [S OM p.N]: the FO-10/FO-50/FO-70 operation manual's printed page. The fact
+//            base is docs/fax/hardware.md;
 //   [M] typical: memory of machines of this class, not in the manual;
 //   [A] assumed: a design default of ours.
 // Values derived from others say so and carry no mark of their own.

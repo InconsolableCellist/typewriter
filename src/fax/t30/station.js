@@ -90,6 +90,7 @@ export class T30Station {
     this.state = 'idle';
     this.done = false;
     this.result = null;
+    this.lastRx = null; this.fellBack = false;
     this.remote = { ident: null, nsf: null, dis: null, dcs: null };
     this.tx = null;     // transmitting-side state
     this.rx = null;     // receiving-side state
@@ -200,7 +201,9 @@ export class T30Station {
     this.timers.stopAll();
     this._set('done');
     this.done = true;
-    this.result = { reason, ok, pagesSent: this.pagesSent, pagesReceived: this.pagesReceived };
+    // lastRx: the last frame heard (the final frame of a burst; 'BAD' when only damaged frames came), the key of the
+    // Sharp communication error code table (service manual p.2-19); fellBack: the transmitter stepped its rate down.
+    this.result = { reason, ok, pagesSent: this.pagesSent, pagesReceived: this.pagesReceived, lastRx: this.lastRx, fellBack: this.fellBack };
     this._note(t, 'hangup', { reason, ok });
     this._emit({ type: 'hangup', reason, ok });
   }
@@ -227,6 +230,8 @@ export class T30Station {
       if (fr.valid && fr.name) good.push(fr); else bad++;
     }
     this._note(t, 'rx', { frames: good.map((f) => f.name), bad });
+    if (good.length) this.lastRx = (good.find((f) => f.final) ?? good[good.length - 1]).name;
+    else if (bad) this.lastRx = 'BAD';
     if (this.rx?.disLoop && this.timers.running('T4')) this.timers.start('T4', t, this.T.T4); // heard something: wait again
     if (!good.some((f) => f.final) && bad) { this._onBadFrames(t); if (!good.length) return; }
     if (!good.length) return;
@@ -359,6 +364,7 @@ export class T30Station {
         this.tx.rateIdx++;
         this.tries = 1;
         this._note(t, 'step-down', { rate: this.rate });
+        this.fellBack = true;
         this.later(t, this.timing.gap, (tt) => this._sendDCS(tt));
       } else if (name === 'CRP' || name === 'DIS' || name === 'DTC') {
         // The receiver did not get DCS (it repeated its DIS) or asked for a repeat.

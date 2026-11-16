@@ -3,7 +3,11 @@
 // silence when the machine waits, and simple synthesised placeholders for the mechanism, each from the mechanism's own
 // ports and onsets: the drive stepper's torque ripple ringing two modes of the light case, the cutter motor's brush
 // buzz at its commutation rate, and short damped knocks for the swing gear's clack, the cut, the relays, the hook
-// switch and the keys. The line, the modem and the monitor speaker join in M7; the levels are ASSUMED until a recording.
+// switch and the keys. M7 adds the line and the machine's own sounders (`sim.tap`, src/sim/fax/line-tap.js, when the host
+// is the whole station): the monitor speaker on the line by the firmware's rule (dialling and handshake, muted for the
+// pages) at its volume setting, the handset's earpiece while the handset is off its cradle, the electronic ringer and
+// the piezo beeper. Each is read at the host's own time as it is stepped, so it is sample-aligned with the mechanism
+// and the call. The levels and the small speaker's band are ASSUMED until a recording.
 import { SUBSTEP_HZ } from '../sim/rate.js';
 import { FAX_PORT, FAC } from '../sim/fax/ports.js';
 
@@ -21,6 +25,15 @@ class Mode {
 }
 
 // Levels and modes [A]: the placeholders' only tuning, until the owner's recordings (plan 10).
+/** The monitor speaker's gain for volume settings 0-3, the earpiece's, the ringer's and the beeper's [A]. */
+export const LINE_LEVEL = { speaker: [0, 0.35, 0.7, 1.1], earpiece: 0.3, ringer: 1, beeper: 1 };
+
+/** A first-order band: the small speaker or the earpiece (high-pass hp Hz, low-pass lp Hz). */
+class Band {
+  constructor(sr, hp, lp) { this.a = Math.exp(-2 * Math.PI * hp / sr); this.b = 1 - Math.exp(-2 * Math.PI * lp / sr); this.x1 = 0; this.y1 = 0; this.z = 0; }
+  tick(x) { const y = this.a * (this.y1 + x - this.x1); this.x1 = x; this.y1 = y; this.z += this.b * (y - this.z); return this.z; }
+}
+
 export const LEVEL = { motor: 900, planet: 0.25, cut: 0.5, cutterBuzz: 0.04, relay: 0.12, hook: 0.2, key: 0.08, sheet: 0.05 };
 const CASE_MODES = [[740, 9], [1930, 14], [3400, 18]];       // Hz, Q of a 2.6 kg thin ABS case [A]
 const KNOCK_MODES = [[2600, 6], [5200, 8]];                  // small hard contacts [A]
@@ -46,6 +59,26 @@ export class FaxAudioEngine {
     this.lastTe = 0; this.buzzPhase = 0; this.noise = 0x1234567;
     this.knock = 0;              // the knocks' excitation for this sample
     this.bufL = new Float32Array(128);
+    this.tap = sim.tap ?? null;
+    this.speakerBand = new Band(sampleRate, 350, 3800);
+    this.earBand = new Band(sampleRate, 300, 3000);
+    this.piezoBand = new Band(sampleRate, 600, 6000);
+  }
+
+  /** The line's listeners and the sounders at the host's time: the speaker, the earpiece, ringer and beeper. */
+  lineVoice() {
+    const tap = this.tap, t = this.sim.t, L = LINE_LEVEL;
+    const g = L.speaker[tap.monitor] ?? 0;
+    const offHook = !this.sim.liu.onCradle;
+    let y = 0;
+    if (g > 0 || offHook) {
+      const line = tap.lineAt(t);
+      if (g > 0) y += this.speakerBand.tick(line * g);
+      if (offHook) y += this.earBand.tick(line * L.earpiece);
+    }
+    const r = tap.ringerAt(t), b = tap.beepAt(t);
+    if (r !== 0 || b !== 0) y += this.piezoBand.tick(r * L.ringer + b * L.beeper);
+    return y;
   }
 
   setTimeScale(s) { this.timeScale = Math.max(0, Math.min(1, s)); }
@@ -110,7 +143,7 @@ export class FaxAudioEngine {
       while (k-- > 0) sim.step();
       if (nSub > 1) for (let p = 0; p < FAX_PORT.COUNT; p++) ports[p] /= nSub;
       const knock = this.readOnsets();
-      if (render) this.bufL[i] = this.voice(knock);
+      if (render) this.bufL[i] = this.voice(knock) + (this.tap ? this.lineVoice() : 0);
       ports.fill(0);
       if (++this.snapCount >= this.snapEvery) { this.snapCount = 0; this.publish(); }
     }

@@ -26,10 +26,14 @@ export class ScanCtl {
 
   busy() { return !!this.op || this.q.length > 0; }
 
-  /** { op: 'prefeed' | 'line' | 'eject', id, res ('standard' | 'fine' | 'superfine') }. */
+  /**
+   * { op: 'prefeed' | 'line' | 'eject', id, res ('standard' | 'fine' | 'superfine') }. An eject may give `steps`: the
+   * firmware knows from the lines it has fed that the sheet's tail is past the registration sensor already, so the
+   * sensor (which may now see the next sheet, close behind) is not watched and the sheet is run out that far.
+   */
   command(m, t) {
     if (!['prefeed', 'line', 'eject'].includes(m.op)) return;
-    this.q.push({ kind: m.op, id: m.id ?? null, res: m.res ?? 'standard', stage: '' });
+    this.q.push({ kind: m.op, id: m.id ?? null, res: m.res ?? 'standard', stage: '', steps: m.steps ?? null });
     if (!this.op) this.next(t);
   }
 
@@ -47,6 +51,9 @@ export class ScanCtl {
       if (!n) { this.finish(t, 'resolution'); return; }
       op.stage = 'line';
       this.drive.move({ owner: 'scan', train: 'scan', steps: n }, t);
+    } else if (op.kind === 'eject' && op.steps != null) {
+      op.stage = 'out';
+      this.drive.move({ owner: 'scan', train: 'scan', steps: op.steps }, t);
     } else if (op.kind === 'eject') {
       op.stage = 'clear';
       this.drive.move({ owner: 'scan', train: 'scan', steps: D.maxSheetSteps, watch: true }, t);

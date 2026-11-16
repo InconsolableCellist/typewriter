@@ -5,7 +5,7 @@ import { MechanicalSim } from './mechanics.js';
 import { AudioEngine } from '../audio/engine.js';
 import { WordprocSim } from './wp/index.js';
 import { WpAudioEngine } from '../audio/wp-engine.js';
-import { FaxSim } from './fax/index.js';
+import { FaxStation } from './fax/station.js';
 import { FaxAudioEngine } from '../audio/fax-engine.js';
 
 // Every typewriter action (front strike, upstrike, single element) runs in MechanicalSim, which dispatches on
@@ -13,7 +13,7 @@ import { FaxAudioEngine } from '../audio/fax-engine.js';
 const TYPEWRITER = { sim: (o) => new MechanicalSim(o), engine: (sim, rate) => new AudioEngine(sim, rate) };
 const HOSTS = {
   'printwheel-system': { sim: (o) => new WordprocSim(o), engine: (sim, rate) => new WpAudioEngine(sim, rate) },
-  'thermal-fax': { sim: (o) => new FaxSim(o), engine: (sim, rate) => new FaxAudioEngine(sim, rate) },
+  'thermal-fax': { sim: (o) => new FaxStation(o), engine: (sim, rate) => new FaxAudioEngine(sim, rate) },
 };
 
 function hostFor(machine) {

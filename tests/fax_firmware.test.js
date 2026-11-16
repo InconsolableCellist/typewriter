@@ -438,3 +438,64 @@ test('Caller ID shows the calling name between rings; Distinctive Ring answers o
   assert.ok(untilLcd(fw, /RECEPTION OK/, 120));
   assert.equal(devices.output.length, 1);
 });
+
+// ---- on the mechanism host (src/sim/fax/) through sim-devices.js -------------------------------------------------------
+
+async function simMachine(opts = {}) {
+  const { default: faxfo70 } = await import('../src/machine/faxfo70.js');
+  const { geometryFor } = await import('../src/machine/index.js');
+  const { FaxSim } = await import('../src/sim/fax/index.js');
+  const { clone } = await import('../src/sim/clone.js');
+  const { attachToSim } = await import('../src/fax/firmware/sim-devices.js');
+  const machine = clone(faxfo70);
+  const sim = new FaxSim({ machine, geometry: geometryFor(machine) });
+  const { fw, devices } = attachToSim(sim, { options: { wallClockMs: TEST_WALL }, ...opts });
+  const run = (s) => { const end = sim.t + s, out = []; while (sim.t < end) { sim.step(); if (sim.events.length) sim.drainEvents(out); } return out; };
+  return { sim, fw, devices, run };
+}
+
+test('on the mechanism host: a sheet is drawn in and copied, line by line through the head, and cut', async () => {
+  const bars = (pose) => { const r = new Uint8Array(216); if (Math.floor(pose.y * 1000) % 4 === 0) r.fill(0xff, 20, 100); return r; };
+  const { sim, fw, run } = await simMachine({ sampleLine: bars });
+  run(0.3);
+  assert.equal(fw.lcd.text, 'NOV-16 09:30 FAX');
+  sim.command({ dev: 'feeder', op: 'load', sheets: [{ id: 's1', length: 0.035 }] });
+  run(2.5);
+  assert.equal(fw.lcd.text.trim(), 'DOCUMENT READY');
+  sim.command({ dev: 'panel', op: 'finger', key: 'copyHelp', force: 2 });
+  run(0.1);
+  sim.command({ dev: 'panel', op: 'finger', key: 'copyHelp', force: 0 });
+  let lines = 0, cuts = 0, dark = 0;
+  for (let i = 0; i < 40 && !fw.log.some((l) => l.what === 'copy'); i++) {
+    for (const e of run(0.5)) {
+      if (e.dev === 'print' && e.darkness) { lines++; if (e.darkness[400] > 128) dark++; }
+      if (e.dev === 'print' && e.ev === 'cut' && e.length) cuts++;
+    }
+  }
+  assert.equal(fw.log.find((l) => l.what === 'copy')?.pages, 1, fw.lcd.history.map((h) => `${h.t.toFixed(2)} ${h.text}`).join(' / '));
+  assert.ok(lines > 220 && lines < 290, `${lines} lines`);
+  assert.ok(dark > lines / 6 && dark < lines / 2, `${dark} dark of ${lines}`);
+  assert.equal(cuts, 1);
+});
+
+test('on the mechanism host: SPEAKER closes the line relay, the exchange sees the loop and gives dial tone', async () => {
+  const { Switchboard } = await import('../src/fax/remote/switchboard.js');
+  const { Directory } = await import('../src/fax/remote/directory.js');
+  const { sim, fw, devices, run } = await simMachine();
+  const dir = new Directory({ clock: fw.clock });
+  const sb = new Switchboard({ clock: fw.clock, directory: dir });
+  dir.attach(sb);
+  devices.setLine(sb);
+  run(0.2);
+  assert.equal(sim.liu.lineLoop(), false);
+  sim.command({ dev: 'panel', op: 'finger', key: 'speaker', force: 2 });
+  run(0.05);
+  sim.command({ dev: 'panel', op: 'finger', key: 'speaker', force: 0 });
+  run(0.4);
+  assert.match(fw.lcd.text, /ON-HOOK DIAL/);
+  assert.equal(sim.liu.lineLoop(), true);
+  assert.ok(sb.log.some((l) => l.what === 'progress' && l.signal === 'dialtone'));
+  sim.command({ dev: 'handset', op: 'lift' });
+  run(0.3);
+  assert.equal(fw.state.handset, true);
+});

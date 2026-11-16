@@ -5,10 +5,15 @@
 /** True for the machines whose mechanism is the word processor's (src/sim/host-factory.js HOSTS). */
 export const isWordprocFamily = (machine) => machine?.action?.type === 'printwheel-system';
 
+/** True for the fax (src/sim/fax/). */
+export const isFaxFamily = (machine) => machine?.action?.type === 'thermal-fax';
+
 /** Resolves to the URL of the worklet module for this machine's family. */
 export async function workletUrl(machine) {
   const m = isWordprocFamily(machine)
     ? await import('../audio/worklet-wordproc.js?worker&url')
-    : await import('../audio/worklet-typewriter.js?worker&url');
+    : isFaxFamily(machine)
+      ? await import('../audio/worklet-fax.js?worker&url')
+      : await import('../audio/worklet-typewriter.js?worker&url');
   return m.default;
 }

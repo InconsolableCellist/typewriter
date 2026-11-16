@@ -23,6 +23,10 @@
       #loader.wp { background: radial-gradient(ellipse at center, #0c1410 0%, #050806 75%); color: #5dff9a; text-shadow: 0 0 6px rgba(93,255,154,.55); }
       #loader.wp .fill { background: #5dff9a; box-shadow: 0 0 8px #5dff9a; }
       #loader.wp .bar { background: rgba(93,255,154,.12); }
+      /* The fax: a strip of thermal paper, its print coming in line by line. */
+      #loader.fax { background: radial-gradient(ellipse at center, #f4f1e8 0%, #d9d5ca 80%); color: #26252e; }
+      #loader.fax .fill { background: #26252e; }
+      #loader.fax .bar { height: 4px; background: rgba(38,37,46,.1); }
       #loader .cursor { display: inline-block; width: .6em; animation: blink 1s steps(1) infinite; }
       @keyframes blink { 50% { opacity: 0; } }
     </style>
@@ -41,6 +45,7 @@
         var wp = /machine=wordproc/.test(location.search) || (!/machine=/.test(location.search) && (function () { try { return /wordproc/.test(localStorage.getItem('machine') || ''); } catch (e) { return false; } })());
         var l = document.getElementById('loader');
         if (wp) { l.classList.add('wp'); document.getElementById('loaderTitle').textContent = 'IBM Displaywriter System'; document.getElementById('loaderSub').textContent = 'word processor, c. 1980'; }
+        else if (/machine=faxfo70/.test(location.search)) { l.classList.add('fax'); document.getElementById('loaderTitle').textContent = 'SHARP FO-70'; document.getElementById('loaderSub').textContent = 'facsimile, c. 1999'; }
       })();
     </script>
     <canvas id="c"></canvas>

@@ -117,3 +117,20 @@ The firmware also listens to the port's tones directly while TEL/FAX or A.M. mod
 
 `{ load(key) -> value | null, save(key, value) }`, synchronous (the kit preloads IndexedDB or uses localStorage).
 Keys `faxfo70.settings` and `faxfo70.journal`, JSON values. `setup.js`'s `MemoryStorage` is the Node one.
+
+## On the mechanism host: `sim-devices.js`
+
+`attachToSim(sim, { line, sampleLine, lcd, beeper, storage, options })` builds these devices over a `FaxSim`
+(`docs/fax/architecture.md` 4.3) and attaches the firmware with `sim.attachFirmware({ nextT, service, device })`.
+Host events are queued in `device()` and handled at the next `service()`, one substep later, because a controller
+emits them from inside its own bookkeeping.
+
+| Firmware device | Host |
+|---|---|
+| `feeder.load` / `feed` / `eject` | `ctl.scan` `prefeed` / `line` (one per line) / `eject`. Replies: `ready` (its `at` pose is kept), `line`, `ejected`, `error` (`misfeed` becomes a jam) |
+| `scanner.readLine(k)` | The `ready` pose with `y` advanced by k line pitches, passed to `sampleLine(pose, res, params)`. That is the kit's job: its page image through the CIS model. With no sampler the sheet reads white |
+| `printer.print` | One `ctl.print` `line` per row: dots unpacked, energy 1.2 times `mech.printer.markEnergy` (1.5 times at DARK). `coverOpen` becomes `cover`, `noPaper` becomes `paper` |
+| `cutter.cut` | `ctl.print` `cut`. `cutterJam` becomes `jam` |
+| `ncu.seize` / `hold` | `ctl.liu` relay `cml`. `sim.liu.lineLoop()` is polled every 10 ms and passed to `line.loop()` |
+| `ncu.dial`, `line.port()` | `line`: a call-level line. This is `src/fax/remote/switchboard.js` now; the sample exchange can supply the same interface later. Set it after the firmware exists with `devices.setLine(sb)`, since it runs on `fw.clock` |
+| Unsolicited events | `scan/document`, `print/paper`, `print/cover {closed}`, `liu/hook {offHook}`, `panel/key {key, down}`. Key names are mapped by `SIM_KEYS`; VOLUME ▲ and VOLUME ▼ both map to VOLUME |

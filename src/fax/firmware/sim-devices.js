@@ -54,6 +54,7 @@ export class SimDevices {
     this.jobs = new Map();          // host op id -> { dev, kind, fwId, need, got, done }
     this.seq = 0;
     this.pose = null;               // the sheet at the read line, as `ready` reported it
+    this.fedM = 0;                  // how far it has been fed since (m)
     this.res = 'standard';
     this.loopShown = null;
     this.relays = { cml: false, hold: false };
@@ -146,7 +147,7 @@ export class SimDevices {
       else this._finish(e.id, job, { ok: false, error: e.error });
       return;
     }
-    if (job.kind === 'load' && e.ev === 'ready') { this.pose = e.at ?? this.sim.scanLine?.() ?? null; this._finish(e.id, job, { ok: true }); return; }
+    if (job.kind === 'load' && e.ev === 'ready') { this.pose = e.at ?? this.sim.scanLine?.() ?? null; this.fedM = 0; this._finish(e.id, job, { ok: true }); return; }
     if (job.kind === 'eject' && e.ev === 'ejected') {
       this.pose = null;
       this._finish(e.id, job, { ok: true });
@@ -171,10 +172,22 @@ export class SimDevices {
       load({ id }) { scan({ op: 'prefeed', id: self._job('feeder', 'load', id) }); },
       feed({ id, lines, vres }) {
         if (!lines) { self._post({ dev: 'feeder', ev: 'done', id, ok: true }); return; }
+        self.fedM += (lines * 1e-3) / LINES_PER_MM[vres ?? 'standard'];
         const hid = self._job('feeder', 'feed', id, lines);
         for (let i = 0; i < lines; i++) scan({ op: 'line', id: hid, res: vres ?? 'standard' });
       },
-      eject({ id }) { scan({ op: 'eject', id: self._job('feeder', 'eject', id) }); },
+      // What the firmware knows from the lines it fed: where the sheet's tail is. Once it is past the registration
+      // sensor, that sensor may already see the next sheet close behind, so the sheet is run out by count.
+      eject({ id }) {
+        const P = sim.m?.mech?.feeder?.path, adv = sim.m?.mech?.drive?.advancePerStep;
+        const pose = self.pose;
+        let steps = null;
+        if (P && adv && pose?.length != null) {
+          const tail = P.readLine + pose.y + self.fedM - pose.length;
+          if (tail > P.regSensor + 0.001) steps = Math.max(0, Math.ceil((P.feed - tail + 0.004) / adv));
+        }
+        scan({ op: 'eject', id: self._job('feeder', 'eject', id), steps });
+      },
     };
     this.scanner = {
       params: null,

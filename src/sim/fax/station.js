@@ -57,14 +57,16 @@ export function thermalModel(head = new ThermalHead({ paper: new ThermalPaper() 
     printLine({ dots, energy, coated, coord, t }) {
       const out = new Uint8Array(dots.length);
       const gap = lastT < 0 ? 1 : t - lastT;
-      if (gap > 2) head.idle(gap);
+      // The head stands between lines. Its phases are exact matrix exponentials, which overflow past a fraction of a
+      // second, so a long pause is stepped in short pieces; after a second the dots are at the substrate's temperature.
+      if (gap > 0.15) for (let s = 0; s < Math.min(gap, 1); s += 0.1) head.idle(0.1);
       const pitchMm = lastT < 0 ? 1 / 7.7 : Math.min(1, Math.max(0.03, (coord - lastC) * 1000));
       lastT = t; lastC = coord;
       if (!coated) return out;
       row.fill(0);
       for (let i = 0; i < dots.length; i++) if (dots[i]) row[i >>> 3] |= 0x80 >>> (i & 7);
       const e = typeof energy === 'number' ? energy : energy[0];
-      const r = head.printLine(row, { strobeMs: (e / P) * 1000, periodMs: Math.min(2000, Math.max(5, gap * 1000)), pitchMm });
+      const r = head.printLine(row, { strobeMs: (e / P) * 1000, periodMs: Math.min(150, Math.max(5, gap * 1000)), pitchMm });
       for (let i = 0; i < out.length; i++) out[i] = Math.round(r.density[i] * 255);
       return out;
     },

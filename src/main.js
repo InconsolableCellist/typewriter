@@ -26,7 +26,7 @@ async function main() {
   canvas.addEventListener('webglcontextlost', () => console.warn('webgl context lost'));
   const machines = Object.values(MACHINES).filter((m) => !UNLISTED.has(m.id) || params.has('wp') || m.id === machine.id);
   // The glyph faces are needed before the first frame by every kit: fetched while the kit's chunks load.
-  const glyphs = loadGlyphs(machine.glyphs);
+  const glyphs = machine.glyphs === false ? Promise.resolve(null) : loadGlyphs(machine.glyphs);   // the fax has no type
   glyphs.catch(() => {});   // the kit awaits it and reports a failure
   const kit = await KITS[machine.action.type]();
   await kit.mount({ canvas, params, machine, machines, onPick: pick, glyphs });

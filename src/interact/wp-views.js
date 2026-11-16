@@ -1,4 +1,5 @@
-// Where the word processor's camera may stand (docs/displaywriter/architecture.md 3.5). Named stations, each a unit
+// Where the word processor's camera may stand (docs/displaywriter/architecture.md 3.5), and the fax's through the same
+// code with its own graph (WP_GRAPH below is the default; src/machine/fax-views.js the fax's). Named stations, each a unit
 // seen head-on at a natural distance, joined left and right like the rooms of a point-and-click game; within a station,
 // focus items: a closer look at one part. The camera moves only when the user asks: an edge arrow, a station's or a
 // focus item's name, a click on a highlighted object, Back, or the free view the user switches on. Pure data and
@@ -43,13 +44,20 @@ export const FOCUS = {
 
 const STATION_ORDER = ['desk', 'printer', 'computer', 'diskettes', 'shelf'];
 
-/** The station or focus item named `id` ("computer", or "computer/keyboard"), or null. */
-export function viewSpec(id) {
+/**
+ * A view graph as data: { stations, focus, order, home }. The word processor's is the default everywhere below; another
+ * machine passes its own (the fax's, src/machine/fax-views.js), with the same shapes.
+ */
+export const WP_GRAPH = Object.freeze({ stations: STATIONS, focus: FOCUS, order: STATION_ORDER, home: 'desk' });
+
+/** The station or focus item named `id` ("computer", or "computer/keyboard") in `graph`, or null. */
+export function viewSpec(id, graph = WP_GRAPH) {
+  const { stations, focus } = graph;
   const [s, f] = String(id).split('/');
-  if (!STATIONS[s]) return null;
-  if (!f) return { id: s, station: s, focus: null, ...STATIONS[s] };
-  if (!STATIONS[s].items.includes(f)) return null;
-  return { id: `${s}/${f}`, station: s, focus: f, ...FOCUS[f] };
+  if (!Object.hasOwn(stations, s)) return null;
+  if (!f) return { id: s, station: s, focus: null, ...stations[s] };
+  if (!stations[s].items.includes(f)) return null;
+  return { id: `${s}/${f}`, station: s, focus: f, ...focus[f] };
 }
 
 /** The old camera presets (?cam=) as views. */
@@ -151,8 +159,8 @@ export function framePose(b, view, aspect, fovDeg) {
 }
 
 /** The pose for view `id` given the named boxes. */
-export function poseOf(id, boxes, aspect, fovDeg) {
-  const v = viewSpec(id);
+export function poseOf(id, boxes, aspect, fovDeg, graph = WP_GRAPH) {
+  const v = viewSpec(id, graph);
   return framePose(unionBox(v.boxes.map((n) => boxes[n]).filter(Boolean)), v.view, aspect, fovDeg);
 }
 
@@ -164,9 +172,10 @@ export function poseOf(id, boxes, aspect, fovDeg) {
  * cameraPose() reads the camera, so leaving the free view goes to the nearest station.
  */
 export class ViewNav {
-  constructor({ glide, poseOf: pose, cameraPose, start = 'desk', context = null }) {
+  constructor({ glide, poseOf: pose, cameraPose, start = null, context = null, graph = WP_GRAPH }) {
     this.glide = glide; this.pose = pose; this.cameraPose = cameraPose; this.context = context;
-    const s = viewSpec(start) ?? viewSpec('desk');
+    this.graph = graph;
+    const s = viewSpec(start ?? graph.home, graph) ?? viewSpec(graph.home, graph);
     this.station = s.station; this.focusId = s.focus; this.free = false;
     this.listeners = new Set();
   }
@@ -175,6 +184,7 @@ export class ViewNav {
 
   /** What the bar and the arrows show. */
   where() {
+    const { stations: STATIONS, focus: FOCUS, order, home } = this.graph;
     const st = STATIONS[this.station];
     const neighbour = (n) => (n ? { id: n, label: STATIONS[n].label } : null);
     return {
@@ -182,8 +192,8 @@ export class ViewNav {
       label: this.free ? 'Free view' : this.focusId ? `${st.label} › ${FOCUS[this.focusId].label}` : st.label,
       left: this.free ? null : neighbour(st.left), right: this.free ? null : neighbour(st.right),
       items: st.items.map((f) => ({ id: f, label: FOCUS[f].label, note: FOCUS[f].note?.(this.context) ?? '', current: f === this.focusId })),
-      stations: STATION_ORDER.map((n) => ({ id: n, label: STATIONS[n].label, current: n === this.station && !this.focusId })),
-      canBack: this.free || !!this.focusId || this.station !== 'desk',
+      stations: order.map((n) => ({ id: n, label: STATIONS[n].label, current: n === this.station && !this.focusId })),
+      canBack: this.free || !!this.focusId || this.station !== home,
     };
   }
 
@@ -193,10 +203,11 @@ export class ViewNav {
    */
   targets() {
     if (this.free) return [];
+    const { stations: STATIONS, focus: FOCUS, order, home } = this.graph;
     const st = STATIONS[this.station];
     const out = st.items.filter((f) => f !== this.focusId).map((f) => ({ id: `${this.station}/${f}`, kind: 'focus', label: FOCUS[f].label, boxes: FOCUS[f].boxes }));
-    for (const n of STATION_ORDER) {
-      if (n === 'desk' || n === this.station) continue;
+    for (const n of order) {
+      if (n === home || n === this.station) continue;
       out.push({ id: n, kind: 'station', label: STATIONS[n].label, boxes: STATIONS[n].boxes });
     }
     if (this.focusId) out.push({ id: this.station, kind: 'station', label: st.label, boxes: st.boxes });
@@ -208,7 +219,7 @@ export class ViewNav {
 
   /** Goes to a station or a focus item ("printer", "printer/panel"); leaves the free view. */
   go(id) {
-    const v = viewSpec(id);
+    const v = viewSpec(id, this.graph);
     if (!v) return false;
     this.station = v.station; this.focusId = v.focus; this.free = false;
     this.glide(this.pose(v.id), v.id);
@@ -217,14 +228,14 @@ export class ViewNav {
   }
 
   focus(item) { return this.go(`${this.station}/${item}`); }
-  left() { const n = STATIONS[this.station].left; return !this.free && !!n && this.go(n); }
-  right() { const n = STATIONS[this.station].right; return !this.free && !!n && this.go(n); }
+  left() { const n = this.graph.stations[this.station].left; return !this.free && !!n && this.go(n); }
+  right() { const n = this.graph.stations[this.station].right; return !this.free && !!n && this.go(n); }
 
   /** Back: from the free view to the nearest station, from a focus item to its station, from a station to the desk. */
   back() {
     if (this.free) return this.setFree(false);
     if (this.focusId) return this.go(this.station);
-    if (this.station !== 'desk') return this.go('desk');
+    if (this.station !== this.graph.home) return this.go(this.graph.home);
     return false;
   }
 
@@ -240,8 +251,8 @@ export class ViewNav {
   /** The station whose head-on view is closest to the camera now, its target counting double. */
   nearestStation() {
     const cam = this.cameraPose();
-    let best = 'desk', bestD = Infinity;
-    for (const n of STATION_ORDER) {
+    let best = this.graph.home, bestD = Infinity;
+    for (const n of this.graph.order) {
       const p = this.pose(n);
       const d = Math.hypot(...sub(p.position, cam.position)) + 2 * Math.hypot(...sub(p.target, cam.target));
       if (d < bestD) { bestD = d; best = n; }

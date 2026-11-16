@@ -55,7 +55,7 @@ export default {
     paperExit: [[-0.060, 0.050, 0.116], [0.130, 0.058, 0.120]],        // the printed strip leaves at the front [A]
     documentExit: [[-0.060, 0.012, 0.116], [0.130, 0.020, 0.120]],     // the scanned sheet below it [A]
     rollBay: [[-0.070, 0.020, -0.030], [0.140, 0.080, 0.100]],         // the roll lies loose under the panel [M]
-    rear: [[-0.152, 0.010, -0.120], [0.152, 0.060, -0.116]],           // the jacks: LINE and TEL [S: TEL/LIU board]
+    rear: [[-0.152, 0.010, -0.118], [0.152, 0.060, -0.114]],           // the jacks: LINE and TEL [S: TEL/LIU board]
   },
 
   deskLayout: {

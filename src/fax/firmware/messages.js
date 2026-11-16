@@ -1,123 +1,106 @@
 // Every fixed text the FO-70's 16-digit LCD shows, in one table, and the error codes printed on reports.
 //
-// mark: 'S'  the wording as printed in the Sharp FO-50/FO-70 service manual (docs/fax/refs/sharp_fo70_service_manual.pdf),
-//            `page` its page (the manual's own number, then the PDF's). The manual shows only the texts its procedures
-//            pass through: power on, the diagnostic mode, the quick reference guide and the dial mode setting.
-//       'O'  quoted by a search summary of the operation manual's "Messages and Signals" (research.md 8; that manual
-//            is not in hand): its wording is likely but not read here.
-//       'A'  ours: plausible Sharp wording of the period, until the operation manual is read.
+// mark: 'S'  the wording as printed in the owner's manuals, `page` where: "OM p.N" the FO-10/FO-50/FO-70 operation
+//            manual (docs/fax/refs/sharp_fo10_50_70_operation_manual.pdf; page N is the printed page, its figure is
+//            PDF page N + 102), "SM p.N-M" the service manual (docs/fax/refs/sharp_fo70_service_manual.pdf). The
+//            operation manual's "Messages and Signals" (OM p.90-91) and its procedures' display figures are the
+//            source for what a user sees; the service manual's for power on and the diagnostics.
+//       'A'  ours: a text the manuals do not show (what the LCD says while dialling or sending, for instance).
 // Texts are at most 16 characters, in the LCD's character set (panel.js).
 
 const S = (text, page, note) => ({ text, mark: 'S', page, ...(note ? { note } : {}) });
-const O = (text, note) => ({ text, mark: 'O', ...(note ? { note } : {}) });
 const A = (text, note) => ({ text, mark: 'A', ...(note ? { note } : {}) });
 
 export const MESSAGES = Object.freeze({
-  // Power on (the power-on sequence, p.7-2/pdf80): the machine has no power switch (p.1-4).
-  WAIT_MOMENT:     S('WAIT A MOMENT', 'p.7-2/pdf80', 'while the CPU and modem initialise; STOP held here offers the memory clear'),
-  MEMORY_CLEAR_Q:  S('MEMORY CLEAR?', 'p.7-2/pdf80', 'START clears; nothing for 3 s returns to standby'),
-  MEMORY_CLEARED:  S('MEMORY CLEARED', 'p.7-2/pdf80'),
-  // Faults.
-  CHECK_PAPER:     O('CHECK PAPER', 'thermal paper jammed or not loaded properly; also used here for an empty roll and a cutter jam [A]'),
-  COVER_OPEN:      O('COVER OPEN', 'the operation panel is open (the door sensor, p.4-3)'),
-  DOC_JAMMED:      S('DOCUMENT JAMMED', 'p.1-7/pdf12', 'the original does not feed; START tries again'),
-  LINE_ERROR:      O('LINE ERROR', 'transmission or reception failed; STOP clears it'),
-  // Standby. The clock line itself is built in main.js: "05-NOV 10:30" with an arrow to the reception mode's legend
-  // printed by the LCD window (p.1-9/pdf14).
-  DOC_READY:       A('DOCUMENT READY'),
-  SET_CLOCK:       A('SET DATE & TIME', 'shown in turn with the clock line after a cold start'),
-  // Resolution: the key's settings (the resolutions themselves, p.1-1).
-  RES_STANDARD:    A('STANDARD'),
-  RES_FINE:        A('FINE'),
-  RES_SUPERFINE:   A('SUPER FINE'),
-  RES_HALFTONE:    A('HALF TONE'),
-  // Dialling and sending.
-  ENTER_FAX_NO:    A('ENTER FAX #'),
-  SPEED_NO:        A('SPEED # (06-40)', 'speed dial numbers 06-40, 01-05 on the rapid keys (p.1-9)'),
-  NOT_STORED:      A('NOT STORED'),
+  // Power on (SM p.7-2/pdf80): the machine has no power switch (OM p.13).
+  WAIT_MOMENT:     S('WAIT A MOMENT', 'SM p.7-2', 'while the CPU and modem initialise; STOP here offers the memory clear'),
+  MEMORY_CLEAR_Q:  S('MEMORY CLEAR?', 'SM p.7-2', 'START clears; nothing for 3 s returns to standby'),
+  MEMORY_CLEARED:  S('MEMORY CLEARED', 'SM p.7-2'),
+  // Messages and Signals, display messages (OM p.90-91), in the manual's order.
+  CHECK_PAPER:     S('CHECK PAPER', 'OM p.90', 'the thermal paper is jammed or is not loaded properly'),
+  COVER_OPEN:      S('COVER OPEN', 'OM p.90', 'the operation panel is open'),
+  DOC_JAMMED:      S('DOCUMENT JAMMED', 'OM p.90', 'START tries to feed it out (OM p.92)'),
+  FUNCTION_MODE:   S('FUNCTION MODE', 'OM p.90', 'the FUNCTION key has been pressed'),
+  HOLD:            S('HOLD', 'OM p.90', 'HOLD/SEARCH during a phone conversation'),
+  LINE_BUSY:       S('LINE BUSY', 'OM p.90', 'busy or no answer on automatic dialling; STOP clears it'),
+  LINE_ERROR:      S('LINE ERROR', 'OM p.90', 'transmission or reception was not successful; STOP clears it'),
+  NO_DATA:         S('NO DATA', 'OM p.90', 'a search with no numbers stored'),
+  NOT_STORED:      S('NO # STORED', 'OM p.90', 'a rapid key or speed dial number with no number in it'),
+  OFF_HOOK:        S('OFF HOOK', 'OM p.90', 'the handset left off after dialling and sending a fax'),
+  ON_HOOK_DIAL:    S('ON HOOK DIAL', 'OM p.91', 'SPEAKER pressed: waiting for you to dial'),
+  OUT_OF_PAPER:    S('OUT OF PAPER', 'OM p.91, p.19'),
+  OVER_HEAT:       S('OVER HEAT', 'OM p.91', 'the print head has overheated'),
+  PAPER_JAMMED:    S('PAPER JAMMED', 'OM p.91, p.93'),
+  DOC_READY:       S('READY TO SEND', 'OM p.91, p.33', 'a document is loaded'),
+  RECALLING:       S('RECALLING', 'OM p.91', 'busy or no answer: the machine will redial'),
+  SEARCH_DIAL:     S('SEARCH DIAL', 'OM p.91', 'HOLD/SEARCH pressed: # or * searches'),
+  TOTAL_PAGES:     S('TOTAL PAGE(S)', 'OM p.91', '"TOTAL PAGE(S) 01": pages transmitted, received or copied'),
+  // Receiving.
+  RECEIVING:       S('RECEIVING', 'OM p.55', 'TEL mode: the handset can be replaced'),
+  POLLING:         S('POLLING', 'OM p.80', 'E/POLL pressed after dialling; replace the handset'),
+  // Caller ID (OM p.71-72).
+  NO_SERVICE:      S('NO SERVICE', 'OM p.71'),
+  CID_ERROR:       S('CALLER-ID ERROR', 'OM p.71'),
+  PRIVATE_CALL:    S('PRIVATE CALL', 'OM p.71'),
+  REVIEWING_CALLS: S('REVIEWING CALLS', 'OM p.72', 'HOLD/SEARCH 2'),
+  // Volume (OM p.29-30): one VOLUME key, the speaker's while SPEAKER is on, the ringer's otherwise.
+  SPEAKER_VOL:     S('SPEAKER:', 'OM p.29', 'SPEAKER: MIDDLE -> HIGH -> LOW'),
+  RINGER_VOL:      S('RINGER:', 'OM p.30', 'RINGER: MIDDLE -> HIGH -> RINGER OFF: OK? -> LOW'),
+  RINGER_OFF_Q:    S('RINGER OFF: OK?', 'OM p.30', 'START turns the ringer off'),
+  // The FUNCTION modes (setup.js).
+  M_LIST:          S('LISTING MODE', 'OM p.81', 'FUNCTION 2'),
+  L_JUNK:          S('JUNK #', 'OM p.81', '* in LISTING MODE: the Anti Junk Number List'),
+  L_TEL:           S('TELEPHONE #', 'OM p.81', '# in LISTING MODE: the Telephone Number List'),
+  M_ENTRY:         S('ENTRY MODE', 'OM p.20', 'FUNCTION 3'),
+  M_FAXTEL:        S('FAX/TEL. # MODE', 'OM p.41', 'FUNCTION 3 #; the quick reference and the service manual print "FAX/TEL # MODE"'),
+  SET_CLEAR:       S('1=SET,2=CLEAR', 'OM p.41, p.77'),
+  FAXTEL_SET:      S('FAX/TEL. # SET', 'OM p.41'),
+  ENTER_SPEED:     S('ENTER SPEED #', 'OM p.41'),
+  M_OWN:           S('OWN NUMBER SET', 'OM p.21', 'FUNCTION 3 # #'),
+  ENTER_FAX_NO:    S('ENTER FAX #', 'OM p.21'),
+  ENTER_YOUR_NAME: S('ENTER YOUR NAME', 'OM p.21'),
+  M_DATE:          S('DATE & TIME SET', 'OM p.23, p.24', 'FUNCTION 3 # # #'),
+  M_JUNK:          S('STORE JUNK #', 'OM p.77', 'FUNCTION 3 * *'),
+  M_PRIORITY:      S('PRIORITY CALL #', 'OM p.73', 'FUNCTION 3 *'),
+  M_OPTION:        S('OPTION SETTING', 'OM p.69', 'FUNCTION 4'),
+  PRESS_STAR_HASH: S('PRESS * OR #', 'OM p.69', 'alternates with OPTION SETTING'),
+  TONE_SELECTED:   S('TONE SELECTED', 'SM p.2-1'),
+  PULSE_SELECTED:  S('PULSE SELECTED', 'SM p.2-1'),
+  // Ours: what the manuals do not show.
+  ENTER_NAME:      A('ENTER NAME', 'name entry for an auto-dial number (OM p.42 shows no display)'),
+  SET_CLOCK:       A('DATE & TIME SET', 'after a cold start, in turn with the clock line'),
+  SPEED_NO:        A('ENTER SPEED #', 'SPEED DIAL pressed: two digits 01-40 (OM p.46 shows no display)'),
+  JUNK_NO:         A('ENTER (1-5)', 'STORE JUNK #: the number that identifies the entry (OM p.78 shows no display)'),
   DIALING:         A('DIALING'),
   SENDING:         A('SENDING'),
-  POLLING:         A('POLLING'),
-  LINE_BUSY:       A('LINE BUSY'),
-  REDIAL_WAIT:     A('REDIAL WAIT', 'followed by the minutes and seconds left'),
-  TX_OK:           A('TRANSMISSION OK'),
-  RX_OK:           A('RECEPTION OK'),
-  // Receiving and the telephone.
-  RECEIVING:       S('RECEIVING', 'p.1-9/pdf14', 'the TEL mode figure: handset, beeps, START, RECEIVING'),
   INCOMING:        A('INCOMING CALL'),
   PICK_UP:         A('PICK UP HANDSET', 'TEL/FAX mode while the machine pseudo-rings a voice call'),
   TELEPHONE:       A('TELEPHONE'),
-  ON_HOOK_DIAL:    A('ON-HOOK DIAL'),
-  ON_HOLD:         A('ON HOLD'),
-  BLOCKED:         A('RECEPT. BLOCKED'),
-  // Copy and lists.
+  BLOCKED:         A('RECEPT. BLOCKED', 'a junk fax refused'),
   COPYING:         A('COPYING'),
   PRINTING:        A('PRINTING'),
-  // Volume (one VOLUME key: the speaker's while SPEAKER is on, the ringer's otherwise, p.1-2).
-  SPEAKER_VOL:     A('SPEAKER:'),
-  RINGER_VOL:      A('RINGER:'),
-  // The FUNCTION key's modes. FUNCTION 3 then # steps through the entry modes; FUNCTION 4 is the option setting,
-  // where # (or *) steps through the options and the display alternates between a name and its prompt.
-  M_ENTRY:         A('ENTRY MODE', 'what FUNCTION 3 shows before the first #: not in the service manual'),
-  M_FAXTEL:        S('FAX/TEL # MODE', 'p.1-9/pdf14', 'FUNCTION 3 #: storing and clearing auto dial numbers'),
-  M_OWN:           S('OWN NUMBER SET', 'p.1-9/pdf14', 'FUNCTION 3 # #: the own fax number and name'),
-  M_DATE:          S('DATE & TIME SET', 'p.1-9/pdf14', 'FUNCTION 3 # # #'),
-  M_JUNK:          A('JUNK FAX # MODE', 'a fourth entry mode of ours for the junk fax numbers (their list exists, p.2-3)'),
-  M_OPTION:        S('OPTION SETTING', 'p.2-1/pdf16', 'FUNCTION 4'),
-  M_LIST:          A('LIST MODE', 'FUNCTION 6: the reports and lists; not in the service manual'),
-  PRESS_STAR_HASH: S('PRESS * OR #', 'p.2-1/pdf16', 'alternates with OPTION SETTING'),
-  STORE_CLEAR:     A('1=STORE 2=CLEAR', 'FAX/TEL # MODE: "Press 1 to store a number or 2 to clear a number" (p.1-9)'),
-  ENTER_NAME:      A('ENTER NAME'),
-  STORED:          A('STORED'),
-  CLEARED:         A('CLEARED'),
-  // Options (OPTION SETTING). DIAL MODE and its prompts are the manual's; the others are the switches it marks OPTION
-  // (rings SW-D1, volumes and the polling key SW-J1, the transaction report SW-J3, the remote code SW-F1, the A.M.
-  // switches SW-G1 and G4, p.2-5 to 2-12), named by us.
-  O_DIAL:          S('DIAL MODE', 'p.2-1/pdf16'),
-  O_DIAL_CHOICE:   S('1=TONE, 2=PULSE', 'p.2-1/pdf16'),
-  TONE_SELECTED:   S('TONE SELECTED', 'p.2-1/pdf16'),
-  PULSE_SELECTED:  S('PULSE SELECTED', 'p.2-1/pdf16'),
-  O_RINGS:         A('# OF RINGS'),
-  O_RINGS_CHOICE:  A('ENTER 1-9'),
-  O_REPORT:        A('TRANSACTION REP.'),
-  O_REPORT_CHOICE: A('1=ERR 2=ON 3=OFF'),
-  O_POLLING:       A('POLLING KEY'),
-  O_YES_NO:        A('1=YES, 2=NO'),
-  O_REMOTE:        A('REMOTE RX CODE'),
-  O_REMOTE_CHOICE: A('ENTER 0-9'),
-  O_AM_FULL:       A('A.M. FULL -> FAX'),
-  O_CALLER_ID:     A('CALLER ID'),
-  O_DISTINCT:      A('DISTINCTIVE RING'),
-  O_BLOCKING:      A('JUNK FAX BLOCK'),
-  O_CONTRAST:      A('CONTRAST'),
-  O_CONTRAST_CHOICE: A('1=AUTO, 2=DARK', 'contrast "Automatic/Dark selectable" (p.1-1)'),
-  SELECTED:        A('SELECTED', 'after a choice: "<choice> SELECTED", as TONE SELECTED'),
-  // Lists (LIST MODE) [A].
-  L_TEL:           A('TEL # LIST'),
-  L_SETUP:         A('OPTION LIST'),
-  L_ACTIVITY:      A('ACTIVITY REPORT'),
-  L_TRANS:         A('TRANS. REPORT'),
-  L_HELP:          A('HELP LIST'),
-  // The diagnostic mode: FUNCTION 9 * 8 # 7 (p.2-2/pdf17). The ROM version for 2 s, then DIAG MODE; START, and the
-  // items by * and # or their direct key. The item names are the manual's table; that the LCD shows them as written
-  // is ours [A].
-  ROM_VER:         S('ROM Ver. FZL0 *', 'p.2-2/pdf17', 'FZK0 on the FO-50'),
-  DIAG_MODE:       S('DIAG MODE', 'p.2-2/pdf17'),
-  D_SOFT:          S('SOFT SWITCH MODE', 'p.2-2/pdf17'),
-  D_ROMRAM:        S('ROM & RAM CHECK', 'p.2-2/pdf17'),
-  D_AGING:         S('AGING MODE', 'p.2-2/pdf17'),
-  D_PANEL:         S('PANEL CHECK MODE', 'p.2-2/pdf17', 'printed "PANEL CKECK MODE" in the item table'),
-  D_PATTERN:       S('CHECK PATTERN', 'p.2-2/pdf17'),
-  D_SIGNAL:        S('SIGNAL SEND MODE', 'p.2-2/pdf17'),
-  D_MEMCLR:        S('MEMORY CLEAR', 'p.2-2/pdf17'),
-  D_SHADING:       S('SHADING MODE', 'p.2-2/pdf17'),
-  D_BLACK:         S('ALL BLACK PRINT', 'p.2-2/pdf17'),
-  D_FEEDER:        S('AUTO FEEDER MODE', 'p.2-2/pdf17'),
-  D_ESEND:         S('ENTRY DATA SEND', 'p.2-2/pdf17'),
-  D_ERECV:         S('ENTRY DATA RECEIVE', 'p.2-2/pdf17', 'eighteen letters: the LCD shows its first sixteen'),
-  D_CUTTER:        S('CUTTER AGING', 'p.2-2/pdf17'),
-  D_COUNTRY:       S('COUNTRY SELECT', 'p.2-2/pdf17'),
+  // The diagnostic mode: FUNCTION 9 * 8 # 7 (SM p.2-2/pdf17). The ROM version for 2 s, then DIAG MODE; START, and the
+  // items by * and # or their direct key. The item names are the manual's table; that the LCD shows them so is ours.
+  ROM_VER:         S('ROM Ver. FZL0 *', 'SM p.2-2', 'FZK0 on the FO-50'),
+  DIAG_MODE:       S('DIAG MODE', 'SM p.2-2'),
+  D_SOFT:          S('SOFT SWITCH MODE', 'SM p.2-2'),
+  D_ROMRAM:        S('ROM & RAM CHECK', 'SM p.2-2'),
+  D_AGING:         S('AGING MODE', 'SM p.2-2'),
+  D_PANEL:         S('PANEL CHECK MODE', 'SM p.2-2', 'printed "PANEL CKECK MODE" in the item table'),
+  D_PATTERN:       S('CHECK PATTERN', 'SM p.2-2'),
+  D_SIGNAL:        S('SIGNAL SEND MODE', 'SM p.2-2'),
+  D_MEMCLR:        S('MEMORY CLEAR', 'SM p.2-2'),
+  D_SHADING:       S('SHADING MODE', 'SM p.2-2'),
+  D_BLACK:         S('ALL BLACK PRINT', 'SM p.2-2'),
+  D_FEEDER:        S('AUTO FEEDER MODE', 'SM p.2-2'),
+  D_ESEND:         S('ENTRY DATA SEND', 'SM p.2-2'),
+  D_ERECV:         S('ENTRY DATA RECV.', 'SM p.2-2', '"ENTRY DATA RECEIVE", eighteen letters: abbreviated [A]'),
+  D_CUTTER:        S('CUTTER AGING', 'SM p.2-2'),
+  D_COUNTRY:       S('COUNTRY SELECT', 'SM p.2-2'),
 });
+
+/** The resolution and contrast display [OM p.37]: "STANDARD  :AUTO" ... "HALF TONE :DARK". */
+export const resText = (res, contrast) => `${({ STANDARD: 'STANDARD', FINE: 'FINE', SUPERFINE: 'SUPER FINE', HALFTONE: 'HALF TONE' })[res].padEnd(10)}:${contrast}`;
 
 /** The text of a message. */
 export const msg = (id) => {
@@ -178,61 +161,66 @@ export const COMM_CODES = Object.freeze({
 });
 
 /**
- * The code for a failed call, by the table's rule: the side (TX: the FO-70 sent or polled... see below), the T.30
- * station's hangup reason, the last frame it heard (`lastRx`, 'BAD' for frames it could not read) and whether it fell
- * back. A poll is a reception (the FO-70 receives the pages). Returns null for a call that did not fail.
+ * The code for a failed call, by the table's rule: the side ('TX' the FO-70 sent; 'RX' it received, a poll included),
+ * the T.30 station's hangup reason and the last frame it heard (`lastRx`; 'BAD' for frames it could not read). The
+ * transaction report prints the codes 0 to 7 as COM.E-0 to COM.E-7 [OM p.51], so the rule keeps to them: a call the
+ * remote refused for capability (the table's 11) is filed under its final signal, DIS (1). Null for a call that did
+ * not fail.
  */
-export function commCode(side, { reason, lastRx = null, fellBack = false, pagesReceived = 0 } = {}) {
+export function commCode(side, { reason, lastRx = null } = {}) {
   if (reason === 'complete') return null;
   const f = lastRx;
   if (f === 'BAD') return 0;
   if (side === 'TX') {
-    if (reason === 'incompatible') return 11;
-    if (f == null || f === 'DCN') return 7;
     if (f === 'NSF' || f === 'DIS' || f === 'CSI') return 1;
-    if (f === 'CFR') return fellBack ? 12 : 2;
-    if (f === 'FTT') return reason === 'training-failed' ? 3 : 12;
+    if (f === 'CFR') return 2;
+    if (f === 'FTT') return 3;
     if (f === 'MCF') return 4;
     if (f === 'PIP' || f === 'PIN') return 5;
     if (f === 'RTN' || f === 'RTP') return 6;
     return 7;
   }
-  if (f == null || f === 'DCN') return 7;
-  if (f === 'NSS' || f === 'DCS' || f === 'TSI') return pagesReceived > 0 ? 9 : 1;
+  if (f === 'NSS' || f === 'DCS' || f === 'TSI') return 1;
   if (f === 'NSC' || f === 'DTC' || f === 'CIG') return 2;
-  if (f === 'EOP' || f === 'PRI-EOP') return f === 'EOP' ? 3 : 6;
-  if (f === 'EOM' || f === 'PRI-EOM') return f === 'EOM' ? 4 : 6;
-  if (f === 'MPS' || f === 'PRI-MPS') return f === 'MPS' ? 5 : 6;
-  if (f === 'CRP') return 10;
+  if (f === 'EOP') return 3;
+  if (f === 'EOM') return 4;
+  if (f === 'MPS') return 5;
+  if (f && f.startsWith('PRI-')) return 6;
   return 7;
 }
 
 /**
- * What a call or a job ended with, kept in the journal as `result`. A communication error (`comm`) is printed with
- * its code from the table above, kept with the entry as `code`; the others are the machine's own conditions, which the
- * service manual's table does not cover: their report words are ours [A] until the operation manual is read. `lcd` is
- * the message shown.
+ * What a call or a job ended with, kept in the journal as `result`. `note` is the transaction report's NOTE: OK,
+ * P.FAIL, JAM, NO PAPER, COM.E-0 to COM.E-7, CANCEL [OM p.51]; 'COM' prints COM.E- and the entry's `code` (commCode).
+ * `lcd` is the message shown. The report has no NOTE for a busy line or a refused junk fax: those are ours [A].
  */
 export const ERRORS = Object.freeze({
-  OK:          { comm: false, lcd: null,          text: 'OK' },
-  NO_LINE:     { comm: false, lcd: 'LINE_ERROR',  text: 'NO LINE' },
-  BUSY:        { comm: false, lcd: 'LINE_BUSY',   text: 'BUSY' },
-  NO_ANSWER:   { comm: true,  lcd: 'LINE_ERROR',  text: 'NO ANSWER' },
-  TRAINING:    { comm: true,  lcd: 'LINE_ERROR',  text: 'TRAINING FAILED' },
-  NO_RESPONSE: { comm: true,  lcd: 'LINE_ERROR',  text: 'NO RESPONSE' },
-  PAGE_REJ:    { comm: true,  lcd: 'LINE_ERROR',  text: 'PAGE REJECTED' },
-  REMOTE_DCN:  { comm: true,  lcd: 'LINE_ERROR',  text: 'DISCONNECTED' },
-  INCOMPAT:    { comm: true,  lcd: 'LINE_ERROR',  text: 'REMOTE CANNOT RECEIVE' },
-  LINE_DROP:   { comm: true,  lcd: 'LINE_ERROR',  text: 'LINE DISCONNECTED' },
-  RX_TIMEOUT:  { comm: true,  lcd: 'LINE_ERROR',  text: 'NO SIGNAL' },
-  STOPPED:     { comm: false, lcd: null,          text: 'STOP KEY' },
-  DOC_JAM:     { comm: false, lcd: 'DOC_JAMMED',  text: 'DOCUMENT JAMMED' },
-  PAPER:       { comm: false, lcd: 'CHECK_PAPER', text: 'PAPER OUT/JAMMED' },
-  COVER:       { comm: false, lcd: 'COVER_OPEN',  text: 'COVER OPEN' },
-  CUTTER:      { comm: false, lcd: 'CHECK_PAPER', text: 'CUTTER ERROR' },
-  NO_POLL:     { comm: true,  lcd: 'LINE_ERROR',  text: 'NOTHING TO POLL' },
-  BLOCKED:     { comm: false, lcd: 'BLOCKED',     text: 'JUNK FAX BLOCKED' },
+  OK:          { note: 'OK',       lcd: null },
+  NO_LINE:     { note: 'COM',      lcd: 'LINE_ERROR' },
+  BUSY:        { note: 'BUSY',     lcd: 'LINE_BUSY' },              // [A]
+  NO_ANSWER:   { note: 'COM',      lcd: 'LINE_BUSY' },              // LINE BUSY: "busy or the receiving fax machine doesn't answer" [OM p.90]
+  TRAINING:    { note: 'COM',      lcd: 'LINE_ERROR' },
+  NO_RESPONSE: { note: 'COM',      lcd: 'LINE_ERROR' },
+  PAGE_REJ:    { note: 'COM',      lcd: 'LINE_ERROR' },
+  REMOTE_DCN:  { note: 'COM',      lcd: 'LINE_ERROR' },
+  INCOMPAT:    { note: 'CANCEL',   lcd: 'LINE_ERROR' },             // "the other machine requested transmission using a function which your fax does not have" [OM p.51]
+  LINE_DROP:   { note: 'COM',      lcd: 'LINE_ERROR' },
+  RX_TIMEOUT:  { note: 'COM',      lcd: 'LINE_ERROR' },
+  STOPPED:     { note: 'CANCEL',   lcd: null },                     // STOP pressed [OM p.51]
+  DOC_JAM:     { note: 'JAM',      lcd: 'DOC_JAMMED' },
+  PAPER:       { note: 'NO PAPER', lcd: 'OUT_OF_PAPER' },
+  PAPER_JAM:   { note: 'JAM',      lcd: 'PAPER_JAMMED' },
+  COVER:       { note: 'JAM',      lcd: 'COVER_OPEN' },             // "Make sure the operation panel is shut securely" under JAM [OM p.51]
+  CUTTER:      { note: 'JAM',      lcd: 'PAPER_JAMMED' },
+  NO_POLL:     { note: 'CANCEL',   lcd: 'LINE_ERROR' },             // no document at the polled machine [OM p.51]
+  BLOCKED:     { note: 'BLOCKED',  lcd: 'BLOCKED' },                // [A]
 });
+
+/** The NOTE a journal entry prints: OK, COM.E-n and the rest [OM p.51]. */
+export function noteFor(entry) {
+  const e = ERRORS[entry.result] ?? ERRORS.LINE_DROP;
+  return e.note === 'COM' ? `COM.E-${entry.code ?? 7}` : e.note;
+}
 
 /** The result for a T.30 station's hangup reason (src/fax/t30/station.js). */
 export function errorForHangup(reason) {

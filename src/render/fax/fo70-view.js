@@ -12,12 +12,12 @@ export const FO70_URL = '/assets/models/fax_fo70.glb';
 const FONT = '"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif';
 const PX_PER_M = 8000;                 // the panel print: 8 px a millimetre
 
-/** The mechanism's key names (src/machine/faxfo70.js mech.panel.keys) to the GLB's: the photograph shows one VOLUME
- * key where the mechanism has volumeUp and volumeDown, so volumeDown has no cap of its own (an empty stand-in). */
+/** The mechanism's key names (src/machine/faxfo70.js mech.panel.keys) to the GLB's. One VOLUME key, as the service
+ * manual's panel drawing and key matrix show (p.1-2, p.6-15). */
 export const MECH_KEY_TO_NODE = {
   '*': 'star', '#': 'hash', rapid1: 'rapid_a', rapid2: 'rapid_b', rapid3: 'rapid_c', rapid4: 'rapid_d', rapid5: 'rapid_e',
   speedDial: 'speed_dial', redial: 'redial', holdSearch: 'hold', speaker: 'speaker', resolution: 'resolution',
-  function: 'function', volumeUp: 'volume', volumeDown: null, copyHelp: 'copy', start: 'start', stop: 'stop',
+  function: 'function', volume: 'volume', copyHelp: 'copy', start: 'start', stop: 'stop',
 };
 
 /** Every key node's name in the GLB, without the `fax_key_` prefix: the contract the kit binds controls to. */

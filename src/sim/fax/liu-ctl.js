@@ -1,4 +1,5 @@
-// The line interface's firmware (docs/fax/architecture.md 3.7): it switches the relays' coils and watches the hook
+// The line interface's firmware (docs/fax/architecture.md 3.7): it switches the line relay's coil (CML, the only relay
+// on the TEL/LIU board) and watches the hook
 // switch, reporting the handset lifted or put down once the contact has been steady for the debounce time. It never
 // writes a mechanical state: its only outputs are the relays' coil currents.
 
@@ -19,7 +20,7 @@ export class LiuCtl {
     this.nextT = this.pollT;
   }
 
-  /** { op: 'relay', name: 'cml' | 'tel', on }. */
+  /** { op: 'relay', name: 'cml', on }. */
   command(m) {
     if (m.op === 'relay' && m.name in this.coils) { this.coils[m.name] = m.on ? 1 : 0; this.io.setRelay(m.name, this.coils[m.name]); }
   }

@@ -14,12 +14,12 @@ export function makeFaxLayout(machine) {
     // Recording: paper paid out past the head (m), the leading end's strip coordinate, the roll's radius and the paper
     // left on it, the head down (1) or lifted, the cover's angle (rad, 0 shut).
     paperU: scalar(), paperLead: scalar(), rollRadius: scalar(), rollRemaining: scalar(), headDown: scalar(), cover: scalar(),
-    // Cutter: cam angle (rad, 0 home) and blade travel (0 up, 1 through).
+    // Cutter: its crank's angle (rad, 0 home) and blade travel (0 open, 1 through).
     cutterCam: scalar(), blade: scalar(),
-    // Telephone: the hook plunger's travel (m, 0 up), handset on its cradle, relay armatures (0..1 of travel).
-    hookX: scalar(), onCradle: scalar(), relays: arr(2),
+    // Telephone: the hook switch lever's travel (m, 0 up), handset on its cradle, the line relay's armature (0..1).
+    hookX: scalar(), onCradle: scalar(), relays: arr(1),
     // Sensors as the controllers read them, and the line loop (closed 1).
-    docSensor: scalar(), regSensor: scalar(), paperSensor: scalar(), cutterHome: scalar(), coverClosed: scalar(), lineLoop: scalar(),
+    docSensor: scalar(), regSensor: scalar(), paperSensor: scalar(), cutterHome: scalar(), camHome: scalar(), coverClosed: scalar(), lineLoop: scalar(),
     // Panel keys' stem travel (m).
     keyX: arr(machine.mech.panel.keys.length),
   });

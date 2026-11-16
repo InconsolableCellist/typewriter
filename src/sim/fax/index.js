@@ -1,9 +1,10 @@
 // FaxSim: the Sharp FO-70's mechanism host (docs/fax/architecture.md 3). It owns time, the hands, the bodies and their
 // controllers, the snapshot and the events, behind the same interface as WordprocSim (src/sim/wp/index.js), so the
 // LocalHost, the worklet (src/audio/worklet-fax.js) and Node tests drive it unchanged. The bodies follow the service
-// manual's blocks: the drive unit (drive-mech.js), the scanner frame's document path (scanner-mech.js), the head frame
-// unit with the platen, the roll and the cover (head-mech.js), the cutter (cutter-mech.js), the TEL/LIU board's relays
-// and hook switch (liu-mech.js) and the operation panel's keys (panel-mech.js). Each controller reaches its body only
+// manual's blocks: the drive unit with its one pulse motor (drive-mech.js), the scanner frame's document path
+// (scanner-mech.js), the head frame unit with the platen, the roll and the operation panel over them (head-mech.js),
+// the cutter, driven by the same motor (cutter-mech.js), the TEL/LIU board's line relay and hook switch (liu-mech.js)
+// and the operation panel's keys (panel-mech.js). Each controller reaches its body only
 // through a frozen `io` of drive commands and sensor reads (tests/fax_mech.test.js proves it).
 //
 // Plug points for the other parts of the fax (architecture.md 4): attachThermal(model) for the thermal head and paper
@@ -13,7 +14,7 @@ import { SUBSTEP_HZ } from '../rate.js';
 import { Inputs } from '../common/inputs.js';
 import { makeFaxLayout } from './layout.js';
 import { FAX_PORT } from './ports.js';
-import { DriveMech, SCAN, RECORD } from './drive-mech.js';
+import { DriveMech, SCAN, RECORD, CUT } from './drive-mech.js';
 import { ScannerMech } from './scanner-mech.js';
 import { HeadMech, defaultThermal } from './head-mech.js';
 import { CutterMech } from './cutter-mech.js';
@@ -33,11 +34,12 @@ export function driveIO(drive) {
 export function scanIO(scanner) {
   return Object.freeze({ docSensor: () => scanner.docSensor(), regSensor: () => scanner.regSensor() });
 }
-/** What the recorder's controller may touch: the head's strobe, the cutter motor, and its sensors. */
-export function printIO(head, cutter) {
+/** What the recorder's controller may touch: the head's strobe, and its sensors (the cutter and cam switches, the paper
+ * sensor and the door sensor). The cutter has no motor: the drive controller turns it. */
+export function printIO(head, cutter, drive) {
   return Object.freeze({
-    strobe: (dots, energy) => head.strobe(dots, energy), setCutter: (v, closed) => cutter.setDrive(v, closed),
-    cutterHome: () => cutter.home(), paperSensor: () => head.paperSensor(), coverClosed: () => head.coverClosed(),
+    strobe: (dots, energy) => head.strobe(dots, energy), cutterHome: () => cutter.home(), camHome: () => drive.camHome(),
+    paperSensor: () => head.paperSensor(), coverClosed: () => head.coverClosed(),
   });
 }
 /** What the line interface's controller may touch: the relay coils and the hook switch. */
@@ -70,7 +72,7 @@ export class FaxSim {
     this.drive = new DriveMech(this, M.drive);
     this.scanner = new ScannerMech(this, M.feeder);
     this.head = new HeadMech(this, M.printer, M.cover, { warm: !cold });
-    this.cutter = new CutterMech(this, M.cutter, this.head);
+    this.cutter = new CutterMech(this, M.cutter, this.head, this.drive.trains[CUT]);
     this.liu = new LiuMech(this, M.liu);
     this.panel = new PanelMech(this, M.panel);
     for (const b of [this.scanner, this.head, this.liu, this.panel]) b.registerDofs(this.inputs);
@@ -80,7 +82,7 @@ export class FaxSim {
     this.ctl = {
       drive: driveCtl,
       scan: new ScanCtl(M.feeder, M.drive.stepsPerLine, scanIO(this.scanner), driveCtl, (e) => emit(this.scanEvent(e))),
-      print: new PrintCtl({ printer: M.printer, cutter: M.cutter, stepsPerLine: M.drive.stepsPerLine }, printIO(this.head, this.cutter), driveCtl, emit),
+      print: new PrintCtl({ printer: M.printer, cutter: M.cutter, stepsPerLine: M.drive.stepsPerLine }, printIO(this.head, this.cutter, this.drive), driveCtl, emit),
       liu: new LiuCtl(M.liu, liuIO(this.liu), emit),
       panel: new PanelCtl(M.panel, panelIO(this.panel), emit),
     };
@@ -121,9 +123,9 @@ export class FaxSim {
       const nipScan = sc.awake || d.awake ? sc.step(h, d.trains[SCAN]) : 0;
       const nipRecord = hd.awake || d.awake ? hd.step(h, d.trains[RECORD]) : 0;
       if (sc.awake || hd.awake) d.wake();
-      d.integrate(h, nipScan, nipRecord);
+      d.integrate(h, nipScan, nipRecord, this.cutter.load());
+      this.cutter.after();
     }
-    this.cutter.step(h);
     this.liu.step(h);
     this.panel.step(h);
   }
@@ -198,7 +200,7 @@ export class FaxSim {
     s[L.hookX] = li.hx; s[L.onCradle] = li.onCradle ? 1 : 0;
     for (let k = 0; k < RELAYS.length; k++) s[L.relays + k] = li.rel[k].x / li.rel[k].d.travel;
     s[L.docSensor] = sc.docSensor() ? 1 : 0; s[L.regSensor] = sc.regSensor() ? 1 : 0; s[L.paperSensor] = hd.paperSensor() ? 1 : 0;
-    s[L.cutterHome] = cu.home() ? 1 : 0; s[L.coverClosed] = hd.coverClosed() ? 1 : 0; s[L.lineLoop] = li.lineLoop() ? 1 : 0;
+    s[L.cutterHome] = cu.home() ? 1 : 0; s[L.camHome] = d.camHome() ? 1 : 0; s[L.coverClosed] = hd.coverClosed() ? 1 : 0; s[L.lineLoop] = li.lineLoop() ? 1 : 0;
     for (let i = 0; i < this.panel.n; i++) s[L.keyX + i] = this.panel.x[i];
   }
 

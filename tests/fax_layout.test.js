@@ -72,8 +72,12 @@ test('camera presets look at the desk', () => {
 test('the definition marks its values and keeps the line pitches and drive consistent', async () => {
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../src/machine/faxfo70.js', import.meta.url), 'utf8');
-  for (const mark of ['[S', '[M', '[A']) assert.ok(src.includes(mark), mark);
-  assert.ok(/ASSUMED/.test(src) && /single-planetary/.test(src), 'the drive layout is marked assumed');
+  for (const mark of ['[S p.', '[M', '[A']) assert.ok(src.includes(mark), mark);
+  assert.ok(!/\[S\]|\[S:/.test(src), 'every documented value cites its page');
+  // The service manual settles the motor count (one) and that the cutter has no motor of its own (p.3-7).
+  assert.ok(/single-planetary/.test(src) && !('motor' in faxfo70.mech.cutter), 'one motor drives the cutter too');
+  assert.deepEqual(Object.keys(faxfo70.mech.liu.relays), ['cml'], 'one relay on the TEL/LIU board');
+  assert.ok(faxfo70.mech.panel.keys.includes('volume') && faxfo70.mech.panel.keys.length === 27, 'one VOLUME key, 27 keys');
   const D = faxfo70.mech.drive;
   for (const res of ['standard', 'fine', 'superfine']) {
     const pitch = D.stepsPerLine[res] * D.advancePerStep;

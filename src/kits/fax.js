@@ -263,6 +263,7 @@ function installFaxMachine({ sim, machine, geometry, view, parts, ui, params }) 
   const pile = new ReceivedPile({ pile: { x: pileAt.x - origin[0], z: pileAt.z - origin[2] } });
   const feeder = new FeederSheet();
   view.group.add(strip.mesh, pile.group, feeder.group);
+  sim.command({ dev: 'lcd', op: 'refresh' });
   const pages = new Map();          // sheet id -> page image, until it has gone through
   const queue = [];                 // sheets in the feeder, in feeding order
   let nextId = 1;

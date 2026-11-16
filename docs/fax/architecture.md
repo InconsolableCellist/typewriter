@@ -230,6 +230,55 @@ buzz at its commutation rate with its current, and short knocks for the onsets. 
 sprite is fetched (`audio.samples: false`). The worklet entry carries only `FaxSim`, its bodies and controllers,
 `src/sim/common/` and this engine; the line, modems and firmware join it in M6 and M7.
 
+### 5.1 M7: the working machine, its threads and its sound
+
+**One host, one clock, one thread at a time.** `src/sim/fax/station.js` (`FaxStation extends FaxSim`, built by
+`host-factory.js` and the fax worklet entry) is the whole machine: the mechanism; the firmware through
+`src/fax/firmware/sim-devices.js` on the host's clock (its `service(t)` runs after the controllers in the substep);
+the CIS and video stage over the sheet images (`src/fax/image/sheet-scan.js`); the thermal head and paper as the head's
+model (`thermalModel`); and the exchange of the card index (`src/fax/remote/`), whose calls are real modem audio on an
+`AudioLink`. Before the first gesture and with `?localsim` it runs on the page (`LocalHost`); after the gesture it runs
+in the fax AudioWorklet (plan 7.2), where `FaxAudioEngine` steps it 8 substeps an output sample. Nothing of a call is
+streamed between threads, so a slow frame cannot starve the modems or the speaker.
+
+**What crosses the thread boundary.** In: commands (`doc place` with the sheet's reflectance image, once; `doc raw`,
+the raw CIS lines; `panel tap` or `finger`; `handset`; the cover grab). Out, with the 250 Hz snapshots: each printed
+line's darkness (`print line`), the cut pieces (`print cut`), the LCD's text (`lcd`), the ringer (`ringer`), the
+firmware's settings and journal to store (`store`), and the feeder's `scan ready` and `feeder out`.
+
+**The CIS is read ahead.** A CIS line costs about a millisecond (1728 elements by about 49 taps), and the firmware's
+memory-less pacing (devices.md) reads a whole page when the station asks for it: 2.4 s for a fine page, which would
+stall the audio thread. So when a sheet reaches the read line (`scan ready`), the kit's worker
+(`src/fax/image/scan-worker.js`) reads its raw 8-bit lines at standard, fine and super fine from the same pose, with
+the same sensor seed, and hands them in; the host then runs only the video stage (shading, white tracking, threshold
+or halftone, microseconds a line). A line the worker has not delivered yet is read in place (a glitch at worst).
+
+**The handover.** The firmware's tasks are generators and cannot be copied, so `exportState()` carries the mechanism,
+the store (settings, journal) and the page images, and the audio thread boots the firmware afresh on them. The handover
+is at the first gesture, when the machine is standing by.
+
+**The line's audio** (`src/sim/fax/line-tap.js`). The switchboard steps its `AudioLink` in 20 ms blocks on the
+firmware's clock, each when its first sample is due; the tap keeps each block (what the FO-70 hears, plus 0.35 of its
+own transmission as sidetone) in a ring at 8 kHz. The exchange's call-progress tones (dial tone, ringback, busy,
+reorder) arrive only as events at call level, so the tap synthesises them from the North American tone plan
+(`TONE_PLANS.na`) with their cadences; the dialler's DTMF digits and the Front Desk's voice samples likewise. The engine
+reads the tap at the host's time, sample by sample, linearly interpolated to the output rate:
+
+| Listener | Rule | Level [A] |
+|---|---|---|
+| Monitor speaker | `ncu.monitor(level)`: the firmware turns it on for automatic dialling and the handshake and off at DCS or the receive phase (main.js), and SPEAKER keeps it on; band 350 to 3800 Hz | volume 0 to 3: 0, 0.35, 0.7, 1.1 |
+| Handset earpiece | While the handset is off its cradle (`liu.onCradle`); band 300 to 3000 Hz | 0.3 |
+| Ringer | `beeper.ring(on, { volume, pattern })`: a 1000/1250 Hz warble at 16 Hz, the cadence from the exchange's ringing (the TEL/FAX pseudo ring 1 s on, 2 s off) | 0.1 a volume step |
+| Beeper | `beeper.beep`: key 60 ms, end 1.5 s, error four short, at 2730 Hz | 0.07 |
+
+The mechanism's voices (stepper, cutter motor and blade, relays, hook, keys) are as above, from the ports and onsets.
+
+**Known approximations.** A received page is printed once its data has arrived (the T.30 checker gets the page
+whole), line by line through the head; a real memory-less machine prints as it decodes. Feed lines run at motor speed
+within each pacing chunk. The cutter feeds the strip 16 mm (the head to the blade, and 2 mm) before it cuts. The panel
+has one VOLUME key on the model; the mechanism's `volumeDown` is an empty stand-in (both map to VOLUME). A sheet
+shorter than about 24 mm never reaches the feed roller and is not fed.
+
 ## 6. Kit and views
 
 ### 6.1 Views

@@ -141,8 +141,10 @@ export class FaxStation extends FaxSim {
    *   { dev: 'doc', op: 'place', sheets: [{ id, page, skew, offset, faceDown }] }   sheets laid in the feeder with images
    *   { dev: 'doc', op: 'raw', id, res, y0, raw }                                      a sheet's CIS lines read ahead
    *   { dev: 'panel', op: 'tap', key }                                                 a click on a key
+   *   { dev: 'lcd', op: 'refresh' }                                                    the LCD's text again, as an event
    */
   command(msg) {
+    if (msg?.dev === 'lcd') { this.emitEvent({ type: 'device', dev: 'lcd', text: this.fw.lcd.text, cursor: null }); return; }
     if (msg?.dev === 'doc') {
       if (msg.op === 'place') {
         const sheets = (msg.sheets ?? []).map((s) => {

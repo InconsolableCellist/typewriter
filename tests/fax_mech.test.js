@@ -303,6 +303,31 @@ test('export and import mid-move, by a plain deep copy with no structuredClone, 
   assert.deepEqual(rb.events, ra.events);
 });
 
+// ---- firmware ---------------------------------------------------------------------------------------------------
+
+test('firmware attaches to the host: it hears device events as they happen and drives the controllers on the clock', () => {
+  const sim = fresh(), r = new Run(sim);
+  const heard = [];
+  const fw = {
+    nextT: 0.01, ticks: 0,
+    service(t) { this.ticks++; this.nextT = t + 0.01; },
+    device(e, t) {
+      heard.push([e.dev, e.ev, t]);
+      if (e.dev === 'scan' && e.ev === 'document' && e.present) sim.ctl.scan.command({ op: 'prefeed', id: 'fw' }, t);
+    },
+  };
+  sim.attachFirmware(fw);
+  sim.command({ dev: 'feeder', op: 'load', sheets: [{ id: 'auto', length: 0.08 }] });
+  r.run(4, (x) => !!x.done('scan', 'fw'));
+  assert.equal(r.done('scan', 'fw')?.ev, 'ready', 'a sheet laid on the table is pre-fed by the firmware');
+  assert.ok(fw.ticks > 50, 'serviced on the clock');
+  assert.ok(heard.some(([d, ev]) => d === 'scan' && ev === 'ready'));
+  sim.attachFirmware(null);
+  const n = fw.ticks;
+  r.run(0.1);
+  assert.equal(fw.ticks, n, 'detached');
+});
+
 // ---- the rules ----------------------------------------------------------------------------------------------------
 
 test('no controller writes a mechanical state: they only switch phases, coils and strobes and read sensors', async () => {

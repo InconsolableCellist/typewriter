@@ -85,6 +85,18 @@ export class FaxSim {
       panel: new PanelCtl(M.panel, panelIO(this.panel), emit),
     };
     this.ctlList = Object.values(this.ctl);
+    this.firmware = null;
+  }
+
+  /**
+   * The machine's firmware (src/fax/firmware/; architecture.md 4.3): an object with nextT and service(t), run on the
+   * host's clock after the controllers, and device(e), told of every device event as it happens. It reaches the
+   * machine only through this.ctl's methods (scan.command, print.command, liu.command, panel events). Null detaches.
+   */
+  attachFirmware(fw) {
+    if (this.firmware) this.ctlList = this.ctlList.filter((c) => c !== this.firmware);
+    this.firmware = fw ?? null;
+    if (fw) this.ctlList.push(fw);
   }
 
   /** A scanned line's event carries where the sensor's line fell on the document (scanner-mech.js scanLine). */
@@ -164,7 +176,7 @@ export class FaxSim {
     return true;
   }
 
-  emitEvent(e) { this.events.push(e); }
+  emitEvent(e) { this.events.push(e); if (this.firmware?.device && e.type === 'device') this.firmware.device(e, this.t); }
   /** Queue an acoustic event for the audio thread (no allocation). */
   ac(t, a, b, c = 0) {
     const n = this.acN;
